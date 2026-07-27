@@ -1,0 +1,82 @@
+{
+  "expo": {
+    "name": "さいえん手帳",
+    "slug": "saien-techo",
+    "version": "0.1.0",
+    "orientation": "default",
+    "scheme": "saientecho",
+    "userInterfaceStyle": "dark",
+    "backgroundColor": "#0A0805",
+    "icon": "./assets/icon.png",
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#0A0805"
+    },
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.saientecho.app",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
+    },
+    "android": {
+      "package": "com.saientecho.app",
+      "versionCode": 1,
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#0A0805"
+      },
+      "blockedPermissions": ["com.google.android.gms.permission.AD_ID"]
+    },
+    "web": {
+      "bundler": "metro",
+      "output": "single",
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "kotlinVersion": "2.2.20"
+          }
+        }
+      ],
+      "./plugins/withKotlinMetadataSkip",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "栽培や収穫の写真を選択するために写真ライブラリへのアクセスを使用します。",
+          "cameraPermission": "栽培や収穫の写真を撮影するためにカメラを使用します。"
+        }
+      ],
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "バーコード（JAN）を読み取るためにカメラを使用します。"
+        }
+      ],
+      "./plugins/withDaidokoOcr",
+      [
+        "react-native-google-mobile-ads",
+        {
+          "androidAppId": "ca-app-pub-3940256099942544~3347511713",
+          "iosAppId": "ca-app-pub-3940256099942544~1458002511",
+          "delayAppMeasurementInit": true,
+          "userTrackingUsageDescription": "広告の表示回数の制御と不正防止のために利用します。"
+        }
+      ]
+    ],
+    "experiments": {
+      "typedRoutes": true
+    },
+    "extra": {
+      "router": {
+        "origin": false
+      }
+    },
+    "owner": "keisato848"
+  }
+}

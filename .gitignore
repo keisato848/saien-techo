@@ -1,21 +1,78 @@
-# dependencies
+# Dependencies
 node_modules/
+.pnpm-store/
 
-# local settings (machine-specific)
-.claude/settings.local.json
-
-# build / cache
-.expo/
+# Build outputs
 dist/
 build/
-__pycache__/
-*.log
+*.tsbuildinfo
 
-# env
+# Expo / React Native
+.expo/
+ios/
+android/
+*.jks
+*.keystore
+keystore.properties
+*.p8
+*.p12
+*.key
+*.mobileprovision
+*.orig.*
+web-build/
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+pnpm-debug.log*
+
+# Environment variables
 .env
-.env.*
+.env.local
+.env.*.local
 !.env.example
+
+# Database
+*.db
+*.db-shm
+*.db-wal
+*.sqlite
 
 # OS
 .DS_Store
 Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Test coverage
+coverage/
+.vitest/
+
+# E2E generated artifacts
+e2e/android-e2e-result.json
+e2e/screenshots/
+e2e/ui-dumps/
+e2e/ui*.xml
+
+# Local on-device LLM artifacts
+apps/mobile/android/app/src/main/assets/models/*.bin
+apps/mobile/android/app/src/main/assets/models/*.task
+!apps/mobile/android/app/src/main/assets/models/README.md
+
+# Temporary
+tmp/
+temp/
+Temp/
+
+# Claude Code
+.claude/*
+!.claude/skills/
+!.claude/agents/
+!.claude/settings.json
+chat.json
+nul

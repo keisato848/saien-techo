@@ -21,18 +21,33 @@ if (files.length === 0) {
   process.exit(0);
 }
 
-const pnpmCmd = process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm';
-const prettier = runCommand(pnpmCmd, ['exec', 'prettier', '--write', '--ignore-unknown', ...files]);
-if (!prettier.ok) {
-  console.error('format-staged: prettier failed');
-  console.error(prettier.combinedOutput?.slice(0, 1000) ?? '');
-  process.exit(1);
+// Windows のコマンドライン長制限(約 8KB)を超えないようチャンクで実行する
+function* chunks(list, size) {
+  for (let i = 0; i < list.length; i += size) yield list.slice(i, i + size);
 }
 
-const add = runCommand('git', ['add', '--', ...files]);
-if (!add.ok) {
-  console.error('format-staged: git add failed');
-  process.exit(1);
+const pnpmCmd = process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm';
+for (const batch of chunks(files, 40)) {
+  const prettier = runCommand(pnpmCmd, [
+    'exec',
+    'prettier',
+    '--write',
+    '--ignore-unknown',
+    ...batch,
+  ]);
+  if (!prettier.ok) {
+    console.error('format-staged: prettier failed');
+    console.error(prettier.combinedOutput?.slice(0, 1000) ?? '');
+    process.exit(1);
+  }
+}
+
+for (const batch of chunks(files, 40)) {
+  const add = runCommand('git', ['add', '--', ...batch]);
+  if (!add.ok) {
+    console.error('format-staged: git add failed');
+    process.exit(1);
+  }
 }
 
 console.log(`[OK] prettier auto-format: ${files.length} file(s)`);
