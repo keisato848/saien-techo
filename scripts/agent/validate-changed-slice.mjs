@@ -97,7 +97,11 @@ function resolveFilesFromGit(parsed) {
 }
 
 function gitDiff(extraArgs) {
-  const result = runCommand('git', ['diff', '--name-only', '--relative', ...extraArgs], {
+  // -z は必須。既定(core.quotepath=true)では非 ASCII のパスが
+  // "docs/\343\202\244..." とエスケープされ、先頭の " のせいで
+  // isDocsLikeFile 等の startsWith/endsWith 判定を全てすり抜ける。
+  // その結果、日本語名の docs が docs-prettier タスクの対象から漏れていた。
+  const result = runCommand('git', ['diff', '--name-only', '-z', '--relative', ...extraArgs], {
     cwd: rootDir,
   });
 
@@ -106,7 +110,7 @@ function gitDiff(extraArgs) {
   }
 
   return result.stdout
-    .split(/\r?\n/)
+    .split('\0')
     .map((line) => line.trim())
     .filter(Boolean);
 }
@@ -124,7 +128,8 @@ function buildValidationPlan(files) {
     (file) => file.startsWith('apps/mobile/android/') || file.startsWith('e2e/'),
   );
   const photoOrOcrChanged = files.some(
-    (file) => /photo|ocr/i.test(file) && (file.startsWith('apps/mobile/') || file.startsWith('e2e/')),
+    (file) =>
+      /photo|ocr/i.test(file) && (file.startsWith('apps/mobile/') || file.startsWith('e2e/')),
   );
 
   if (docsFiles.length > 0) {
@@ -161,21 +166,46 @@ function buildValidationPlan(files) {
   }
 
   if (sharedChanged) {
-    addWorkspaceTask('shared-lint', '@daidoko/shared lint', ['--filter', '@daidoko/shared', 'lint'], taskMap);
+    addWorkspaceTask(
+      'shared-lint',
+      '@daidoko/shared lint',
+      ['--filter', '@daidoko/shared', 'lint'],
+      taskMap,
+    );
     addWorkspaceTask(
       'shared-typecheck',
       '@daidoko/shared typecheck',
       ['--filter', '@daidoko/shared', 'typecheck'],
       taskMap,
     );
-    addWorkspaceTask('shared-test', '@daidoko/shared test', ['--filter', '@daidoko/shared', 'test'], taskMap);
-    addWorkspaceTask('mobile-typecheck', 'mobile typecheck', ['--filter', 'mobile', 'typecheck'], taskMap);
-    addWorkspaceTask('server-typecheck', 'server typecheck', ['--filter', 'server', 'typecheck'], taskMap);
+    addWorkspaceTask(
+      'shared-test',
+      '@daidoko/shared test',
+      ['--filter', '@daidoko/shared', 'test'],
+      taskMap,
+    );
+    addWorkspaceTask(
+      'mobile-typecheck',
+      'mobile typecheck',
+      ['--filter', 'mobile', 'typecheck'],
+      taskMap,
+    );
+    addWorkspaceTask(
+      'server-typecheck',
+      'server typecheck',
+      ['--filter', 'server', 'typecheck'],
+      taskMap,
+    );
   }
 
   if (serverChanged) {
     addWorkspaceTask('server-lint', 'server lint', ['--filter', 'server', 'lint'], taskMap);
-    addWorkspaceTask('server-typecheck', 'server typecheck', ['--filter', 'server', 'typecheck'], taskMap);
+    addWorkspaceTask(
+      'server-typecheck',
+      'server typecheck',
+      ['--filter', 'server', 'typecheck'],
+      taskMap,
+    );
     if (files.some((file) => file.startsWith('apps/server/src/'))) {
       const serverTargets = serverTestTargets(files);
       if (serverTargets.length > 0) {
@@ -195,7 +225,12 @@ function buildValidationPlan(files) {
 
   if (mobileChanged) {
     addWorkspaceTask('mobile-lint', 'mobile lint', ['--filter', 'mobile', 'lint'], taskMap);
-    addWorkspaceTask('mobile-typecheck', 'mobile typecheck', ['--filter', 'mobile', 'typecheck'], taskMap);
+    addWorkspaceTask(
+      'mobile-typecheck',
+      'mobile typecheck',
+      ['--filter', 'mobile', 'typecheck'],
+      taskMap,
+    );
     if (shouldRunMobileTests(files)) {
       const patterns = mobileTestPattern(files);
       if (patterns) {
@@ -221,7 +256,9 @@ function buildValidationPlan(files) {
   }
 
   if (photoOrOcrChanged) {
-    recommendations.push('Consider pnpm agent:android:e2e:ocr and pnpm agent:android:e2e:photo for OCR/photo flows.');
+    recommendations.push(
+      'Consider pnpm agent:android:e2e:ocr and pnpm agent:android:e2e:photo for OCR/photo flows.',
+    );
   }
 
   return {
