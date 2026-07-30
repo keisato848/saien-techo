@@ -1,0 +1,16 @@
+# 行末は LF でリポジトリに保存し、作業ツリーにも LF で展開する。
+# Windows の core.autocrlf=true でも作業ツリーが CRLF にならないため、
+# Prettier（.prettierrc の endOfLine: lf）の判定がローカルと CI（Q-3 Format check）で一致する。
+* text=auto eol=lf
+
+# 画像はバイナリとして扱う（行末変換の誤適用を防ぐ）
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.webp binary
+*.ico binary
+*.aab binary
+*.apk binary
+*.keystore binary
+*.jks binary

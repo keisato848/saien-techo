@@ -1,0 +1,365 @@
+const {
+  AndroidConfig,
+  withAndroidManifest,
+  withAppBuildGradle,
+  withDangerousMod,
+  withMainApplication,
+} = require('@expo/config-plugins');
+const fs = require('fs');
+const path = require('path');
+
+// Unbundled (Google Play Services) ML Kit. Unlike the bundled `com.google.mlkit:*`
+// artifacts, these wrappers ship NO native `.so` in the app — the inference code
+// lives in Google Play Services (kept 16 KB-aligned by Google and downloaded on
+// demand). This keeps the app's native libraries 16 KB page-size compliant.
+const ML_KIT_DEPENDENCIES = [
+  'implementation("com.google.android.gms:play-services-mlkit-text-recognition-japanese:16.0.1")',
+  'implementation("com.google.android.gms:play-services-mlkit-image-labeling:16.0.8")',
+];
+const OCR_IMPORT = 'import com.daidoko.app.ocr.DaidokoOcrPackage';
+// Inserted inside `PackageList(this).packages.apply { ... }` in the SDK 54
+// MainApplication template (indentation matches that block).
+const OCR_PACKAGE_REGISTRATION = '              add(DaidokoOcrPackage())';
+
+const OCR_PACKAGE_SOURCE = `package com.daidoko.app.ocr
+
+import com.facebook.react.ReactPackage
+import com.facebook.react.bridge.NativeModule
+import com.facebook.react.bridge.ReactApplicationContext
+import com.facebook.react.uimanager.ViewManager
+
+class DaidokoOcrPackage : ReactPackage {
+  override fun createNativeModules(reactContext: ReactApplicationContext): List<NativeModule> =
+    listOf(DaidokoOcrModule(reactContext))
+
+  override fun createViewManagers(
+    reactContext: ReactApplicationContext,
+  ): List<ViewManager<*, *>> = emptyList()
+}
+`;
+
+const OCR_MODULE_SOURCE = `package com.daidoko.app.ocr
+
+import android.graphics.BitmapFactory
+import android.graphics.Rect
+import android.net.Uri
+import com.facebook.react.bridge.Arguments
+import com.facebook.react.bridge.Promise
+import com.facebook.react.bridge.ReactApplicationContext
+import com.facebook.react.bridge.ReactContextBaseJavaModule
+import com.facebook.react.bridge.ReactMethod
+import com.facebook.react.bridge.WritableArray
+import com.facebook.react.bridge.WritableMap
+import com.google.mlkit.vision.common.InputImage
+import com.google.mlkit.vision.label.ImageLabel
+import com.google.mlkit.vision.label.ImageLabeling
+import com.google.mlkit.vision.label.defaults.ImageLabelerOptions
+import com.google.mlkit.vision.text.Text
+import com.google.mlkit.vision.text.TextRecognition
+import com.google.mlkit.vision.text.japanese.JapaneseTextRecognizerOptions
+
+class DaidokoOcrModule(
+  private val reactContext: ReactApplicationContext,
+) : ReactContextBaseJavaModule(reactContext) {
+  private val recognizer by lazy {
+    TextRecognition.getClient(JapaneseTextRecognizerOptions.Builder().build())
+  }
+  private val imageLabeler by lazy {
+    ImageLabeling.getClient(ImageLabelerOptions.DEFAULT_OPTIONS)
+  }
+
+  override fun getName(): String = NAME
+
+  @ReactMethod
+  fun isAvailable(promise: Promise) {
+    promise.resolve(true)
+  }
+
+  @ReactMethod
+  fun recognizeImage(imageUri: String, promise: Promise) {
+    try {
+      val image = createInputImage(imageUri)
+      recognizer.process(image)
+        .addOnSuccessListener { text -> promise.resolve(toWritableMap(text)) }
+        .addOnFailureListener { error ->
+          promise.reject("OCR_FAILED", error.message ?: "Text recognition failed", error)
+        }
+    } catch (error: Exception) {
+      promise.reject("OCR_INPUT_FAILED", error.message ?: "Invalid OCR image", error)
+    }
+  }
+
+  @ReactMethod
+  fun labelImage(imageUri: String, promise: Promise) {
+    try {
+      val image = createInputImage(imageUri)
+      imageLabeler.process(image)
+        .addOnSuccessListener { labels -> promise.resolve(toLabelArray(labels)) }
+        .addOnFailureListener { error ->
+          promise.reject("IMAGE_LABEL_FAILED", error.message ?: "Image labeling failed", error)
+        }
+    } catch (error: Exception) {
+      promise.reject("IMAGE_LABEL_INPUT_FAILED", error.message ?: "Invalid image", error)
+    }
+  }
+
+  private fun createInputImage(imageUri: String): InputImage {
+    val uri = Uri.parse(imageUri)
+    if (uri.scheme == "asset" || (uri.scheme == null && imageUri.startsWith("assets_"))) {
+      val assetPath = uri.path?.trimStart('/')?.takeIf { it.isNotBlank() }
+        ?: imageUri.removePrefix("asset:/").trimStart('/')
+      val bitmap = decodeBundledBitmap(assetPath)
+      return InputImage.fromBitmap(bitmap, 0)
+    }
+    return InputImage.fromFilePath(reactContext, uri)
+  }
+
+  private fun decodeBundledBitmap(assetPath: String) =
+    decodeAssetBitmap(assetPath)
+      ?: decodeDrawableBitmap(assetPath)
+      ?: throw IllegalArgumentException("Could not decode bundled OCR asset: $assetPath")
+
+  // OCR 品質を保てる上限。フル解像度デコードによるメモリ過剰使用を避ける
+  // （Play Console の「ビットマップのダウンサンプリング」推奨への対応）。
+  private val maxBitmapDimension = 2048
+
+  private fun sampleSizeFor(width: Int, height: Int): Int {
+    var sampleSize = 1
+    var w = width
+    var h = height
+    while (w / 2 >= maxBitmapDimension || h / 2 >= maxBitmapDimension) {
+      sampleSize *= 2
+      w /= 2
+      h /= 2
+    }
+    return sampleSize
+  }
+
+  private fun decodeAssetBitmap(assetPath: String) = buildList {
+    add(assetPath)
+    if (!assetPath.endsWith(".png")) add("$assetPath.png")
+  }.firstNotNullOfOrNull { candidate ->
+    runCatching {
+      val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+      reactContext.assets.open(candidate).use { stream ->
+        BitmapFactory.decodeStream(stream, null, bounds)
+      }
+      val options = BitmapFactory.Options().apply {
+        inSampleSize = sampleSizeFor(bounds.outWidth, bounds.outHeight)
+      }
+      reactContext.assets.open(candidate).use { stream ->
+        BitmapFactory.decodeStream(stream, null, options)
+      }
+    }.getOrNull()
+  }
+
+  private fun decodeDrawableBitmap(assetPath: String) =
+    assetPath.substringAfterLast('/').substringBeforeLast('.').takeIf { it.isNotBlank() }?.let { name ->
+      val resourceId = reactContext.resources.getIdentifier(name, "drawable", reactContext.packageName)
+      if (resourceId == 0) {
+        null
+      } else {
+        val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        BitmapFactory.decodeResource(reactContext.resources, resourceId, bounds)
+        val options = BitmapFactory.Options().apply {
+          inSampleSize = sampleSizeFor(bounds.outWidth, bounds.outHeight)
+        }
+        BitmapFactory.decodeResource(reactContext.resources, resourceId, options)
+      }
+    }
+
+  private fun toWritableMap(text: Text): WritableMap {
+    val result = Arguments.createMap()
+    result.putString("rawText", text.text)
+    result.putArray("blocks", toBlocks(text.textBlocks))
+    result.putString("confidence", inferConfidence(text.text))
+    result.putArray("warnings", buildWarnings(text.text))
+    return result
+  }
+
+  private fun toLabelArray(labels: List<ImageLabel>): WritableArray {
+    val array = Arguments.createArray()
+    labels.forEach { label ->
+      val map = Arguments.createMap()
+      map.putString("text", label.text)
+      map.putDouble("confidence", label.confidence.toDouble())
+      map.putInt("index", label.index)
+      array.pushMap(map)
+    }
+    return array
+  }
+
+  private fun toBlocks(blocks: List<Text.TextBlock>): WritableArray {
+    val array = Arguments.createArray()
+    blocks.forEach { block ->
+      val blockMap = Arguments.createMap()
+      blockMap.putString("text", block.text)
+      blockMap.putArray("lines", toLines(block.lines))
+      array.pushMap(blockMap)
+    }
+    return array
+  }
+
+  private fun toLines(lines: List<Text.Line>): WritableArray {
+    val array = Arguments.createArray()
+    lines.forEach { line ->
+      val lineMap = Arguments.createMap()
+      lineMap.putString("text", line.text)
+      line.boundingBox?.let { lineMap.putMap("boundingBox", toBoundingBox(it)) }
+      array.pushMap(lineMap)
+    }
+    return array
+  }
+
+  private fun toBoundingBox(rect: Rect): WritableMap {
+    val map = Arguments.createMap()
+    map.putInt("x", rect.left)
+    map.putInt("y", rect.top)
+    map.putInt("width", rect.width())
+    map.putInt("height", rect.height())
+    return map
+  }
+
+  private fun inferConfidence(rawText: String): String {
+    val length = rawText.replace(Regex("\\\\s"), "").length
+    return when {
+      length >= 80 -> "high"
+      length >= 20 -> "medium"
+      else -> "low"
+    }
+  }
+
+  private fun buildWarnings(rawText: String): WritableArray {
+    val warnings = Arguments.createArray()
+    if (rawText.isBlank()) warnings.pushString("文字を読み取れませんでした")
+    return warnings
+  }
+
+  companion object {
+    const val NAME = "DaidokoOcr"
+  }
+}
+`;
+
+function ensureManifestPermission(manifest, permissionName) {
+  const usesPermission = manifest['uses-permission'] ?? [];
+  if (!usesPermission.some((permission) => permission.$?.['android:name'] === permissionName)) {
+    usesPermission.push({ $: { 'android:name': permissionName } });
+  }
+  manifest['uses-permission'] = usesPermission;
+}
+
+function withDaidokoOcrManifest(config) {
+  return withAndroidManifest(config, (configWithManifest) => {
+    const manifest = configWithManifest.modResults.manifest;
+    ensureManifestPermission(manifest, 'android.permission.CAMERA');
+    return configWithManifest;
+  });
+}
+
+// expo-file-system's config plugin unconditionally requests broad media-library
+// access, but this app only reads/writes its own app-private documentDirectory,
+// which never requires these permissions. Block them to satisfy Google Play's
+// Photo and Video Permissions policy.
+function withDaidokoBlockedStoragePermissions(config) {
+  return AndroidConfig.Permissions.withBlockedPermissions(config, [
+    'android.permission.READ_EXTERNAL_STORAGE',
+    'android.permission.WRITE_EXTERNAL_STORAGE',
+    'android.permission.READ_MEDIA_IMAGES',
+  ]);
+}
+
+// Ask Google Play Services to download the ML Kit models at install time so the
+// first OCR / image-labeling call doesn't have to wait on (or fail without) a
+// model download. "ocr" = text recognition, "ica" = image-labeling,
+// "barcode_ui" = expo-camera's GMS barcode scanner. expo-camera declares the
+// same `com.google.mlkit.vision.DEPENDENCIES` meta-data with only `barcode_ui`,
+// so we emit the UNION here and add `tools:replace` to win the manifest merge
+// (otherwise the two conflicting values fail `processReleaseMainManifest`).
+function withDaidokoMlKitModelMetadata(config) {
+  return withAndroidManifest(config, (configWithManifest) => {
+    const manifest = configWithManifest.modResults.manifest;
+    manifest.$['xmlns:tools'] = manifest.$['xmlns:tools'] || 'http://schemas.android.com/tools';
+
+    const application = AndroidConfig.Manifest.getMainApplicationOrThrow(
+      configWithManifest.modResults,
+    );
+    AndroidConfig.Manifest.addMetaDataItemToMainApplication(
+      application,
+      'com.google.mlkit.vision.DEPENDENCIES',
+      'ocr,ica,barcode_ui',
+    );
+    const metaData = (application['meta-data'] ?? []).find(
+      (item) => item.$?.['android:name'] === 'com.google.mlkit.vision.DEPENDENCIES',
+    );
+    if (metaData) {
+      metaData.$['tools:replace'] = 'android:value';
+    }
+    return configWithManifest;
+  });
+}
+
+function withDaidokoOcrBuildGradle(config) {
+  return withAppBuildGradle(config, (configWithGradle) => {
+    let contents = configWithGradle.modResults.contents;
+    for (const dependency of ML_KIT_DEPENDENCIES) {
+      if (!contents.includes(dependency)) {
+        contents = contents.replace(
+          '    implementation("com.facebook.react:react-android")',
+          `    implementation("com.facebook.react:react-android")\n    ${dependency}`,
+        );
+      }
+    }
+    configWithGradle.modResults.contents = contents;
+    return configWithGradle;
+  });
+}
+
+function withDaidokoOcrMainApplication(config) {
+  return withMainApplication(config, (configWithMainApplication) => {
+    let contents = configWithMainApplication.modResults.contents;
+    // Register the legacy ReactPackage. Anchors target the stock Expo SDK 54
+    // MainApplication.kt: the `ReactPackage` import and the
+    // `PackageList(this).packages.apply { ... }` block in getPackages().
+    if (!contents.includes(OCR_IMPORT)) {
+      contents = contents.replace(
+        'import com.facebook.react.ReactPackage',
+        `import com.facebook.react.ReactPackage\n${OCR_IMPORT}`,
+      );
+    }
+    if (!contents.includes(OCR_PACKAGE_REGISTRATION)) {
+      contents = contents.replace(
+        'PackageList(this).packages.apply {',
+        `PackageList(this).packages.apply {\n${OCR_PACKAGE_REGISTRATION}`,
+      );
+    }
+    configWithMainApplication.modResults.contents = contents;
+    return configWithMainApplication;
+  });
+}
+
+function withDaidokoOcrSources(config) {
+  return withDangerousMod(config, [
+    'android',
+    async (configWithAndroid) => {
+      const ocrDir = path.join(
+        configWithAndroid.modRequest.platformProjectRoot,
+        'app/src/main/java/com/daidoko/app/ocr',
+      );
+      await fs.promises.mkdir(ocrDir, { recursive: true });
+      await fs.promises.writeFile(path.join(ocrDir, 'DaidokoOcrPackage.kt'), OCR_PACKAGE_SOURCE);
+      await fs.promises.writeFile(path.join(ocrDir, 'DaidokoOcrModule.kt'), OCR_MODULE_SOURCE);
+      return configWithAndroid;
+    },
+  ]);
+}
+
+module.exports = function withDaidokoOcr(config) {
+  config = withDaidokoOcrManifest(config);
+  config = withDaidokoBlockedStoragePermissions(config);
+  config = withDaidokoMlKitModelMetadata(config);
+  config = withDaidokoOcrBuildGradle(config);
+  config = withDaidokoOcrMainApplication(config);
+  config = withDaidokoOcrSources(config);
+  return config;
+};
