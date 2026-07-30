@@ -6,14 +6,18 @@ import { runCommand } from './lib/runtime.mjs';
 
 const EXTENSIONS = /\.(ts|tsx|js|jsx|mjs|cjs|json|md)$/i;
 
-const diff = runCommand('git', ['diff', '--cached', '--name-only', '--diff-filter=ACMR']);
+// -z は必須。既定(core.quotepath=true)では非 ASCII のパスが
+// "docs/\343\202\244..." のようにエスケープされて返り、そのまま prettier に
+// 渡すと --ignore-unknown が存在しないファイルとして黙って読み飛ばす。
+// 日本語ファイル名の docs が整形されないまま CI の Format check で落ちていた。
+const diff = runCommand('git', ['diff', '--cached', '--name-only', '-z', '--diff-filter=ACMR']);
 if (!diff.ok) {
   console.error('format-staged: git diff failed');
   process.exit(1);
 }
 
 const files = diff.stdout
-  .split(/\r?\n/)
+  .split('\0')
   .map((line) => line.trim())
   .filter((line) => line && EXTENSIONS.test(line));
 

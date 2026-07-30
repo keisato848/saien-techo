@@ -55,11 +55,17 @@ function collectChangedFiles() {
   const files = [];
 
   // 作業ツリー（staged + unstaged + untracked）
-  const status = runCommand('git', ['status', '--porcelain'], { cwd: rootDir });
+  // -z はレコード区切りが NUL で、パスがクオート/エスケープされない。既定形式では
+  // 非 ASCII 名が "docs/\343\202\244..." となり、日本語 docs を取りこぼしていた。
+  // R/C（リネーム・コピー）だけは「XY 新パス\0旧パス\0」と 2 レコードになる。
+  const status = runCommand('git', ['status', '--porcelain', '-z'], { cwd: rootDir });
   if (status.ok) {
-    for (const line of status.stdout.split(/\r?\n/)) {
-      const file = line.slice(3).trim().replace(/^"|"$/g, '');
+    const records = status.stdout.split('\0').filter(Boolean);
+    for (let i = 0; i < records.length; i += 1) {
+      const code = records[i].slice(0, 2);
+      const file = records[i].slice(3).trim();
       if (file) files.push(file.replace(/\\/g, '/'));
+      if (code.includes('R') || code.includes('C')) i += 1; // 続く旧パスのレコードを読み飛ばす
     }
   }
 
@@ -67,9 +73,11 @@ function collectChangedFiles() {
   const branch = runCommand('git', ['branch', '--show-current'], { cwd: rootDir });
   const name = branch.ok ? branch.stdout.trim() : '';
   if (name && name !== 'develop' && name !== 'main') {
-    const diff = runCommand('git', ['diff', '--name-only', 'develop...HEAD'], { cwd: rootDir });
+    const diff = runCommand('git', ['diff', '--name-only', '-z', 'develop...HEAD'], {
+      cwd: rootDir,
+    });
     if (diff.ok) {
-      for (const line of diff.stdout.split(/\r?\n/)) {
+      for (const line of diff.stdout.split('\0')) {
         const file = line.trim();
         if (file) files.push(file.replace(/\\/g, '/'));
       }
