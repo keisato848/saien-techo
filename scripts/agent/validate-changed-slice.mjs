@@ -166,22 +166,26 @@ function buildValidationPlan(files) {
   }
 
   if (sharedChanged) {
+    // フィルタ名は packages/shared/package.json の name と一致させること。
+    // 不一致だと pnpm は「No projects matched the filters」を出して exit 0 で
+    // 返すため、何も実行されないまま [OK] と表示される（fork 時の @daidoko/shared
+    // 残存で packages/shared の検証が丸ごと空振りしていた）。
     addWorkspaceTask(
       'shared-lint',
-      '@daidoko/shared lint',
-      ['--filter', '@daidoko/shared', 'lint'],
+      '@saien/shared lint',
+      ['--filter', '@saien/shared', 'lint'],
       taskMap,
     );
     addWorkspaceTask(
       'shared-typecheck',
-      '@daidoko/shared typecheck',
-      ['--filter', '@daidoko/shared', 'typecheck'],
+      '@saien/shared typecheck',
+      ['--filter', '@saien/shared', 'typecheck'],
       taskMap,
     );
     addWorkspaceTask(
       'shared-test',
-      '@daidoko/shared test',
-      ['--filter', '@daidoko/shared', 'test'],
+      '@saien/shared test',
+      ['--filter', '@saien/shared', 'test'],
       taskMap,
     );
     addWorkspaceTask(
