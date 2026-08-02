@@ -28,14 +28,11 @@ export const DOC_RULES = [
     pattern: /^\.claude\/(agents|skills)\//,
     target: 'docs/開発ハーネス.md §1 構成マップ',
   },
-  {
-    pattern: /^apps\/server\/src\/routes\//,
-    target: 'docs/アーキテクチャ設計.md（API エンドポイント一覧）',
-  },
-  {
-    pattern: /^apps\/mobile\/src\/db\/(schema|migrate)\.ts$/,
-    target: 'docs/データ設計.md（エンティティ・マイグレーション）',
-  },
+  // NOTE: apps/server/src/routes/ → docs/アーキテクチャ設計.md と
+  // apps/mobile/src/db/(schema|migrate).ts → docs/データ設計.md の 2 件は
+  // 督促先が存在しないため外してある（実体は移植元の docs/参考-daidoko/ 配下で、
+  // さいえん手帳版は未作成）。存在しないファイルの更新を毎回督促していた。
+  // WBS 1.3（データ設計・DB スキーマ）でさいえん手帳版を作成したら復活させる。
 ];
 
 /** ドキュメント側とみなすパス（これが同時に変更されていれば督促しない） */
