@@ -24,7 +24,9 @@ function parseArgs(argv) {
 
 const options = parseArgs(process.argv.slice(2));
 if (!options.name) {
-  console.error('Usage: node scripts/agent/scaffold-feature-plan.mjs --name <feature-name> [--surfaces mobile,server,shared,docs] [--json]');
+  console.error(
+    'Usage: node scripts/agent/scaffold-feature-plan.mjs --name <feature-name> [--surfaces mobile,server,shared,docs] [--json]',
+  );
   process.exit(1);
 }
 
@@ -58,10 +60,7 @@ if (options.surfaces.includes('server')) {
 }
 
 if (options.surfaces.includes('shared')) {
-  files.push(
-    `packages/shared/src/${slug}.ts`,
-    `packages/shared/src/__tests__/${slug}.test.ts`,
-  );
+  files.push(`packages/shared/src/${slug}.ts`, `packages/shared/src/__tests__/${slug}.test.ts`);
 }
 
 if (options.surfaces.includes('docs')) {

@@ -5,6 +5,8 @@ description: Google Play ストア掲載（ja-JP のアプリ名・説明文・�
 
 # Play ストア掲載の CLI 更新
 
+> **停止**: だいどこの値またはプレースホルダが残っている。WBS 3.7〜3.9 で さいえん手帳用に差し替えるまで実行しないこと。
+
 詳細は `docs/リリース手順.md` §3。プライバシーポリシーの公開反映は §4（公開 URL は gist — 更新時は同期コマンドを実行）。
 
 ## アプリ名・説明文（短い説明・詳しい説明）
@@ -44,7 +46,7 @@ description: Google Play ストア掲載（ja-JP のアプリ名・説明文・�
    ※ wipe 直後の SystemUI ANR ダイアログは capture スクリプトが dumpsys で検出して自動で閉じる
 3. `adb install -r apps/mobile/android/app/build/outputs/apk/release/app-release.apk`
 4. 取得: `node scripts/release/capture-store-screenshots.mjs`
-   - ショットごとに force-stop → `daidoko://` ディープリンクでコールドスタート → screencap
+   - ショットごとに force-stop → `saientecho://` ディープリンクでコールドスタート → screencap
    - ステータスバーは SystemUI デモモードで固定（09:00・電池100%・通知なし）
    - `manual` 指定のショット（AI 結果画面など）はスキップして既存ファイルを維持
    - 部分再取得: `--shots 01,04` / 対象レシピ変更: `--recipe recipe-3`

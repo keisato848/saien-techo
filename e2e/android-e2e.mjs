@@ -4,7 +4,7 @@
  *
  * 必要環境:
  *   - ADB 接続済みの Pixel 9a (or 任意の Android 端末)
- *   - com.daidoko.app がインストール済み
+ *   - さいえん手帳(app.json の applicationId)がインストール済み
  *   - 端末がロック解除されている
  *
  * 実行: node e2e/android-e2e.mjs
@@ -19,8 +19,9 @@
 import { spawnSync } from 'child_process';
 import { mkdirSync, writeFileSync, readFileSync, existsSync, rmSync } from 'fs';
 import { resolve } from 'path';
+import { androidPackage } from '../scripts/agent/lib/app-identity.mjs';
 
-const PKG = 'com.daidoko.app';
+const PKG = androidPackage();
 const ACT = `${PKG}/.MainActivity`;
 const EXPO_DEV_URL = process.env.EXPO_DEV_URL || '';
 const EXPO_DEV_SERVER_PORT = process.env.EXPO_DEV_SERVER_PORT || '8082';

@@ -5,6 +5,8 @@ description: リリース後に問題が発覚したときの巻き戻し・被�
 
 # 障害時の巻き戻し（Play / Railway）
 
+> **停止**: だいどこの値またはプレースホルダが残っている。WBS 3.7〜3.9 で さいえん手帳用に差し替えるまで実行しないこと。
+
 ## 大原則
 
 - **Google Play はバイナリのロールバック不可**（versionCode は単調増加のみ）。戦略は
@@ -25,12 +27,12 @@ description: リリース後に問題が発覚したときの巻き戻し・被�
 ## 2. Railway（サーバー側の障害）
 
 ```bash
-railway logs --service daidoko            # まずログで原因を特定
-railway deployment list --service daidoko --json   # 直近の SUCCESS デプロイ ID を確認
+railway logs --service <さいえん手帳の Railway サービス名 — 未作成>            # まずログで原因を特定
+railway deployment list --service <さいえん手帳の Railway サービス名 — 未作成> --json   # 直近の SUCCESS デプロイ ID を確認
 ```
 
 - **設定起因**（環境変数の誤り等）: `railway variables --set` で修正 → 再デプロイ
-- **コード起因**: 直前の正常コミットを checkout して `railway up --service daidoko --detach`
+- **コード起因**: 直前の正常コミットを checkout して `railway up --service <さいえん手帳の Railway サービス名 — 未作成> --detach`
   （Railway はローカルディレクトリをビルドするため、**git で戻してから up** すればそれが旧版再デプロイに相当）
 - 復旧確認: `/health` 200 → AI エンドポイント疎通（node fetch で日本語 POST — Git Bash curl は CP932 で壊れる）
 

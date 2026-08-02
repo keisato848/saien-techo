@@ -47,9 +47,14 @@ for (const batch of chunks(files, 40)) {
 }
 
 for (const batch of chunks(files, 40)) {
-  const add = runCommand('git', ['add', '--', ...batch]);
+  // -f は必須。gitignore 対象だが追跡済みのファイル（例: .claude/workflows/*）が
+  // ステージにあると、素の git add がそれを拒否してバッチ全体を失敗させ、
+  // コミットが一切通らなくなる。ここで扱うのは git 自身がステージ済みと報告した
+  // ファイルだけなので、強制追加しても新規に無視対象を取り込むことはない。
+  const add = runCommand('git', ['add', '-f', '--', ...batch]);
   if (!add.ok) {
     console.error('format-staged: git add failed');
+    console.error(add.combinedOutput?.slice(0, 1000) ?? '');
     process.exit(1);
   }
 }

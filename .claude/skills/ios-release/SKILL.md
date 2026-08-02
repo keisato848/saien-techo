@@ -5,6 +5,8 @@ description: iOS（App Store）リリース一式（macOS で実行）。Xcode/�
 
 # iOS（App Store）リリースパイプライン（macOS 専用）
 
+> **停止**: だいどこの値またはプレースホルダが残っている。WBS 3.7〜3.9 で さいえん手帳用に差し替えるまで実行しないこと。
+
 このスキルは **Mac 上の Claude / 開発者** 向け。Windows 環境では iOS シミュレータ・Xcode が使えないため、
 iOS 固有の作業（シミュレータ動作確認・iOS スクショ・ローカル iOS ビルド）はすべて Mac 側で行う。
 背景と全体像は `docs/リリース手順.md` §7、機能パリティ・方針は `docs/フリーミアム設計.md`。
@@ -14,7 +16,7 @@ iOS の AI は「無料枠1日1回 ＋ BYOK」。広告/課金の導線は iOS �
 
 ## 0. 前提（初回のみ・ユーザー作業）
 
-- **Apple Developer Program 登録**（年 $99）。App Store Connect でアプリ枠を作成（bundle id `com.daidoko.app`）。
+- **Apple Developer Program 登録**（年 $99）。App Store Connect でアプリ枠を作成（bundle id `com.saientecho.app`）。
 - Mac に **Xcode**（＋Command Line Tools）、**CocoaPods**、**Node/pnpm**、**EAS CLI**（`npm i -g eas-cli`）。
 - リポジトリを clone し、**リポジトリルートで** `pnpm install`（`.npmrc` が `node-linker=hoisted`。
   `apps/mobile` 内では実行しない）。

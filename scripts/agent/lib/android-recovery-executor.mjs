@@ -5,7 +5,7 @@ import { getRetryPolicy } from './android-retry-policy.mjs';
 /**
  * Executes an automated recovery action based on the given signal.
  * Limits execution to safe, non-destructive actions.
- * 
+ *
  * @param {string} signalCode - The failure signal code.
  * @param {string} device - The target device serial (if applicable).
  * @param {string} adbPath - Resolved adb executable path.
@@ -14,7 +14,7 @@ import { getRetryPolicy } from './android-retry-policy.mjs';
  */
 export function executeRecovery(signalCode, device, adbPath = 'adb', context = {}) {
   const policy = getRetryPolicy(signalCode);
-  
+
   const result = {
     executed: false,
     skipped: true,
@@ -57,9 +57,9 @@ function recoverBootIncomplete(device, adbPath, baseResult) {
   baseResult.executed = true;
   baseResult.skipped = false;
   baseResult.action = 'Waiting briefly for boot completion properties...';
-  
+
   const propsToCheck = ['sys.boot_completed', 'dev.bootcomplete', 'init.svc.bootanim'];
-  baseResult.commands = propsToCheck.map(p => `adb shell getprop ${p}`);
+  baseResult.commands = propsToCheck.map((p) => `adb shell getprop ${p}`);
 
   const maxWaitMs = 10000;
   const pollIntervalMs = 2000;
@@ -73,9 +73,11 @@ function recoverBootIncomplete(device, adbPath, baseResult) {
     lastFailures = [];
 
     for (const prop of propsToCheck) {
-      const res = spawnSync(adbPath, ['-s', device, 'shell', 'getprop', prop], { encoding: 'utf8' });
+      const res = spawnSync(adbPath, ['-s', device, 'shell', 'getprop', prop], {
+        encoding: 'utf8',
+      });
       const val = res.stdout ? res.stdout.trim() : '';
-      
+
       const expected = prop === 'init.svc.bootanim' ? 'stopped' : '1';
       if (val !== expected) {
         allOk = false;
@@ -113,14 +115,14 @@ function recoverSystemUiInterference(device, adbPath, baseResult) {
   baseResult.executed = true;
   baseResult.skipped = false;
   baseResult.action = 'Dismissing System UI overlays and waking up screen.';
-  
+
   const recoveryCmds = [
     ['shell', 'cmd', 'statusbar', 'collapse'],
     ['shell', 'input', 'keyevent', 'KEYCODE_WAKEUP'],
     ['shell', 'wm', 'dismiss-keyguard'],
   ];
 
-  baseResult.commands = recoveryCmds.map(cmd => `adb ${cmd.join(' ')}`);
+  baseResult.commands = recoveryCmds.map((cmd) => `adb ${cmd.join(' ')}`);
 
   let successCount = 0;
   let errorDetails = [];
@@ -134,11 +136,11 @@ function recoverSystemUiInterference(device, adbPath, baseResult) {
     }
   }
 
-  baseResult.ok = (successCount === recoveryCmds.length);
-  baseResult.detail = baseResult.ok 
-    ? 'System UI overlays dismissed successfully.' 
+  baseResult.ok = successCount === recoveryCmds.length;
+  baseResult.detail = baseResult.ok
+    ? 'System UI overlays dismissed successfully.'
     : `Failed some recovery commands: ${errorDetails.join(', ')}`;
-  
+
   // Even if some failed, it might be worth rerunning the test.
   baseResult.rerunRecommended = true;
 

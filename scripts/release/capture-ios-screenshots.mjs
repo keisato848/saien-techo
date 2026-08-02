@@ -2,7 +2,7 @@
  * App Store 掲載用スクリーンショットを iOS シミュレータから機械的に取得する（macOS 専用）。
  *
  * 仕組み: 各ショットごとに「アプリを terminate → Expo Router のディープリンク
- * (daidoko://...) で起動 → 待機 → xcrun simctl io screenshot」。
+ * (saientecho://...) で起動 → 待機 → xcrun simctl io screenshot」。
  * ステータスバーは simctl status_bar override で固定（時計 9:41・電池 100%・WiFi/電波フル）。
  * Android 版（capture-store-screenshots.mjs）の iOS 対応版。ANR/SystemUI ダイアログは
  * iOS シミュレータには無いので、そのぶん単純。
@@ -27,11 +27,11 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
+import { appIdentity } from '../agent/lib/app-identity.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const DEFAULT_OUT = path.join(ROOT, 'docs/store/app-store/phone-screenshots');
-const BUNDLE_ID = 'com.daidoko.app';
-const SCHEME = 'daidoko';
+const { bundleId: BUNDLE_ID, scheme: SCHEME } = appIdentity();
 
 if (process.platform !== 'darwin') {
   console.error('このスクリプトは macOS 専用です（xcrun simctl を使用）。Mac で実行してください。');
@@ -42,7 +42,7 @@ const args = parseArgs(process.argv.slice(2));
 const RECIPE_ID = args.recipe ?? 'recipe-1';
 
 /**
- * ショット定義。route は Expo Router のパス（daidoko://<route> で開く）。
+ * ショット定義。route は Expo Router のパス（saientecho://<route> で開く）。
  * Android 版（capture-store-screenshots.mjs）と同じ画面構成・同じ順序に揃える。
  * manual: true は自動化不可（既存ファイル維持）。
  */

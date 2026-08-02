@@ -97,7 +97,10 @@ function add(severity, rule, file, message) {
  * ネストしたマップ（hooks, mcpServers）は値を検証しないので存在確認だけ行う。
  */
 function parseFrontmatter(raw) {
-  const normalized = raw.replace(/^﻿/, '');
+  // CRLF は先に潰す。JS の `.` は `\r` を行終端として扱うため、CRLF のままだと
+  // frontmatter 最終行（閉じ `---` の直前）のキーが正規表現に一致せず、
+  // フィールドが黙って欠落する。実際に取りこぼした実績あり。
+  const normalized = raw.replace(/^﻿/, '').replace(/\r\n/g, '\n');
   if (!normalized.startsWith('---')) return { ok: false, reason: 'frontmatter がない' };
   const end = normalized.indexOf('\n---', 3);
   if (end === -1) return { ok: false, reason: 'frontmatter が閉じていない' };
@@ -433,6 +436,63 @@ function validateHooks() {
   }
 }
 
+// --- 移植元(だいどこ)の実資産を指す識別子の検出 ------------------------------
+
+/**
+ * 実行するとだいどこ側の資産を操作してしまう識別子。
+ * 「だいどこ」という語の散文中の言及は対象外 — 操作対象になる値だけを落とす。
+ *
+ * 経緯: 移植時にアプリ ID とスキームは置換したが、Railway のサービス名と AdMob の
+ * ユニット ID は grep パターンから漏れ、人手のレビューでしか見つからなかった。
+ * 検出対象は下の配列が唯一の定義。行末に daidoko-ref-ok を書いた行は除外される。
+ */
+const FOREIGN_IDENTIFIERS = [
+  { pattern: /com\.daidoko\.app/, label: 'だいどこの applicationId' }, // daidoko-ref-ok
+  { pattern: /daidoko:\/\//, label: 'だいどこのディープリンクスキーム' }, // daidoko-ref-ok
+  { pattern: /--service\s+daidoko\b/, label: 'だいどこの Railway サービス名' }, // daidoko-ref-ok
+  { pattern: /daidoko-production/, label: 'だいどこの Railway 本番ドメイン' }, // daidoko-ref-ok
+  { pattern: /ca-app-pub-2633806931583277/, label: 'だいどこの AdMob ID' }, // daidoko-ref-ok
+  { pattern: /DAIDOKO_UPLOAD_/, label: 'だいどこの署名環境変数' }, // daidoko-ref-ok
+  { pattern: /keisato848\/daidoko\b/, label: 'だいどこのリポジトリ' }, // daidoko-ref-ok
+];
+
+const SCAN_DIRS = ['.claude', 'scripts', 'e2e'];
+const SCAN_EXTENSIONS = /\.(md|mjs|js|ts|json)$/;
+
+function walk(dir, out = []) {
+  if (!existsSync(dir)) return out;
+  for (const entry of readdirSync(dir)) {
+    if (entry === 'node_modules' || entry.startsWith('.git')) continue;
+    const full = join(dir, entry);
+    if (statSync(full).isDirectory()) walk(full, out);
+    else if (SCAN_EXTENSIONS.test(entry)) out.push(full);
+  }
+  return out;
+}
+
+function validateForeignIdentifiers() {
+  for (const dirName of SCAN_DIRS) {
+    for (const file of walk(join(rootDir, dirName))) {
+      const rel = file.replace(rootDir, '').replace(/\\/g, '/').replace(/^\//, '');
+      const lines = readFileSync(file, 'utf8').split(/\r?\n/);
+      lines.forEach((line, index) => {
+        // 意図的な参照は行末に daidoko-ref-ok を書いて除外する
+        if (line.includes('daidoko-ref-ok')) return;
+        for (const { pattern, label } of FOREIGN_IDENTIFIERS) {
+          if (pattern.test(line)) {
+            add(
+              'ERROR',
+              'foreign-app-identifier',
+              `${rel}:${index + 1}`,
+              `${label}が残っている。実行するとだいどこ側の資産を操作する。さいえん手帳の値かプレースホルダへ置き換えること`,
+            );
+          }
+        }
+      });
+    }
+  }
+}
+
 // --- 実行 --------------------------------------------------------------------
 
 function parseArgs(argv) {
@@ -450,6 +510,7 @@ if (!existsSync(claudeDir)) {
 validateSkills();
 validateAgents();
 validateHooks();
+validateForeignIdentifiers();
 
 const errors = findings.filter((finding) => finding.severity === 'ERROR');
 const warnings = findings.filter((finding) => finding.severity === 'WARN');

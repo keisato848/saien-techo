@@ -9,7 +9,7 @@ const rootDir = resolve(fileURLToPath(new URL('../..', import.meta.url)));
 const androidDir = join(rootDir, 'apps', 'mobile', 'android');
 const options = parseArgs(process.argv.slice(2));
 const wrapperPath = join(androidDir, process.platform === 'win32' ? 'gradlew.bat' : 'gradlew');
-const gradleCache = process.env.GRADLE_CACHE || join(tmpdir(), 'daidoko-gradle-project-cache');
+const gradleCache = process.env.GRADLE_CACHE || join(tmpdir(), 'saien-techo-gradle-project-cache');
 
 if (options.prebuild) {
   const prebuild = runCommand(

@@ -26,6 +26,4 @@ if (result.ok) {
   systemMessage = `Agent Suite session start\n${result.combinedOutput}`;
 }
 
-process.stdout.write(
-  `${JSON.stringify({ continue: true, systemMessage }, null, 2)}\n`,
-);
+process.stdout.write(`${JSON.stringify({ continue: true, systemMessage }, null, 2)}\n`);

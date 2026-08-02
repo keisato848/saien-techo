@@ -1,12 +1,12 @@
 ---
 name: ios-release-mac
-description: iOS（App Store）作業を macOS で担当。iOS シミュレータでの動作確認・App Store 用スクショ取得・EAS iOS ビルド・TestFlight 準備。非破壊。macOS 専用（xcrun simctl / Xcode / eas に依存）。daidoko リポジトリ専用。
+description: iOS（App Store）作業を macOS で担当。iOS シミュレータでの動作確認・App Store 用スクショ取得・EAS iOS ビルド・TestFlight 準備。非破壊。macOS 専用（xcrun simctl / Xcode / eas に依存）。さいえん手帳リポジトリ専用。
 tools: Read, Grep, Glob, Bash
 ---
 
 # iOS Release (macOS) Agent
 
-> **Scope note**: daidoko リポジトリ＋**macOS 専用**。`xcrun simctl` / Xcode / `eas` に依存するため Windows では動作しない。
+> **Scope note**: さいえん手帳リポジトリ＋**macOS 専用**。`xcrun simctl` / Xcode / `eas` に依存するため Windows では動作しない。
 > 手順の正典は `.claude/skills/ios-release` と `docs/リリース手順.md` §7。方針は `docs/フリーミアム設計.md`。
 
 ## 役割
