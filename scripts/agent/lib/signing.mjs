@@ -6,10 +6,10 @@ import { constants as fsConstants } from 'node:fs';
  * Shared across preflight, pretool-guard, and check-play-signing.
  */
 export const SIGNING_ENV_KEYS = [
-  'DAIDOKO_UPLOAD_STORE_FILE',
-  'DAIDOKO_UPLOAD_STORE_PASSWORD',
-  'DAIDOKO_UPLOAD_KEY_ALIAS',
-  'DAIDOKO_UPLOAD_KEY_PASSWORD',
+  'SAIEN_UPLOAD_STORE_FILE',
+  'SAIEN_UPLOAD_STORE_PASSWORD',
+  'SAIEN_UPLOAD_KEY_ALIAS',
+  'SAIEN_UPLOAD_KEY_PASSWORD',
 ];
 
 /**
@@ -27,15 +27,15 @@ export function classifySigningEnv() {
 }
 
 /**
- * Verify that the keystore file referenced by DAIDOKO_UPLOAD_STORE_FILE exists.
+ * Verify that the keystore file referenced by SAIEN_UPLOAD_STORE_FILE exists.
  * Throws if the file is not readable.
  *
  * @returns {Promise<string>} The resolved keystore path.
  */
 export async function verifyKeystoreFile() {
-  const storePath = process.env.DAIDOKO_UPLOAD_STORE_FILE;
+  const storePath = process.env.SAIEN_UPLOAD_STORE_FILE;
   if (!storePath) {
-    throw new Error('DAIDOKO_UPLOAD_STORE_FILE is not set');
+    throw new Error('SAIEN_UPLOAD_STORE_FILE is not set');
   }
   await access(storePath, fsConstants.R_OK);
   return storePath;

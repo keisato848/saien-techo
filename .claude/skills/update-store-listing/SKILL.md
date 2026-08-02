@@ -44,7 +44,7 @@ description: Google Play ストア掲載（ja-JP のアプリ名・説明文・�
    ※ wipe 直後の SystemUI ANR ダイアログは capture スクリプトが dumpsys で検出して自動で閉じる
 3. `adb install -r apps/mobile/android/app/build/outputs/apk/release/app-release.apk`
 4. 取得: `node scripts/release/capture-store-screenshots.mjs`
-   - ショットごとに force-stop → `daidoko://` ディープリンクでコールドスタート → screencap
+   - ショットごとに force-stop → `saientecho://` ディープリンクでコールドスタート → screencap
    - ステータスバーは SystemUI デモモードで固定（09:00・電池100%・通知なし）
    - `manual` 指定のショット（AI 結果画面など）はスキップして既存ファイルを維持
    - 部分再取得: `--shots 01,04` / 対象レシピ変更: `--recipe recipe-3`

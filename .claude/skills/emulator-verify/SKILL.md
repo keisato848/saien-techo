@@ -37,9 +37,9 @@ node scripts/agent/build-android.mjs --arch x86_64   # app.json/plugins 変更�
 
 ## 3. 画面遷移・確認
 
-- 遷移は **ディープリンクが最も堅牢**: `adb shell am start -W -a android.intent.action.VIEW -d "daidoko://<route>" com.daidoko.app`
+- 遷移は **ディープリンクが最も堅牢**: `adb shell am start -W -a android.intent.action.VIEW -d "saientecho://<route>" com.saientecho.app`
   （route 例: 空=ホーム / recipes / recipes/recipe-1 / recipes/recipe-1/cook / family / recipes/import-photo / settings / pantry / shopping）
-- 状態を確定させたいときは事前に `adb shell am force-stop com.daidoko.app`（コールドスタート）
+- 状態を確定させたいときは事前に `adb shell am force-stop com.saientecho.app`（コールドスタート）
 - スクショ: `adb exec-out screencap -p > file.png` → Read で目視。**adb は PowerShell ツールで**（Git Bash は /sdcard を壊す）
 - 座標タップは**直前のスクショで座標を確認**（コーチマーク・ANR・通知パネル等のオーバーレイが座標を奪う）
 

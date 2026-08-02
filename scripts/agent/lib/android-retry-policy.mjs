@@ -2,7 +2,7 @@ import { SIGNAL_CODES } from './android-signals.mjs';
 
 /**
  * Returns a structured retry policy for a given failure signal.
- * 
+ *
  * Policy structure:
  * - strategy: 'stop', 'manual_first', 'retry_candidate'
  * - maxAttempts: integer (0 if stop)
@@ -72,7 +72,8 @@ export function getRetryPolicy(signalCode) {
         strategy: 'stop',
         maxAttempts: 0,
         requiresHuman: true,
-        suggestedAction: 'The device is in a bad state and missing core services. Reboot the device.',
+        suggestedAction:
+          'The device is in a bad state and missing core services. Reboot the device.',
         suggestedChecks: ['adb reboot'],
       };
 
@@ -93,7 +94,8 @@ export function getRetryPolicy(signalCode) {
         strategy: 'manual_first',
         maxAttempts: 1,
         requiresHuman: true,
-        suggestedAction: 'Review the raw adb install output. Check for signature mismatch, package name mismatch, or insufficient storage.',
+        suggestedAction:
+          'Review the raw adb install output. Check for signature mismatch, package name mismatch, or insufficient storage.',
         suggestedChecks: ['adb logcat -d | grep PackageManager'],
       };
 
@@ -111,7 +113,8 @@ export function getRetryPolicy(signalCode) {
         strategy: 'retry_candidate',
         maxAttempts: 2,
         requiresHuman: false,
-        suggestedAction: 'Collapse the status bar or dismiss system dialogs (e.g., ANR, Battery warning).',
+        suggestedAction:
+          'Collapse the status bar or dismiss system dialogs (e.g., ANR, Battery warning).',
         suggestedChecks: ['adb shell cmd statusbar collapse'],
       };
 

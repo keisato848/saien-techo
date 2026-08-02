@@ -14,7 +14,7 @@ iOS の AI は「無料枠1日1回 ＋ BYOK」。広告/課金の導線は iOS �
 
 ## 0. 前提（初回のみ・ユーザー作業）
 
-- **Apple Developer Program 登録**（年 $99）。App Store Connect でアプリ枠を作成（bundle id `com.daidoko.app`）。
+- **Apple Developer Program 登録**（年 $99）。App Store Connect でアプリ枠を作成（bundle id `com.saientecho.app`）。
 - Mac に **Xcode**（＋Command Line Tools）、**CocoaPods**、**Node/pnpm**、**EAS CLI**（`npm i -g eas-cli`）。
 - リポジトリを clone し、**リポジトリルートで** `pnpm install`（`.npmrc` が `node-linker=hoisted`。
   `apps/mobile` 内では実行しない）。

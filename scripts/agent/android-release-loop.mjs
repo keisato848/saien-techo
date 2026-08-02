@@ -10,7 +10,9 @@ const options = parseArgs(process.argv.slice(2));
 const steps = [];
 const recoveryAttempts = [];
 
-steps.push(runStepWithRecovery('preflight', [process.execPath, 'scripts/agent/preflight.mjs', '--json']));
+steps.push(
+  runStepWithRecovery('preflight', [process.execPath, 'scripts/agent/preflight.mjs', '--json']),
+);
 
 const needsDevice = !options.skipInstall || !options.skipE2e;
 let healthOk = true;
@@ -29,13 +31,12 @@ if (needsDevice) {
 
 if (!options.skipBuild && healthOk) {
   steps.push(
-    runStepWithRecovery('build', [
-      process.execPath,
-      'scripts/agent/build-android.mjs',
-      '--arch',
-      options.arch,
-      '--json',
-    ], undefined, options.device),
+    runStepWithRecovery(
+      'build',
+      [process.execPath, 'scripts/agent/build-android.mjs', '--arch', options.arch, '--json'],
+      undefined,
+      options.device,
+    ),
   );
 }
 
@@ -49,7 +50,14 @@ if (!options.skipInstall && healthOk) {
 
 if (!options.skipE2e && healthOk) {
   for (const suite of resolveSuites(options.suite)) {
-    steps.push(runStepWithRecovery(suite, suiteCommand(suite), buildSuiteEnv(options.device), options.device));
+    steps.push(
+      runStepWithRecovery(
+        suite,
+        suiteCommand(suite),
+        buildSuiteEnv(options.device),
+        options.device,
+      ),
+    );
   }
 }
 
@@ -166,7 +174,11 @@ function buildSuiteEnv(device) {
 function runStepWithRecovery(id, [command, ...args], env = undefined, device = null) {
   let stepResult = runStep(id, [command, ...args], env);
 
-  if (!stepResult.ok && stepResult.signal && stepResult.retryPolicy?.strategy === 'retry_candidate') {
+  if (
+    !stepResult.ok &&
+    stepResult.signal &&
+    stepResult.retryPolicy?.strategy === 'retry_candidate'
+  ) {
     const recoveryRes = executeRecovery(stepResult.signal.code, device, 'adb', { id });
     recoveryRes.stepId = id;
     recoveryAttempts.push(recoveryRes);

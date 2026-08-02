@@ -2,7 +2,7 @@
  * Google Play ストア掲載用スクリーンショットを接続中の端末/エミュレータから機械的に取得する。
  *
  * 仕組み: 各ショットごとに「アプリを force-stop → Expo Router のディープリンク
- * (daidoko://...) でコールドスタート → 待機 → adb exec-out screencap」。
+ * (saientecho://...) でコールドスタート → 待機 → adb exec-out screencap」。
  * ステータスバーは SystemUI デモモードで固定（時計 09:00・電池 100%・通知なし）。
  *
  * 前提:
@@ -25,17 +25,17 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
+import { appIdentity } from '../agent/lib/app-identity.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const DEFAULT_OUT = path.join(ROOT, 'docs/store/google-play/phone-screenshots');
-const PACKAGE = 'com.daidoko.app';
-const SCHEME = 'daidoko';
+const { packageName: PACKAGE, scheme: SCHEME } = appIdentity();
 
 const args = parseArgs(process.argv.slice(2));
 const RECIPE_ID = args.recipe ?? 'recipe-1';
 
 /**
- * ショット定義。route は Expo Router のパス（daidoko://<route> で開く）。
+ * ショット定義。route は Expo Router のパス（saientecho://<route> で開く）。
  * manual: true は自動化不可（既存ファイル維持）。順序 = Play 表示順（README.md と一致させる）。
  */
 const SHOTS = [

@@ -97,7 +97,10 @@ function add(severity, rule, file, message) {
  * ネストしたマップ（hooks, mcpServers）は値を検証しないので存在確認だけ行う。
  */
 function parseFrontmatter(raw) {
-  const normalized = raw.replace(/^﻿/, '');
+  // CRLF は先に潰す。JS の `.` は `\r` を行終端として扱うため、CRLF のままだと
+  // frontmatter 最終行（閉じ `---` の直前）のキーが正規表現に一致せず、
+  // フィールドが黙って欠落する。実際に取りこぼした実績あり。
+  const normalized = raw.replace(/^﻿/, '').replace(/\r\n/g, '\n');
   if (!normalized.startsWith('---')) return { ok: false, reason: 'frontmatter がない' };
   const end = normalized.indexOf('\n---', 3);
   if (end === -1) return { ok: false, reason: 'frontmatter が閉じていない' };

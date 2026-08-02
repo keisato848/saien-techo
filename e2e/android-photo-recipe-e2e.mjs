@@ -6,8 +6,9 @@
 import { spawnSync } from 'child_process';
 import { mkdirSync, readFileSync, rmSync, writeFileSync, existsSync } from 'fs';
 import { resolve } from 'path';
+import { androidPackage } from '../scripts/agent/lib/app-identity.mjs';
 
-const PKG = 'com.daidoko.app';
+const PKG = androidPackage();
 const ACT = `${PKG}/.MainActivity`;
 const SCREENSHOT_DIR = resolve('e2e/screenshots/photo-recipe-android');
 const DUMP_DIR = resolve('e2e/ui-dumps/photo-recipe-android');

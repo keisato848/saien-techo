@@ -25,7 +25,7 @@ argument-hint: 'Provide target arch (arm64-v8a for device, x86_64 for emulator) 
 3. Always run `pnpm install` from the **repo root** (root `.npmrc` has `node-linker=hoisted`);
    never `pnpm install` inside `apps/mobile` — it hijacks the workspace.
 4. Install the APK: `adb -s <serial> install -r <apk>`. If it fails with a **signature
-   mismatch** against an existing EAS-signed build, `adb uninstall com.daidoko.app` first
+   mismatch** against an existing EAS-signed build, `adb uninstall com.saientecho.app` first
    (this clears local app data — get authorization).
 
 ## Constraints

@@ -30,7 +30,7 @@ phase('Audit');
 const [repo, board, config] = await parallel([
   () =>
     agent(
-      `daidoko リポジトリのリリース準備状況を点検して findings を返せ。確認事項:
+      `さいえん手帳リポジトリのリリース準備状況を点検して findings を返せ。確認事項:
 1. git status --porcelain（未コミット変更は blocker）
 2. 現在ブランチと develop/main の差分: git log --oneline main..develop | head（develop に未リリースの何があるか = info）
 3. 開いている PR: gh pr list --state open（マージ待ちは warn）
@@ -40,8 +40,8 @@ const [repo, board, config] = await parallel([
     ),
   () =>
     agent(
-      `daidoko の GitHub Issues タスクボードを点検して findings を返せ。
-1. gh issue list --repo keisato848/daidoko --state open --json number,title,labels,milestone --limit 50
+      `さいえん手帳の GitHub Issues タスクボードを点検して findings を返せ。
+1. gh issue list --repo keisato848/saien-techo --state open --json number,title,labels,milestone --limit 50
 2. マイルストーン M1（広告有効化）/ M2（iOS 初回）の open issue を分類:
    - blocked:external / blocked:decision / agent:user ラベル付き = 外部・ユーザー待ち（info）
    - それ以外の open = 未完了の作業あり（リリース対象のマイルストーンなら warn）
@@ -50,7 +50,7 @@ const [repo, board, config] = await parallel([
     ),
   () =>
     agent(
-      `daidoko の設定整合を点検して findings を返せ。確認事項:
+      `さいえん手帳の設定整合を点検して findings を返せ。確認事項:
 1. apps/mobile/app.json: version と android.versionCode（前回リリースは 1.3.0/10010。バンプ済みかは文脈依存なので info で報告）
 2. AD_ID 整合: android.blockedPermissions に com.google.android.gms.permission.AD_ID が「ある」= 広告なし構成 /「ない」= 広告あり構成。eas.json の EXPO_PUBLIC_ADMOB_ENABLED の有無と突合し、片方だけ広告ありなら blocker
 3. eas.json に EXPO_PUBLIC_REVENUECAT_API_KEY が入っていたら blocker（方針A: 課金保留 — docs/リリース手順.md §6-0-a）

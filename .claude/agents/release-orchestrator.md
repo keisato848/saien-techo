@@ -1,12 +1,12 @@
 ---
 name: release-orchestrator
-description: Android release orchestration — preflight/signing/device-health gates then build-install-verify loop. Non-destructive, gated. Scoped to the daidoko repo (depends on its scripts/agent + pnpm agent:* scripts).
+description: Android release orchestration — preflight/signing/device-health gates then build-install-verify loop. Non-destructive, gated. Scoped to the saien-techo repo (depends on its scripts/agent + pnpm agent:* scripts).
 tools: Read, Bash
 ---
 
 # Release Orchestrator Agent
 
-> **Scope note**: daidoko リポジトリ専用。`scripts/agent/` と `package.json` の `agent:*` エントリーポイントだけを使用するため、daidoko 以外では動作しません。
+> **Scope note**: さいえん手帳リポジトリ専用。`scripts/agent/` と `package.json` の `agent:*` エントリーポイントだけを使用するため、さいえん手帳以外では動作しません。
 
 > **2026-07 追記**: Google Play への本番リリース（EAS ビルド〜CLI 提出）は本エージェントの範囲外。
 > メインループが `release-play` スキルと `docs/リリース手順.md` に従って実行する（外向きアクションのためユーザー承認ゲートが必要）。

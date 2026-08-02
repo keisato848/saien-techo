@@ -8,7 +8,10 @@
 import fs from 'node:fs';
 import crypto from 'node:crypto';
 
-export const PACKAGE = 'com.daidoko.app';
+import { androidPackage } from '../../agent/lib/app-identity.mjs';
+
+// app.json が単一ソース。ここにベタ書きすると別アプリの掲載を上書きしうる
+export const PACKAGE = androidPackage();
 export const API_BASE = `https://androidpublisher.googleapis.com/androidpublisher/v3/applications/${PACKAGE}`;
 export const UPLOAD_BASE = `https://androidpublisher.googleapis.com/upload/androidpublisher/v3/applications/${PACKAGE}`;
 
