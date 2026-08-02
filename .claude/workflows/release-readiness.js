@@ -53,8 +53,8 @@ const [repo, board, config] = await parallel([
       `さいえん手帳の設定整合を点検して findings を返せ。確認事項:
 1. apps/mobile/app.json: version と android.versionCode（前回リリースは 1.3.0/10010。バンプ済みかは文脈依存なので info で報告）
 2. AD_ID 整合: android.blockedPermissions に com.google.android.gms.permission.AD_ID が「ある」= 広告なし構成 /「ない」= 広告あり構成。eas.json の EXPO_PUBLIC_ADMOB_ENABLED の有無と突合し、片方だけ広告ありなら blocker
-3. eas.json に EXPO_PUBLIC_REVENUECAT_API_KEY が入っていたら blocker（方針A: 課金保留 — docs/リリース手順.md §6-0-a）
-4. docs/リリース手順.md §6-0 の残作業表と現状の食い違いがあれば warn`,
+3. eas.json に EXPO_PUBLIC_REVENUECAT_API_KEY が入っていたら blocker（方針A: 課金保留 — docs/リリース手順.md（未整備 — WBS 3.9 で作成） §6-0-a）
+4. docs/リリース手順.md（未整備 — WBS 3.9 で作成） §6-0 の残作業表と現状の食い違いがあれば warn`,
       { label: 'audit:config', phase: 'Audit', schema: REPORT },
     ),
 ]);
