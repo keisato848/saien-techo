@@ -10,9 +10,9 @@ description: Android エミュレータ/実機での画面・機能検証の定�
 ## 1. エミュレータ準備
 
 ```powershell
-# AVD 一覧 / 起動（検証は 1080x2400 の daidoko_e2e_fresh_api36 が基準。x86_64 なので --arch x86_64 でビルド）
+# AVD 一覧 / 起動（検証は 1080x2400 の saien_e2e_api36 が基準。x86_64 なので --arch x86_64 でビルド）
 & "$env:LOCALAPPDATA\Android\Sdk\emulator\emulator.exe" -list-avds
-& "$env:LOCALAPPDATA\Android\Sdk\emulator\emulator.exe" -avd daidoko_e2e_fresh_api36 -no-boot-anim -no-audio -no-snapshot -dns-server 8.8.8.8,1.1.1.1
+& "$env:LOCALAPPDATA\Android\Sdk\emulator\emulator.exe" -avd saien_e2e_api36 -no-boot-anim -no-audio -no-snapshot -dns-server 8.8.8.8,1.1.1.1
 ```
 
 - **`-dns-server 8.8.8.8,1.1.1.1` を必ず付ける**（エミュレータ DNS 死亡の実績。広告/UMP/ML Kit モデル DL はネット必須）

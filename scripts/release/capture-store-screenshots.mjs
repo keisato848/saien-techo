@@ -10,7 +10,7 @@
  *       EXPO_PUBLIC_ENABLE_SAMPLE_DATA=1 EXPO_PUBLIC_DISABLE_COACH_MARKS=1 \
  *         node scripts/agent/build-android.mjs --arch x86_64
  *       adb install -r apps/mobile/android/app/build/outputs/apk/release/app-release.apk
- *   - 推奨エミュレータ: daidoko_e2e_fresh_api36（1080x2400 = 既存ストア掲載と同解像度）
+ *   - 推奨エミュレータ: saien_e2e_api36（1080x2400 = Play 掲載のスマホ用スクショ解像度）
  *   - wipe-data 直後の初回ブートは SystemUI が重く ANR ダイアログが写り込むことがある。
  *     起動後 2〜3 分待ってから実行する（出たら Wait で閉じて再実行）
  *

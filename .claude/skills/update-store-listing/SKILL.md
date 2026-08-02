@@ -41,8 +41,8 @@ description: Google Play ストア掲載（ja-JP のアプリ名・説明文・�
 
 1. ストアショット用リリース APK をビルド（サンプルデータ有効＋コーチマーク無効。エミュレータは x86_64）:
    `EXPO_PUBLIC_ENABLE_SAMPLE_DATA=1 EXPO_PUBLIC_DISABLE_COACH_MARKS=1 node scripts/agent/build-android.mjs --arch x86_64`
-2. クリーンなエミュレータを起動（**1080x2400 の `daidoko_e2e_fresh_api36` を使う** — 既存掲載と同解像度）:
-   `emulator -avd daidoko_e2e_fresh_api36 -wipe-data -no-snapshot`
+2. クリーンなエミュレータを起動（**1080x2400 の `saien_e2e_api36` を使う** — 既存掲載と同解像度）:
+   `emulator -avd saien_e2e_api36 -wipe-data -no-snapshot`
    ※ wipe 直後の SystemUI ANR ダイアログは capture スクリプトが dumpsys で検出して自動で閉じる
 3. `adb install -r apps/mobile/android/app/build/outputs/apk/release/app-release.apk`
 4. 取得: `node scripts/release/capture-store-screenshots.mjs`
