@@ -5,6 +5,8 @@ description: Google Play へのアプリリリース一式。バージョンバ�
 
 # Google Play リリースパイプライン
 
+> **停止**: だいどこの値またはプレースホルダが残っている。WBS 3.7〜3.9 で さいえん手帳用に差し替えるまで実行しないこと。
+
 詳細・トラブルシューティングは `docs/リリース手順.md` §0・§2・§5 を参照。
 サーバー側に変更がある場合は先に `deploy-server` スキルで Railway を更新しておく。
 
@@ -27,7 +29,7 @@ description: Google Play へのアプリリリース一式。バージョンバ�
 5. **本番構成の実機 E2E**（マージ前検証の原則・省略しない）:
    - ローカル release ビルドは**必ず** `node scripts/agent/build-android.mjs`（生 gradlew は失敗する）
    - `adb reverse --remove-all` で localhost ブリッジを排除（API 既定 = Railway 本番）
-   - 実機で AI 機能（食べた・名寄せ等）を操作し `railway logs --service daidoko` で 200 を裏どり
+   - 実機で AI 機能（食べた・名寄せ等）を操作し `railway logs --service <さいえん手帳の Railway サービス名 — 未作成>` で 200 を裏どり
 6. **提出**（外向きアクション — ユーザーの明示承認を確認してから）:
    ```
    cd apps/mobile

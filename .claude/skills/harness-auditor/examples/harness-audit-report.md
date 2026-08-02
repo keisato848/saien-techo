@@ -31,4 +31,4 @@
 
 - 全7軸にスコアと根拠がある。
 - 🔴 高の指摘が 0 件である。
-- 機械検証 `github-customization-check` が成功している。
+- 機械検証 `claude-customization-check` が成功している。

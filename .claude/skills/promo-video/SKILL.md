@@ -5,6 +5,8 @@ description: ストアプロモーション動画（YouTube 埋め込み）を�
 
 # プロモーション動画の自動生成
 
+> **停止**: だいどこの値またはプレースホルダが残っている。WBS 3.7〜3.9 で さいえん手帳用に差し替えるまで実行しないこと。
+
 collect（データはコード）→ record（screenrecord）→ edit（ffmpeg）→ review（フレーム確認）→ handoff（YouTube アップロードはユーザー作業）の一直線フロー。詳細は `docs/リリース手順.md` §3-4、ストア掲載全般は `update-store-listing` Skill。
 
 ## 0. データはコードで管理する（最重要）

@@ -5,6 +5,8 @@ description: Play Console / AdMob / RevenueCat のブラウザ自動化（Claude
 
 # コンソール類のブラウザ自動化 運用手順
 
+> **停止**: だいどこの値またはプレースホルダが残っている。WBS 3.7〜3.9 で さいえん手帳用に差し替えるまで実行しないこと。
+
 Claude in Chrome（mcp\_\_claude-in-chrome\_\_\*）でメインループが実行する。**サブエージェントには委譲しない**
 （store-ops はブラウザ操作を禁止。取得・検証・dry-run 担当）。
 
@@ -49,8 +51,8 @@ Claude in Chrome（mcp\_\_claude-in-chrome\_\_\*）でメインループが実�
 2. アプリ ID（`ca-app-pub-…~…`）とユニット ID（`ca-app-pub-…/…`）を控えて app.json / eas.json に配線
 3. リワードユニット: アプリ → 広告ユニット → リワード（報酬は既定 1/Reward でよい — アプリは視聴完了イベントのみ参照）
 4. **app-ads.txt**: `google.com, pub-<ID>, DIRECT, f08c47fec0942fa0` を Play 掲載の連絡先ウェブサイトの
-   **ドメイン直下**に設置。だいどこは `keisato848/keisato848.github.io` リポジトリ（GitHub Pages）に設置済み —
-   更新は `gh api repos/keisato848/keisato848.github.io/contents/app-ads.txt` の PUT、
+   **ドメイン直下**に設置。だいどこでは `keisato848/keisato848.github.io`（GitHub Pages）に設置していた。さいえん手帳用の配信先は未作成 —
+   更新は `gh api repos/<さいえん手帳の app-ads.txt 配信リポジトリ — 未作成>/contents/app-ads.txt` の PUT、
    Pages ビルドが `building` のまま固まったら `gh api .../pages/builds -X POST` で再トリガー
 5. アプリ確認（要審査）はクロール後最大7日。承認まで実広告は配信制限
 
