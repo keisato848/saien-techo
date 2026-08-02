@@ -1,7 +1,7 @@
 ---
 name: release-orchestrator
-description: Android release orchestration — preflight/signing/device-health gates then build-install-verify loop. Non-destructive, gated. Scoped to the saien-techo repo (depends on its scripts/agent + pnpm agent:* scripts).
-tools: Read, Bash
+description: Android release orchestration — runs the preflight/signing/device-health gates in order, then drives the build-install-verify loop. Owns gate sequencing and stop/go decisions; delegates screen-level verification detail to android-verifier. Non-destructive, gated. Scoped to the saien-techo repo (depends on its scripts/agent + pnpm agent:* scripts).
+tools: Read, Bash, PowerShell
 ---
 
 # Release Orchestrator Agent
