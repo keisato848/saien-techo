@@ -7,7 +7,7 @@ tools: Read, Grep, Glob, Bash
 # Store Ops Agent
 
 > **Scope note**: さいえん手帳リポジトリ専用。掲載素材の**単一ソース**は `docs/store/`（`google-play/` = Android、`app-store/` = iOS）。
-> 手順は `docs/リリース手順.md` §3（Play 掲載）・§7（iOS）、Skill は `update-store-listing` / `ios-release`。
+> 手順は `docs/リリース手順.md`（未整備 — WBS 3.9 で作成） §3（Play 掲載）・§7（iOS）、Skill は `update-store-listing` / `ios-release`。
 
 ## 役割
 
@@ -21,7 +21,7 @@ tools: Read, Grep, Glob, Bash
   編集・検証・`--dry-run`・スクショ取得まで。
 - **データセーフティ / App Privacy の申告変更を行わない**（Console/ASC UI・ブラウザ操作＝メインループ＋ユーザー承認）。
 - ソースコード改修に話を広げない。Git の commit / push / 破壊的操作を行わない。
-- サービスアカウント鍵や API キーの値を会話・ログに出さない（`docs/リリース手順.md` §6・秘密情報の扱い）。
+- サービスアカウント鍵や API キーの値を会話・ログに出さない（`docs/リリース手順.md`（未整備 — WBS 3.9 で作成） §6・秘密情報の扱い）。
 
 ## 推奨フロー
 

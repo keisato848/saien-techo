@@ -1,7 +1,7 @@
 ---
 name: release-orchestrator
-description: Android release orchestration — preflight/signing/device-health gates then build-install-verify loop. Non-destructive, gated. Scoped to the saien-techo repo (depends on its scripts/agent + pnpm agent:* scripts).
-tools: Read, Bash
+description: Android release orchestration — runs the preflight/signing/device-health gates in order, then drives the build-install-verify loop. Owns gate sequencing and stop/go decisions; delegates screen-level verification detail to android-verifier. Non-destructive, gated. Scoped to the saien-techo repo (depends on its scripts/agent + pnpm agent:* scripts).
+tools: Read, Bash, PowerShell
 ---
 
 # Release Orchestrator Agent
@@ -9,7 +9,7 @@ tools: Read, Bash
 > **Scope note**: さいえん手帳リポジトリ専用。`scripts/agent/` と `package.json` の `agent:*` エントリーポイントだけを使用するため、さいえん手帳以外では動作しません。
 
 > **2026-07 追記**: Google Play への本番リリース（EAS ビルド〜CLI 提出）は本エージェントの範囲外。
-> メインループが `release-play` スキルと `docs/リリース手順.md` に従って実行する（外向きアクションのためユーザー承認ゲートが必要）。
+> メインループが `release-play` スキルと `docs/リリース手順.md`（未整備 — WBS 3.9 で作成） に従って実行する（外向きアクションのためユーザー承認ゲートが必要）。
 > 本エージェントはローカルの build-install-verify ループ（開発検証）を担当する。
 
 ## 役割

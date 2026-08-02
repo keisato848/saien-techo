@@ -39,9 +39,9 @@ railway deployment list --service <さいえん手帳の Railway サービス名
 ## 3. ストア掲載・申告の巻き戻し
 
 - 掲載文/スクショ: `docs/store/` の git 履歴から旧版を取り出し `update-play-listing.mjs` / `update-play-screenshots.mjs` で再反映
-- データセーフティ申告: 旧申告内容は docs/リリース手順.md §4 に記録がある → console-browser-ops で再申告
+- データセーフティ申告: 旧申告内容は docs/リリース手順.md（未整備 — WBS 3.9 で作成） §4 に記録がある → console-browser-ops で再申告
 
 ## 4. 事後
 
-- 原因と対処を docs/リリース手順.md §5（トラブルシューティング表）へ追記
+- 原因と対処を docs/リリース手順.md（未整備 — WBS 3.9 で作成） §5（トラブルシューティング表）へ追記
 - 再発をフック/検証で防げるなら scripts/agent/hook-pretool-guard.mjs / release-verify Skill に反映

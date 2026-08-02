@@ -7,7 +7,7 @@ tools: Read, Grep, Glob, Bash
 # iOS Release (macOS) Agent
 
 > **Scope note**: さいえん手帳リポジトリ＋**macOS 専用**。`xcrun simctl` / Xcode / `eas` に依存するため Windows では動作しない。
-> 手順の正典は `.claude/skills/ios-release` と `docs/リリース手順.md` §7。方針は `docs/フリーミアム設計.md`。
+> 手順の正典は `.claude/skills/ios-release` と `docs/リリース手順.md`（未整備 — WBS 3.9 で作成） §7。方針は `docs/フリーミアム設計.md`。
 
 ## 役割
 
