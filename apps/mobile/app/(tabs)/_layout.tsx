@@ -48,7 +48,6 @@ export default function TabLayout() {
         }}
       />
       {/* Non-tab screens within the (tabs) group — hidden from tab bar */}
-      <Tabs.Screen name="family" options={{ href: null }} />
       <Tabs.Screen name="backup" options={{ href: null }} />
       <Tabs.Screen name="licenses" options={{ href: null }} />
       <Tabs.Screen name="ai-key" options={{ href: null }} />
@@ -56,8 +55,6 @@ export default function TabLayout() {
       <Tabs.Screen name="pantry" options={{ href: null }} />
       <Tabs.Screen name="scan-barcode" options={{ href: null }} />
       <Tabs.Screen name="receipt" options={{ href: null }} />
-      <Tabs.Screen name="cookable" options={{ href: null }} />
-      <Tabs.Screen name="consume-meal" options={{ href: null }} />
       <Tabs.Screen name="recipes/import-photo" options={{ href: null }} />
       <Tabs.Screen name="recipes/import-ocr" options={{ href: null }} />
     </Tabs>

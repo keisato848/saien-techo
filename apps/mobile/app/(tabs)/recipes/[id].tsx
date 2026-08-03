@@ -92,18 +92,11 @@ export default function RecipeDetailScreen() {
   );
 
   // 初回利用ガイド（コーチマーク）
-  const cookRef = useRef<View>(null);
   const missingRef = useRef<View>(null);
   const menuRef = useRef<View>(null);
   const coach = useCoachMarks(
     'recipe-detail',
     [
-      {
-        key: 'cook',
-        title: '調理開始',
-        text: '全画面で手順を1つずつ表示します。タイマー・画面スリープ防止つきで料理に集中できます。',
-        ref: cookRef,
-      },
       {
         key: 'missing',
         title: '足りない材料だけ買い物へ',
@@ -206,15 +199,6 @@ export default function RecipeDetailScreen() {
             }}
           >
             <Text style={styles.menuItemText}>編集</Text>
-          </Pressable>
-          <Pressable
-            style={styles.menuItem}
-            onPress={() => {
-              setShowMenu(false);
-              router.push(`/(tabs)/recipes/${id}/revisions`);
-            }}
-          >
-            <Text style={styles.menuItemText}>版履歴</Text>
           </Pressable>
           <Pressable
             style={styles.menuItem}
@@ -384,17 +368,6 @@ export default function RecipeDetailScreen() {
         >
           <ShoppingCart size={18} color={Colors.gold} />
         </PressableScale>
-        <View ref={cookRef} collapsable={false} style={styles.ctaButtonOuter}>
-          <PressableScale
-            style={styles.ctaButton}
-            scaleTo={0.97}
-            onPress={() => router.push(`/(tabs)/recipes/${recipe.id}/cook`)}
-          >
-            <Text style={styles.ctaText} numberOfLines={1}>
-              調理開始
-            </Text>
-          </PressableScale>
-        </View>
       </View>
 
       <CoachMarkOverlay

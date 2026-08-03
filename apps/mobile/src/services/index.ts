@@ -36,7 +36,6 @@ export {
   moveCheckedShoppingItemsToPantry,
 } from './pantry.service';
 export { lookupJan, rememberJan } from './jan.service';
-export { getCookableRecipes, rankByCoverage, type CookableRecipe } from './cookable.service';
 export {
   addFamilyMember,
   getCurrentFamily,

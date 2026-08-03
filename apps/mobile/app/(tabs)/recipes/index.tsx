@@ -81,7 +81,7 @@ export default function RecipeListScreen() {
       {
         key: 'add',
         title: 'レシピを増やすには',
-        text: '下の「追加」タブから、手入力・URL取り込み・写真からのAI作成でレシピを登録できます。',
+        text: '下の「追加」タブから、手入力・写真からのAI作成でレシピを登録できます。',
       },
     ],
     !loading && !selectMode,
