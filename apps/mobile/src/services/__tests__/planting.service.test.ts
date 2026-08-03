@@ -361,3 +361,143 @@ function handlesInsertRecipeOnlyTag(): void {
     '揚げ物',
   ]);
 }
+
+describeIfSqlite('検索・絞り込み・並べ替え (R03 / WBS 1.7)', () => {
+  beforeEach(async () => {
+    mockHandles = createTestDb();
+    seedFamily();
+
+    const now = new Date().toISOString();
+    for (const [id, name, order] of [
+      ['place-a', '南の畝', 1],
+      ['place-b', 'ベランダ', 2],
+    ] as [string, string, number][]) {
+      mockHandles.expoDb.runSync(
+        'INSERT INTO places (id, family_id, name, kind, sort_order, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
+        [id, FAMILY_ID, name, 'row', order, now, now],
+      );
+    }
+
+    await createPlanting({
+      cropName: 'トマト',
+      cropNameReading: 'とまと',
+      variety: 'アイコ',
+      plantedOn: daysAgoIso(45),
+      plantedAs: 'seedling',
+      placeId: 'place-a',
+      tags: ['夏野菜', '実もの'],
+    });
+    await createPlanting({
+      cropName: 'キュウリ',
+      cropNameReading: 'きゅうり',
+      plantedOn: daysAgoIso(30),
+      plantedAs: 'seedling',
+      placeId: 'place-b',
+      tags: ['夏野菜'],
+    });
+    await createPlanting({
+      cropName: 'アオジソ',
+      cropNameReading: 'あおじそ',
+      plantedOn: daysAgoIso(60),
+      plantedAs: 'seed',
+      placeId: null,
+      tags: ['葉もの'],
+    });
+  });
+
+  afterEach(() => mockHandles.close());
+
+  async function names(options: Parameters<typeof getPlantingList>[0]): Promise<string[]> {
+    return (await getPlantingList(options)).map((item) => item.cropName);
+  }
+
+  describe('FTS 検索', () => {
+    it('作物名で引ける', async () => {
+      expect(await names({ query: 'トマト' })).toEqual(['トマト']);
+    });
+
+    it('読み（ひらがな）でも引ける', async () => {
+      expect(await names({ query: 'きゅうり' })).toEqual(['キュウリ']);
+    });
+
+    it('品種で引ける', async () => {
+      expect(await names({ query: 'アイコ' })).toEqual(['トマト']);
+    });
+
+    it('タグで引ける', async () => {
+      expect((await names({ query: '葉もの' })).sort()).toEqual(['アオジソ']);
+    });
+
+    it('前方一致で引ける', async () => {
+      expect(await names({ query: 'とま' })).toEqual(['トマト']);
+    });
+
+    it('当たらなければ空', async () => {
+      expect(await names({ query: 'ダイコン' })).toEqual([]);
+    });
+
+    it('空白だけの検索語は絞り込まない', async () => {
+      expect(await names({ query: '   ' })).toHaveLength(3);
+    });
+  });
+
+  describe('タグ絞り込み', () => {
+    it('1 つ指定するとそのタグを持つものだけ', async () => {
+      expect((await names({ tags: ['夏野菜'] })).sort()).toEqual(['キュウリ', 'トマト']);
+    });
+
+    it('複数指定は AND', async () => {
+      expect(await names({ tags: ['夏野菜', '実もの'] })).toEqual(['トマト']);
+    });
+
+    it('当たらない組み合わせは空', async () => {
+      expect(await names({ tags: ['夏野菜', '葉もの'] })).toEqual([]);
+    });
+  });
+
+  describe('場所絞り込み', () => {
+    it('場所 ID で絞れる', async () => {
+      expect(await names({ placeId: 'place-a' })).toEqual(['トマト']);
+    });
+
+    it("'none' で場所未設定だけ出せる", async () => {
+      expect(await names({ placeId: 'none' })).toEqual(['アオジソ']);
+    });
+  });
+
+  describe('検索と絞り込みの併用', () => {
+    it('両方に当たるものだけ残る', async () => {
+      expect(await names({ query: 'とまと', tags: ['夏野菜'] })).toEqual(['トマト']);
+      expect(await names({ query: 'とまと', tags: ['葉もの'] })).toEqual([]);
+      expect(await names({ query: 'とまと', placeId: 'place-b' })).toEqual([]);
+    });
+  });
+
+  describe('並べ替え', () => {
+    it('既定は植え付けが新しい順', async () => {
+      expect(await names({})).toEqual(['キュウリ', 'トマト', 'アオジソ']);
+    });
+
+    it('植え付けが古い順', async () => {
+      expect(await names({ sort: 'planted_asc' })).toEqual(['アオジソ', 'トマト', 'キュウリ']);
+    });
+
+    it('作物名順', async () => {
+      const sorted = await names({ sort: 'crop_name' });
+      expect(sorted).toHaveLength(3);
+      expect(sorted[0]).toBe('アオジソ');
+    });
+
+    it('場所順では場所未設定が末尾に来る', async () => {
+      expect(await names({ sort: 'place' })).toEqual(['トマト', 'キュウリ', 'アオジソ']);
+    });
+  });
+
+  it('終了した栽培にも検索が効く', async () => {
+    const list = await getPlantingList({});
+    await endPlanting(list[0].id, 'harvested');
+
+    expect(await names({ onlyEnded: true, query: 'きゅうり' })).toEqual(['キュウリ']);
+    expect(await names({ query: 'きゅうり' })).toEqual([]);
+  });
+});
