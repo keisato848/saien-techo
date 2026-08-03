@@ -311,3 +311,21 @@ export interface SaveCareLogInput {
   note?: string;
   photoUris?: string[];
 }
+
+// ─── さいえん手帳: タイムライン（R05 / WBS 1.9）────────────────────────────
+
+/**
+ * タイムラインの 1 行。
+ * 収穫（WBS 2.1）が合流したときに type で区別できるようにしてある。
+ */
+export interface GardenTimelineEntry {
+  id: string;
+  type: 'care_log' | 'harvest';
+  plantingId: string;
+  cropName: string;
+  variety: string | null;
+  kind: CareLogKind;
+  loggedAt: string;
+  note: string | null;
+  photoUris: string[];
+}
