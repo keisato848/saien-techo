@@ -4,7 +4,10 @@
  */
 import { runCommand } from './lib/runtime.mjs';
 
-const EXTENSIONS = /\.(ts|tsx|js|jsx|mjs|cjs|json|md)$/i;
+// html を含めるのは validate-changed-slice が mockup/ を docs 扱いで prettier check
+// するため。ここで整形しないと、自動整形されないファイルを検査する状態になり
+// コミットが止まる（実際に mockup/palette-compare.html で踏んだ）。
+const EXTENSIONS = /\.(ts|tsx|js|jsx|mjs|cjs|json|md|html)$/i;
 
 // -z は必須。既定(core.quotepath=true)では非 ASCII のパスが
 // "docs/\343\202\244..." のようにエスケープされて返り、そのまま prettier に
