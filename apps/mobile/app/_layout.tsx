@@ -1,8 +1,9 @@
 import { Stack } from 'expo-router';
+import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 
-import { Colors } from '../src/constants/theme';
+import { Colors, isDarkPalette } from '../src/constants/theme';
 import { useDatabase } from '../src/hooks/useDatabase';
 import { checkAndNotifyLowStock } from '../src/services/low-stock.service';
 
@@ -31,15 +32,21 @@ export default function RootLayout() {
   }
 
   return (
-    <Stack
-      screenOptions={{
-        headerShown: false,
-        contentStyle: { backgroundColor: Colors.bg },
-      }}
-    >
-      <Stack.Screen name="(tabs)" />
-      <Stack.Screen name="recipes/[id]/edit" options={{ presentation: 'modal' }} />
-    </Stack>
+    <>
+      {/* 明色パレットでは白文字のステータスバーが読めない。app.json の
+          userInterfaceStyle だけでは Android の文字色は変わらないため、
+          パレットの背景の明暗から決める（土案のような暗色では light に戻る）。 */}
+      <StatusBar style={isDarkPalette ? 'light' : 'dark'} backgroundColor={Colors.bg} />
+      <Stack
+        screenOptions={{
+          headerShown: false,
+          contentStyle: { backgroundColor: Colors.bg },
+        }}
+      >
+        <Stack.Screen name="(tabs)" />
+        <Stack.Screen name="recipes/[id]/edit" options={{ presentation: 'modal' }} />
+      </Stack>
+    </>
   );
 }
 

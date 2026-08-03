@@ -150,6 +150,12 @@ export const ACTIVE_PALETTE: PaletteName = resolvePalette();
 
 const p = PALETTES[ACTIVE_PALETTE];
 
+/**
+ * 選択中のパレットが暗色かどうか。
+ * ステータスバーの文字色など、背景の明暗で分岐する箇所で使う。
+ */
+export const isDarkPalette: boolean = ACTIVE_PALETTE === 'tsuchi';
+
 export const Colors = {
   // ── 意味的な名前。新しい画面はこちらを使う ──────────────────────
   bg: p.bg,
