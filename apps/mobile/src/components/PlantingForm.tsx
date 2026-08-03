@@ -165,6 +165,9 @@ export function PlantingForm({
               return (
                 <PressableScale
                   key={option}
+                  // flex は containerStyle 側に渡す。PressableScale は style を
+                  // 内側の Pressable に付けるので、flex:1 だけだと幅が潰れる
+                  containerStyle={styles.flexItem}
                   style={[styles.segment, active && styles.segmentActive]}
                   onPress={() => setValue('plantedAs', option, { shouldValidate: true })}
                 >
@@ -299,8 +302,8 @@ const styles = StyleSheet.create({
   },
   hint: { fontSize: Typography.size.sm, color: Colors.inkDim },
   segmented: { flexDirection: 'row', gap: 8 },
+  flexItem: { flex: 1 },
   segment: {
-    flex: 1,
     paddingVertical: 10,
     borderRadius: 8,
     borderWidth: 1,

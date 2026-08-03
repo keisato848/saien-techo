@@ -14,7 +14,11 @@ import { and, asc, desc, eq, isNotNull, isNull } from 'drizzle-orm';
 import { getDb, isNativePlatform } from '../db/client';
 import * as schema from '../db/schema';
 import { generateId } from '../utils/id';
-import { removePlantingFtsEntry, updatePlantingFtsIndex } from './fts.service';
+import {
+  removePlantingFtsEntry,
+  searchPlantingsByFts,
+  updatePlantingFtsIndex,
+} from './fts.service';
 import type {
   PlantedAs,
   PlantingDetail,
@@ -41,9 +45,39 @@ export function elapsedDaysFrom(plantedOn: string, endedAt: string | null): numb
   return Math.max(0, Math.floor((end - start) / 86_400_000));
 }
 
+/**
+ * 一覧の並べ替え（R03 / WBS 1.7）。
+ *
+ * 既定は planted_desc。直近に植えたものほど様子を見に行く頻度が高く、
+ * 記録も付きやすいため（docs/画面設計.md S02）。
+ * 「次の作業が近い順」は R10 のアドバイスエンジン（WBS 3.4）が入るまで
+ * 根拠を持てないので用意しない。
+ */
+export const PLANTING_SORTS = ['planted_desc', 'planted_asc', 'crop_name', 'place'] as const;
+export type PlantingSort = (typeof PLANTING_SORTS)[number];
+
+export const PLANTING_SORT_LABEL: Record<PlantingSort, string> = {
+  planted_desc: '植え付けが新しい順',
+  planted_asc: '植え付けが古い順',
+  crop_name: '作物名順',
+  place: '場所順',
+};
+
+export interface PlantingListOptions {
+  includeEnded?: boolean;
+  onlyEnded?: boolean;
+  /** FTS 検索語。作物名・読み・品種・タグに当たる */
+  query?: string;
+  /** 絞り込みタグ。複数指定は AND（「夏野菜かつ実もの」） */
+  tags?: string[];
+  /** 場所 ID。'none' は場所未設定の栽培 */
+  placeId?: string | null;
+  sort?: PlantingSort;
+}
+
 /** 栽培一覧。既定は育成中のみ（R03 の切り替えは endedAt で行う） */
 export async function getPlantingList(
-  options: { includeEnded?: boolean; onlyEnded?: boolean } = {},
+  options: PlantingListOptions = {},
 ): Promise<PlantingListItem[]> {
   if (!isNativePlatform) return [];
 
@@ -66,6 +100,7 @@ export async function getPlantingList(
       variety: schema.plantings.variety,
       placeId: schema.plantings.placeId,
       placeName: schema.places.name,
+      placeSortOrder: schema.places.sortOrder,
       plantedOn: schema.plantings.plantedOn,
       plantedAs: schema.plantings.plantedAs,
       coverPhotoPath: schema.plantings.coverPhotoPath,
@@ -77,8 +112,28 @@ export async function getPlantingList(
     .where(where)
     .orderBy(desc(schema.plantings.plantedOn));
 
+  // 検索語があれば FTS の結果で絞る。SQL 側で結合しないのは planting_fts が
+  // 外部コンテンツ表ではなく独立した仮想表で、JOIN しても索引が効かないため。
+  // 栽培は個人の菜園規模（多くて数百件）なので ID 集合での突き合わせで足りる。
+  const trimmedQuery = options.query?.trim();
+  let matchedIds: Set<string> | null = null;
+  if (trimmedQuery) {
+    matchedIds = new Set(await searchPlantingsByFts(trimmedQuery));
+  }
+
+  const wantedTags = (options.tags ?? []).filter((tag) => tag.trim().length > 0);
+
   const result: PlantingListItem[] = [];
   for (const row of rows) {
+    if (matchedIds && !matchedIds.has(row.id)) continue;
+    if (options.placeId === 'none') {
+      if (row.placeId != null) continue;
+    } else if (options.placeId) {
+      if (row.placeId !== options.placeId) continue;
+    }
+    const tags = await getTagNames(db, schema, row.id);
+    if (wantedTags.length > 0 && !wantedTags.every((tag) => tags.includes(tag))) continue;
+
     result.push({
       id: row.id,
       cropName: row.cropName,
@@ -87,13 +142,43 @@ export async function getPlantingList(
       plantedOn: row.plantedOn,
       plantedAs: row.plantedAs as PlantedAs,
       elapsedDays: elapsedDaysFrom(row.plantedOn, row.endedAt),
-      tags: await getTagNames(db, schema, row.id),
+      tags,
       coverPhotoUri: row.coverPhotoPath,
       endedAt: row.endedAt,
       endedReason: (row.endedReason as PlantingEndedReason | null) ?? null,
+      // 場所順の並べ替えに使う。場所未設定は末尾へ送りたいので大きな値を入れる
+      placeSortKey: row.placeId == null ? Number.MAX_SAFE_INTEGER : (row.placeSortOrder ?? 0),
     });
   }
-  return result;
+
+  return sortPlantings(result, options.sort ?? 'planted_desc');
+}
+
+function sortPlantings(items: PlantingListItem[], sort: PlantingSort): PlantingListItem[] {
+  const sorted = [...items];
+  switch (sort) {
+    case 'planted_asc':
+      sorted.sort((a, b) => a.plantedOn.localeCompare(b.plantedOn));
+      break;
+    case 'crop_name':
+      // 和文の並びは localeCompare('ja') に任せる。カタカナ/ひらがな混在でも
+      // 読みが近いものが隣り合う
+      sorted.sort((a, b) => a.cropName.localeCompare(b.cropName, 'ja'));
+      break;
+    case 'place':
+      sorted.sort(
+        (a, b) =>
+          a.placeSortKey - b.placeSortKey ||
+          (a.placeName ?? '').localeCompare(b.placeName ?? '', 'ja') ||
+          b.plantedOn.localeCompare(a.plantedOn),
+      );
+      break;
+    case 'planted_desc':
+    default:
+      sorted.sort((a, b) => b.plantedOn.localeCompare(a.plantedOn));
+      break;
+  }
+  return sorted;
 }
 
 export async function getPlantingDetail(plantingId: string): Promise<PlantingDetail | null> {
@@ -143,6 +228,8 @@ export async function getPlantingDetail(plantingId: string): Promise<PlantingDet
     note: row.note,
     endedAt: row.endedAt,
     endedReason: (row.endedReason as PlantingEndedReason | null) ?? null,
+    // 詳細画面では並べ替えないので既定値でよい
+    placeSortKey: 0,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   };
