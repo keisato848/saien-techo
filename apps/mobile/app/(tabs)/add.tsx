@@ -3,7 +3,7 @@
  * Entry point for manual, text, URL, photo inference, and OCR-based recipe creation.
  */
 import { useRouter } from 'expo-router';
-import { Camera, FileText, Globe, Image as ImageIcon, PenLine } from 'lucide-react-native';
+import { Camera, FileText, Image as ImageIcon, PenLine } from 'lucide-react-native';
 import { useRef } from 'react';
 import { Platform, StyleSheet, Text, View } from 'react-native';
 
@@ -39,13 +39,6 @@ const METHODS: MethodOption[] = [
     enabled: true,
   },
   {
-    id: 'url',
-    icon: <Globe size={24} color={Colors.gold} />,
-    label: 'URLから取り込み',
-    description: 'レシピサイトのURLを貼り付け',
-    enabled: true,
-  },
-  {
     id: 'photo',
     icon: <Camera size={24} color={Colors.gold} />,
     label: '写真からレシピ',
@@ -76,7 +69,7 @@ export default function AddScreen() {
     {
       key: 'photo',
       title: '写真からAIでレシピ',
-      text: '料理の写真を選ぶだけでAIが下書きを作成します。URL取り込み・文字入り画像の読み取りもここから（AI解析には1日の無料枠があります）。',
+      text: '料理の写真を選ぶだけでAIが下書きを作成します。文字入り画像の読み取りもここから（AI解析には1日の無料枠があります）。',
       ref: photoRef,
     },
     {
@@ -93,8 +86,6 @@ export default function AddScreen() {
       router.push('/recipes/new');
     } else if (method.id === 'text') {
       router.push('/recipes/import-text');
-    } else if (method.id === 'url') {
-      router.push('/recipes/import-url');
     } else if (method.id === 'photo') {
       router.push('/recipes/import-photo');
     } else if (method.id === 'ocr') {

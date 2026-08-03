@@ -9,7 +9,6 @@ import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import { logger } from 'hono/logger';
 
-import importRouter from './routes/import.js';
 import inferRouter from './routes/infer.js';
 import resolveRouter from './routes/resolve.js';
 
@@ -32,7 +31,6 @@ app.use(
 app.get('/', (c) => c.json({ name: 'だいどこ API', version: '1.0.0', status: 'ok' }));
 app.get('/health', (c) => c.json({ status: 'ok', ts: new Date().toISOString() }));
 
-app.route('/api/v1/import', importRouter);
 app.route('/api/v1/infer', inferRouter);
 app.route('/api/v1/resolve', resolveRouter);
 

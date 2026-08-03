@@ -5,7 +5,7 @@
  * docs/買い物リスト・在庫設計.md §5.2 / §5.5
  */
 import { useFocusEffect, useRouter } from 'expo-router';
-import { Bell, ChefHat, Minus, Plus, Receipt, ScanLine, Utensils, X } from 'lucide-react-native';
+import { Bell, Minus, Plus, Receipt, ScanLine, X } from 'lucide-react-native';
 import { useCallback, useRef, useState } from 'react';
 import { FlatList, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
@@ -108,11 +108,6 @@ export default function PantryScreen() {
       title: '残量通知',
       text: '品目のベルから「残りいくつ以下で通知するか」を設定すると、少なくなったときにお知らせします。',
     },
-    {
-      key: 'cookable',
-      title: 'この在庫で作れるレシピ',
-      text: '在庫と各レシピの材料を照合して、いま作れるレシピを充足率順に表示します。',
-    },
   ]);
 
   return (
@@ -123,15 +118,6 @@ export default function PantryScreen() {
         </Pressable>
         <Text style={styles.headerTitle}>在庫</Text>
         <View ref={actionsRef} collapsable={false} style={styles.headerActions}>
-          <Pressable
-            onPress={() => router.push('/(tabs)/consume-meal')}
-            hitSlop={8}
-            accessibilityLabel="食べた分を在庫から減らす"
-            style={styles.headerScan}
-          >
-            <Utensils size={18} color={Colors.gold} />
-            <Text style={styles.headerScanText}>食べた</Text>
-          </Pressable>
           {/* レシート読み取りは端末内 ML Kit（Android 専用）のため iOS では隠す。 */}
           {Platform.OS === 'android' && (
             <Pressable
@@ -192,13 +178,6 @@ export default function PantryScreen() {
           <Plus size={20} color={Colors.bg} />
         </Pressable>
       </View>
-
-      {items.length > 0 && (
-        <Pressable style={styles.cookableButton} onPress={() => router.push('/(tabs)/cookable')}>
-          <ChefHat size={16} color={Colors.gold} />
-          <Text style={styles.cookableText}>この在庫で作れるレシピ</Text>
-        </Pressable>
-      )}
 
       <FlatList
         data={items}
@@ -364,20 +343,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   addButtonDisabled: { opacity: 0.45 },
-  cookableButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    marginHorizontal: 20,
-    marginBottom: 8,
-    paddingVertical: 11,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    backgroundColor: '#150F07',
-  },
-  cookableText: { fontSize: 14, color: Colors.gold, fontWeight: '500' },
   listContent: { paddingHorizontal: 20, paddingBottom: 24 },
   empty: { color: Colors.muted, textAlign: 'center', marginTop: 48, lineHeight: 22, fontSize: 14 },
   rowWrap: {

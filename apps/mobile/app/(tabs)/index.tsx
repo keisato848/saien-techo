@@ -68,7 +68,7 @@ export default function HomeScreen() {
       {
         key: 'fab',
         title: '記録もレシピもここから',
-        text: '作った料理の記録や、レシピの追加（手入力・URL取り込み・写真からAI作成）は「＋」から始めます。',
+        text: '作った料理の記録や、レシピの追加（手入力・写真からAI作成）は「＋」から始めます。',
         ref: fabRef,
       },
       {

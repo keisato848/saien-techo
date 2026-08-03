@@ -164,26 +164,8 @@ export default function SettingsScreen() {
           id: 'profile',
           label: 'プロフィール編集',
           subtitle: userDisplayName,
-          enabled: true,
-          onPress: () => router.push('/(tabs)/family'),
-        },
-      ],
-    },
-    {
-      title: '家族',
-      items: [
-        {
-          id: 'family',
-          label: '家族グループ',
-          subtitle: `${family.name}（${family.memberCount}人）`,
-          enabled: true,
-          onPress: () => router.push('/(tabs)/family'),
-        },
-        {
-          id: 'invite',
-          label: '家族を招待',
-          enabled: true,
-          onPress: () => router.push('/(tabs)/family'),
+          // 遷移先はだいどこの家族画面だった。設定画面の作り直しは WBS 3.6。
+          enabled: false,
         },
       ],
     },
