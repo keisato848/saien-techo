@@ -170,6 +170,18 @@ export default function SettingsScreen() {
       ],
     },
     {
+      title: '菜園',
+      items: [
+        {
+          id: 'places',
+          label: '場所の管理',
+          subtitle: 'プランター・畝・区画の登録と並べ替え',
+          enabled: true,
+          onPress: () => router.push('/places'),
+        },
+      ],
+    },
+    {
       title: 'データ',
       items: [
         {

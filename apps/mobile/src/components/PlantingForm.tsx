@@ -6,8 +6,10 @@
  * 「苗を植えた直後に片手で登録できる」ことを優先している。
  */
 import { zodResolver } from '@hookform/resolvers/zod';
+import { useFocusEffect, useRouter } from 'expo-router';
+import { Plus } from 'lucide-react-native';
 import { Controller, useForm } from 'react-hook-form';
-import { useEffect, useState } from 'react';
+import { useCallback, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -47,6 +49,7 @@ export function PlantingForm({
   submitLabel = '保存',
 }: PlantingFormProps) {
   const insets = useSafeAreaInsets();
+  const router = useRouter();
   const [places, setPlaces] = useState<PlaceItem[]>([]);
   const [availableTags, setAvailableTags] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
@@ -72,12 +75,15 @@ export function PlantingForm({
     },
   });
 
-  useEffect(() => {
-    void (async () => {
-      setPlaces(await getPlaceList());
-      setAvailableTags(await getPlantingTagNames());
-    })();
-  }, []);
+  // 場所の追加画面から戻ってきたときに反映したいので useFocusEffect
+  useFocusEffect(
+    useCallback(() => {
+      void (async () => {
+        setPlaces(await getPlaceList());
+        setAvailableTags(await getPlantingTagNames());
+      })();
+    }, []),
+  );
 
   const selectedTags = watch('tags');
   const selectedPlaceId = watch('placeId');
@@ -174,8 +180,9 @@ export function PlantingForm({
         <View style={styles.group}>
           <Text style={styles.groupLabel}>場所</Text>
           {places.length === 0 ? (
-            // 場所の登録は WBS 1.6。それまでは未登録でも先に進めるようにしておく
-            <Text style={styles.hint}>登録された場所がありません（設定は今後追加します）</Text>
+            <View style={styles.chips}>
+              <Text style={styles.hint}>登録された場所がありません。</Text>
+            </View>
           ) : (
             <View style={styles.chips}>
               <PressableScale
@@ -204,6 +211,11 @@ export function PlantingForm({
               })}
             </View>
           )}
+          {/* 苗を持ったまま登録している最中に場所が無いと詰むので、ここから作れる */}
+          <PressableScale style={styles.addPlace} onPress={() => router.push('/places/new')}>
+            <Plus size={14} color={Colors.accent} />
+            <Text style={styles.addPlaceText}>場所を追加</Text>
+          </PressableScale>
         </View>
 
         <View style={styles.group}>
@@ -311,5 +323,7 @@ const styles = StyleSheet.create({
   chipActive: { borderColor: Colors.accent, backgroundColor: Colors.accentSoft },
   chipText: { fontSize: Typography.size.sm, color: Colors.inkDim },
   chipTextActive: { color: Colors.accentInk, fontWeight: Typography.weight.medium },
+  addPlace: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 10 },
+  addPlaceText: { fontSize: Typography.size.sm, color: Colors.accent },
   noteInput: { minHeight: 90, textAlignVertical: 'top' },
 });
