@@ -16,5 +16,8 @@ fi
 # 4) .claude カスタマイズの仕様準拠検証（test-customizations は .github しか見ない）
 node scripts/agent/validate-claude-customizations.mjs || exit 1
 
-# 5) .github カスタマイズの検証
+# 5) レビュー記録の書式検証
+node scripts/agent/review-log.mjs check || exit 1
+
+# 6) .github カスタマイズの検証
 node scripts/agent/test-customizations.mjs
