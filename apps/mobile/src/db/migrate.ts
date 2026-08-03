@@ -22,7 +22,7 @@ import {
 
 type DB = ExpoSQLiteDatabase<typeof schema>;
 
-export const CURRENT_SCHEMA_VERSION = 7;
+export const CURRENT_SCHEMA_VERSION = 8;
 
 const DEFAULT_USER_ID = 'user-kei';
 const DEFAULT_FAMILY_ID = 'family-001';
@@ -305,6 +305,172 @@ const CREATE_TABLES_SQL = `
   );
 
   CREATE UNIQUE INDEX IF NOT EXISTS idx_name_aliases_family_source ON name_aliases(family_id, source_normalized);
+
+  -- ══════════════════════════════════════════════════════════════════════
+  -- さいえん手帳（v8 / WBS 1.3）
+  -- だいどこのテーブルとは併存する。recipes 系の DROP は WBS 1.5 完了後。
+  -- 詳細は docs/データ設計.md
+  -- ══════════════════════════════════════════════════════════════════════
+
+  CREATE TABLE IF NOT EXISTS crops (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    name_reading TEXT,
+    family TEXT,
+    default_unit TEXT,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+  );
+
+  CREATE TABLE IF NOT EXISTS crop_calendars (
+    id TEXT PRIMARY KEY,
+    crop_id TEXT NOT NULL REFERENCES crops(id),
+    region TEXT NOT NULL,
+    kind TEXT NOT NULL,
+    start_month INTEGER NOT NULL,
+    end_month INTEGER NOT NULL
+  );
+
+  CREATE UNIQUE INDEX IF NOT EXISTS idx_crop_calendars_crop_region_kind
+    ON crop_calendars(crop_id, region, kind);
+
+  CREATE TABLE IF NOT EXISTS crop_guides (
+    crop_id TEXT PRIMARY KEY REFERENCES crops(id),
+    spacing_cm INTEGER,
+    sunlight TEXT,
+    watering_note TEXT,
+    fertilize_after_days INTEGER,
+    harvest_after_days INTEGER,
+    common_pests TEXT,
+    tips TEXT
+  );
+
+  CREATE TABLE IF NOT EXISTS places (
+    id TEXT PRIMARY KEY,
+    family_id TEXT NOT NULL REFERENCES families(id),
+    name TEXT NOT NULL,
+    kind TEXT,
+    note TEXT,
+    sort_order INTEGER,
+    archived_at TEXT,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_places_family ON places(family_id);
+
+  CREATE TABLE IF NOT EXISTS plantings (
+    id TEXT PRIMARY KEY,
+    family_id TEXT NOT NULL REFERENCES families(id),
+    crop_id TEXT REFERENCES crops(id),
+    crop_name TEXT NOT NULL,
+    crop_name_reading TEXT,
+    variety TEXT,
+    place_id TEXT REFERENCES places(id),
+    planted_on TEXT NOT NULL,
+    planted_as TEXT NOT NULL,
+    cover_photo_path TEXT,
+    note TEXT,
+    ended_at TEXT,
+    ended_reason TEXT,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_plantings_family_ended ON plantings(family_id, ended_at);
+  CREATE INDEX IF NOT EXISTS idx_plantings_place ON plantings(place_id);
+  CREATE INDEX IF NOT EXISTS idx_plantings_crop ON plantings(crop_id);
+
+  CREATE TABLE IF NOT EXISTS planting_tags (
+    planting_id TEXT NOT NULL REFERENCES plantings(id),
+    tag_id TEXT NOT NULL REFERENCES tags(id)
+  );
+
+  CREATE UNIQUE INDEX IF NOT EXISTS idx_planting_tags_pk ON planting_tags(planting_id, tag_id);
+  CREATE INDEX IF NOT EXISTS idx_planting_tags_tag ON planting_tags(tag_id);
+
+  CREATE TABLE IF NOT EXISTS care_logs (
+    id TEXT PRIMARY KEY,
+    planting_id TEXT NOT NULL REFERENCES plantings(id),
+    kind TEXT NOT NULL,
+    logged_at TEXT NOT NULL,
+    note TEXT,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_care_logs_planting_date ON care_logs(planting_id, logged_at);
+  CREATE INDEX IF NOT EXISTS idx_care_logs_date ON care_logs(logged_at);
+
+  CREATE TABLE IF NOT EXISTS harvests (
+    id TEXT PRIMARY KEY,
+    planting_id TEXT NOT NULL REFERENCES plantings(id),
+    harvested_at TEXT NOT NULL,
+    quantity REAL,
+    unit TEXT,
+    note TEXT,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_harvests_planting_date ON harvests(planting_id, harvested_at);
+  CREATE INDEX IF NOT EXISTS idx_harvests_date ON harvests(harvested_at);
+
+  CREATE TABLE IF NOT EXISTS photos (
+    id TEXT PRIMARY KEY,
+    owner_type TEXT NOT NULL,
+    owner_id TEXT NOT NULL,
+    local_path TEXT NOT NULL,
+    width INTEGER,
+    height INTEGER,
+    sort_order INTEGER NOT NULL,
+    created_at TEXT NOT NULL
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_photos_owner ON photos(owner_type, owner_id);
+
+  CREATE TABLE IF NOT EXISTS reminders (
+    id TEXT PRIMARY KEY,
+    planting_id TEXT NOT NULL REFERENCES plantings(id),
+    kind TEXT NOT NULL,
+    schedule_kind TEXT NOT NULL,
+    interval_days INTEGER,
+    weekdays TEXT,
+    hour INTEGER NOT NULL,
+    minute INTEGER NOT NULL,
+    enabled INTEGER NOT NULL,
+    last_fired_at TEXT,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_reminders_planting ON reminders(planting_id);
+
+  CREATE TABLE IF NOT EXISTS materials (
+    id TEXT PRIMARY KEY,
+    family_id TEXT NOT NULL REFERENCES families(id),
+    name TEXT NOT NULL,
+    category TEXT NOT NULL,
+    quantity REAL,
+    unit TEXT,
+    low_threshold REAL,
+    jan_code TEXT,
+    note TEXT,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_materials_family_category ON materials(family_id, category);
+
+  -- R03 栽培一覧・検索。recipe_fts と同じ方式（正規化は fts.service.ts を流用）
+  CREATE VIRTUAL TABLE IF NOT EXISTS planting_fts USING fts5(
+    planting_id UNINDEXED,
+    crop_name,
+    crop_name_reading,
+    variety,
+    tag_names,
+    tokenize='unicode61'
+  );
 `;
 
 // Columns added after a table first shipped (SQLite has no ADD COLUMN IF NOT

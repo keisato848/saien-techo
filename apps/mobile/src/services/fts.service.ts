@@ -88,3 +88,65 @@ function normalizeForSearch(text: string): string {
   );
   return hiragana.toLowerCase();
 }
+
+// ─── 栽培（さいえん手帳 / R03）─────────────────────────────────────────────
+// recipe_fts と同じ方式。正規化（カタカナ → ひらがな・小文字化）は共通で使う。
+
+/** 栽培を FTS で検索し、planting_id の配列を返す */
+export async function searchPlantingsByFts(query: string): Promise<string[]> {
+  if (!isNativePlatform || !query.trim()) {
+    return [];
+  }
+  const { getExpoDb } = await import('../db/client');
+  const expoDb = getExpoDb();
+  try {
+    const rows = expoDb.getAllSync<{ planting_id: string }>(
+      'SELECT planting_id FROM planting_fts WHERE planting_fts MATCH ?',
+      [`${normalizeForSearch(query)}*`],
+    );
+    return rows.map((row) => row.planting_id);
+  } catch {
+    // FTS テーブルが未作成（マイグレーション前）
+    return [];
+  }
+}
+
+/** 1 件の栽培の FTS インデックスを更新する */
+export async function updatePlantingFtsIndex(
+  plantingId: string,
+  cropName: string,
+  cropNameReading: string | null,
+  variety: string | null,
+  tagNames: string[],
+): Promise<void> {
+  if (!isNativePlatform) return;
+  const { getExpoDb } = await import('../db/client');
+  const expoDb = getExpoDb();
+  try {
+    expoDb.runSync('DELETE FROM planting_fts WHERE planting_id = ?', [plantingId]);
+    expoDb.runSync(
+      'INSERT INTO planting_fts (planting_id, crop_name, crop_name_reading, variety, tag_names) VALUES (?, ?, ?, ?, ?)',
+      [
+        plantingId,
+        normalizeForSearch(cropName),
+        normalizeForSearch(cropNameReading ?? ''),
+        normalizeForSearch(variety ?? ''),
+        normalizeForSearch(tagNames.join(' ')),
+      ],
+    );
+  } catch {
+    // FTS テーブルが未作成
+  }
+}
+
+/** 栽培を FTS インデックスから削除する */
+export async function removePlantingFtsEntry(plantingId: string): Promise<void> {
+  if (!isNativePlatform) return;
+  const { getExpoDb } = await import('../db/client');
+  const expoDb = getExpoDb();
+  try {
+    expoDb.runSync('DELETE FROM planting_fts WHERE planting_id = ?', [plantingId]);
+  } catch {
+    // FTS テーブルが未作成
+  }
+}
