@@ -2,7 +2,7 @@
  * FTS5 full-text search service
  * Provides Japanese-aware search with kana normalization
  */
-import { isNativePlatform } from '../db/client';
+import { getExpoDb, isNativePlatform } from '../db/client';
 
 /**
  * Search recipes using FTS5 MATCH on native, client-side filter on web.
@@ -81,7 +81,8 @@ export async function removeFtsEntry(recipeId: string): Promise<void> {
 /**
  * Normalize text for FTS search: katakana -> hiragana, lowercase
  */
-function normalizeForSearch(text: string): string {
+/** カタカナ → ひらがな・小文字化。FTS への投入と検索で同じ関数を通す */
+export function normalizeForSearch(text: string): string {
   // Katakana to hiragana
   const hiragana = text.replace(/[\u30A1-\u30F6]/g, (ch) =>
     String.fromCharCode(ch.charCodeAt(0) - 0x60),
@@ -97,7 +98,6 @@ export async function searchPlantingsByFts(query: string): Promise<string[]> {
   if (!isNativePlatform || !query.trim()) {
     return [];
   }
-  const { getExpoDb } = await import('../db/client');
   const expoDb = getExpoDb();
   try {
     const rows = expoDb.getAllSync<{ planting_id: string }>(
@@ -120,7 +120,6 @@ export async function updatePlantingFtsIndex(
   tagNames: string[],
 ): Promise<void> {
   if (!isNativePlatform) return;
-  const { getExpoDb } = await import('../db/client');
   const expoDb = getExpoDb();
   try {
     expoDb.runSync('DELETE FROM planting_fts WHERE planting_id = ?', [plantingId]);
@@ -142,7 +141,6 @@ export async function updatePlantingFtsIndex(
 /** 栽培を FTS インデックスから削除する */
 export async function removePlantingFtsEntry(plantingId: string): Promise<void> {
   if (!isNativePlatform) return;
-  const { getExpoDb } = await import('../db/client');
   const expoDb = getExpoDb();
   try {
     expoDb.runSync('DELETE FROM planting_fts WHERE planting_id = ?', [plantingId]);

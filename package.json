@@ -5,7 +5,7 @@
   "description": "さいえん手帳 — 家庭菜園の手帳とアドバイス",
   "packageManager": "pnpm@9.0.0",
   "engines": {
-    "node": ">=20.0.0",
+    "node": ">=22.5.0",
     "pnpm": ">=9.0.0"
   },
   "scripts": {

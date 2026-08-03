@@ -1,17 +1,22 @@
-import { Tabs } from 'expo-router';
-import { Home, BookOpen, Plus, Settings } from 'lucide-react-native';
+import { Tabs, useRouter } from 'expo-router';
+import { Home, Plus, Settings, Sprout } from 'lucide-react-native';
 import { StyleSheet, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Colors } from '../../src/constants/theme';
 
 export default function TabLayout() {
+  const router = useRouter();
+  const insets = useSafeAreaInsets();
+
   return (
     <Tabs
       screenOptions={{
         headerShown: false,
-        tabBarStyle: styles.tabBar,
-        tabBarActiveTintColor: Colors.gold,
-        tabBarInactiveTintColor: Colors.muted,
+        // ジェスチャーナビゲーションのバーがタブのラベルに被るため下端を空ける
+        tabBarStyle: [styles.tabBar, { height: 58 + insets.bottom, paddingBottom: insets.bottom }],
+        tabBarActiveTintColor: Colors.accent,
+        tabBarInactiveTintColor: Colors.inkDim,
         tabBarLabelStyle: styles.tabLabel,
       }}
     >
@@ -23,10 +28,10 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
-        name="recipes"
+        name="plantings"
         options={{
-          title: 'レシピ',
-          tabBarIcon: ({ color, size }) => <BookOpen size={size} color={color} />,
+          title: '栽培',
+          tabBarIcon: ({ color, size }) => <Sprout size={size} color={color} />,
         }}
       />
       <Tabs.Screen
@@ -39,6 +44,14 @@ export default function TabLayout() {
             </View>
           ),
         }}
+        // ＋ は画面ではなく「栽培を追加」への近道にする。だいどこの add.tsx は
+        // レシピの作成方法シートで、さいえん手帳には該当する分岐がないため。
+        listeners={{
+          tabPress: (event) => {
+            event.preventDefault();
+            router.push('/plantings/new');
+          },
+        }}
       />
       <Tabs.Screen
         name="settings"
@@ -48,6 +61,8 @@ export default function TabLayout() {
         }}
       />
       {/* Non-tab screens within the (tabs) group — hidden from tab bar */}
+      {/* recipes 系は WBS 1.5 でタブから外した。画面自体は削除まで残す */}
+      <Tabs.Screen name="recipes" options={{ href: null }} />
       <Tabs.Screen name="backup" options={{ href: null }} />
       <Tabs.Screen name="licenses" options={{ href: null }} />
       <Tabs.Screen name="ai-key" options={{ href: null }} />
@@ -64,7 +79,7 @@ export default function TabLayout() {
 const styles = StyleSheet.create({
   tabBar: {
     backgroundColor: Colors.bg,
-    borderTopColor: Colors.border,
+    borderTopColor: Colors.line,
     borderTopWidth: 1,
     height: 58,
     paddingTop: 4,

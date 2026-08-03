@@ -33,9 +33,9 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
   },
   sheet: {
-    backgroundColor: '#150F08',
+    backgroundColor: Colors.surface,
     borderTopWidth: 1,
-    borderTopColor: Colors.border,
+    borderTopColor: Colors.line,
     borderTopLeftRadius: 16,
     borderTopRightRadius: 16,
     padding: 20,
@@ -45,7 +45,7 @@ const styles = StyleSheet.create({
   handle: {
     width: 36,
     height: 3,
-    backgroundColor: Colors.border,
+    backgroundColor: Colors.line,
     borderRadius: 2,
     alignSelf: 'center',
     marginBottom: 16,

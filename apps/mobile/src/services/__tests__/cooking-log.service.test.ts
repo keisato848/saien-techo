@@ -98,12 +98,12 @@ describe('createCookingLog', () => {
       cookedAt: '2026-05-10T19:00:00.000Z',
       photos: [
         {
-          localPath: 'file:///data/user/0/com.daidoko.app/cache/photo_1.jpg',
+          localPath: 'file:///data/user/0/com.saientecho.app/cache/photo_1.jpg',
           takenAt: '2026-05-10T18:55:00.000Z',
         },
         {
-          localPath: 'file:///data/user/0/com.daidoko.app/cache/photo_2.png',
-          cloudUrl: 'https://r2.example.com/daidoko/photos/photo-log-test-2.webp',
+          localPath: 'file:///data/user/0/com.saientecho.app/cache/photo_2.png',
+          cloudUrl: 'https://r2.example.com/saien/photos/photo-log-test-2.webp',
           takenAt: '2026-05-10T18:57:00.000Z',
         },
       ],
@@ -115,13 +115,13 @@ describe('createCookingLog', () => {
     expect(found?.photos).toHaveLength(2);
     expect(found?.photos.map((photo) => photo.sortOrder)).toEqual([1, 2]);
     expect(found?.photos[0]).toMatchObject({
-      localPath: 'file:///data/user/0/com.daidoko.app/cache/photo_1.jpg',
+      localPath: 'file:///data/user/0/com.saientecho.app/cache/photo_1.jpg',
       cloudUrl: null,
       takenAt: '2026-05-10T18:55:00.000Z',
     });
     expect(found?.photos[1]).toMatchObject({
-      localPath: 'file:///data/user/0/com.daidoko.app/cache/photo_2.png',
-      cloudUrl: 'https://r2.example.com/daidoko/photos/photo-log-test-2.webp',
+      localPath: 'file:///data/user/0/com.saientecho.app/cache/photo_2.png',
+      cloudUrl: 'https://r2.example.com/saien/photos/photo-log-test-2.webp',
       takenAt: '2026-05-10T18:57:00.000Z',
     });
   });
@@ -199,7 +199,7 @@ describe('getLogsForRecipe', () => {
       cookedAt: '2026-05-12T18:00:00.000Z',
       photos: [
         {
-          localPath: 'file:///data/user/0/com.daidoko.app/cache/timeline_photo.jpg',
+          localPath: 'file:///data/user/0/com.saientecho.app/cache/timeline_photo.jpg',
         },
       ],
     });
@@ -208,7 +208,7 @@ describe('getLogsForRecipe', () => {
     const found = timeline.find((entry) => entry.id === id);
     expect(found?.photos).toHaveLength(1);
     expect(found?.photos[0].localPath).toBe(
-      'file:///data/user/0/com.daidoko.app/cache/timeline_photo.jpg',
+      'file:///data/user/0/com.saientecho.app/cache/timeline_photo.jpg',
     );
   });
 
@@ -218,7 +218,7 @@ describe('getLogsForRecipe', () => {
       recipeId,
       memo: '削除テスト用の調理ログ',
       cookedAt: '2026-05-16T18:00:00.000Z',
-      photos: [{ localPath: 'file:///data/user/0/com.daidoko.app/cache/delete_me.jpg' }],
+      photos: [{ localPath: 'file:///data/user/0/com.saientecho.app/cache/delete_me.jpg' }],
     });
 
     await deleteCookingLog(id);

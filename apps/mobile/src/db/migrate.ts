@@ -5,13 +5,24 @@
 import { and, eq, inArray, sql } from 'drizzle-orm';
 import type { ExpoSQLiteDatabase } from 'drizzle-orm/expo-sqlite';
 
+import { normalizeForSearch } from '../services/fts.service';
 import * as schema from './schema';
 import { isSampleDataEnabled } from './sampleData';
 import {
+  seedCareLogs,
   seedCookingLogs,
   seedCookingPhotos,
+  seedCropCalendars,
+  seedCropGuides,
+  seedCrops,
   seedFamilies,
+  seedHarvests,
   seedIngredients,
+  seedMaterials,
+  seedPlaces,
+  seedPlantingTagMasters,
+  seedPlantingTags,
+  seedPlantings,
   seedRecipeTags,
   seedRecipes,
   seedRevisions,
@@ -31,7 +42,9 @@ const DEFAULT_USER_NAME = '';
 const DEFAULT_FAMILY_NAME = 'わたしの台所';
 const DEFAULT_INVITE_CODE = 'DK0001';
 
-const SAMPLE_DATA_VERSION = '1';
+// サンプルデータの中身を変えたら必ず上げる。据え置くと、既にシード済みの端末は
+// appMeta のマーカーが一致して seedDatabase() が即 return し、新しい行が入らない。
+const SAMPLE_DATA_VERSION = '3';
 const SAMPLE_DATA_META_KEY = 'sample_data_version';
 
 export interface SeedSnapshot {
@@ -683,9 +696,81 @@ export async function seedDatabase(database: DB): Promise<void> {
       .onConflictDoNothing();
   }
 
+  // ── さいえん手帳（WBS 1.5）─────────────────────────────────────────────
+  // 作物マスターの本番データ投入は WBS 3.1。ここは画面確認用の最小セット
+  await database
+    .insert(schema.crops)
+    .values([...seedCrops])
+    .onConflictDoNothing();
+  await database
+    .insert(schema.cropGuides)
+    .values([...seedCropGuides])
+    .onConflictDoNothing();
+  await database
+    .insert(schema.cropCalendars)
+    .values([...seedCropCalendars])
+    .onConflictDoNothing();
+  await database
+    .insert(schema.places)
+    .values([...seedPlaces])
+    .onConflictDoNothing();
+  await database
+    .insert(schema.plantings)
+    .values([...seedPlantings])
+    .onConflictDoNothing();
+  await database
+    .insert(schema.tags)
+    .values([...seedPlantingTagMasters])
+    .onConflictDoNothing();
+  await database
+    .insert(schema.plantingTags)
+    .values([...seedPlantingTags])
+    .onConflictDoNothing();
+  await database
+    .insert(schema.careLogs)
+    .values([...seedCareLogs])
+    .onConflictDoNothing();
+  await database
+    .insert(schema.harvests)
+    .values([...seedHarvests])
+    .onConflictDoNothing();
+  await database
+    .insert(schema.materials)
+    .values([...seedMaterials])
+    .onConflictDoNothing();
+
   // Populate FTS index
   await rebuildFts(database);
+  await rebuildPlantingFts(database);
   await markSampleDataVersion(database);
+}
+
+/**
+ * planting_fts を作り直す（R03 の検索）。
+ * 投入時の正規化は fts.service の normalizeForSearch を共有する。
+ * ここで別の正規化をすると「登録したのに検索で出ない」が起きる。
+ */
+export async function rebuildPlantingFts(database: DB): Promise<void> {
+  await database.run(sql`DELETE FROM planting_fts`);
+
+  const allPlantings = await database.select().from(schema.plantings);
+
+  for (const planting of allPlantings) {
+    const tagRows = await database
+      .select({ name: schema.tags.name })
+      .from(schema.plantingTags)
+      .leftJoin(schema.tags, eq(schema.plantingTags.tagId, schema.tags.id))
+      .where(eq(schema.plantingTags.plantingId, planting.id));
+    const tagNames = tagRows.map((row) => row.name ?? '').join(' ');
+
+    await database.run(
+      sql`INSERT INTO planting_fts (planting_id, crop_name, crop_name_reading, variety, tag_names)
+          VALUES (${planting.id}, ${normalizeForSearch(planting.cropName)},
+                  ${normalizeForSearch(planting.cropNameReading ?? '')},
+                  ${normalizeForSearch(planting.variety ?? '')},
+                  ${normalizeForSearch(tagNames)})`,
+    );
+  }
 }
 
 /** Rebuild FTS5 index from current recipe data */

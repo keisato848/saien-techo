@@ -48,7 +48,7 @@ export function ConfirmSheet({
 const styles = StyleSheet.create({
   message: {
     fontSize: 13,
-    color: Colors.paperDim,
+    color: Colors.inkDim,
     lineHeight: 20,
     marginBottom: 20,
     textAlign: 'center',
@@ -62,31 +62,31 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: Colors.line,
     alignItems: 'center',
   },
   cancelText: {
     fontSize: 14,
-    color: Colors.paperDim,
+    color: Colors.inkDim,
   },
   confirmButton: {
     flex: 1,
     paddingVertical: 12,
     borderRadius: 8,
-    backgroundColor: Colors.gold,
+    backgroundColor: Colors.accent,
     alignItems: 'center',
   },
   destructiveButton: {
-    backgroundColor: '#5C2020',
+    backgroundColor: Colors.dangerSoft,
     borderWidth: 1,
-    borderColor: '#FF6B6B',
+    borderColor: Colors.dangerLine,
   },
   confirmText: {
     fontSize: 14,
     fontWeight: '600',
-    color: Colors.bg,
+    color: Colors.onAccent,
   },
   destructiveText: {
-    color: '#FF6B6B',
+    color: Colors.danger,
   },
 });

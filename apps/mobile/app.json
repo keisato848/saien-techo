@@ -58,7 +58,7 @@
           "cameraPermission": "バーコード（JAN）を読み取るためにカメラを使用します。"
         }
       ],
-      "./plugins/withDaidokoOcr",
+      "./plugins/withSaienOcr",
       [
         "react-native-google-mobile-ads",
         {
@@ -67,7 +67,8 @@
           "delayAppMeasurementInit": true,
           "userTrackingUsageDescription": "広告の表示回数の制御と不正防止のために利用します。"
         }
-      ]
+      ],
+      "@react-native-community/datetimepicker"
     ],
     "experiments": {
       "typedRoutes": true

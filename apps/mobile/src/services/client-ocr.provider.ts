@@ -18,7 +18,7 @@ function isNativeClientOcrModule(value: unknown): value is NativeClientOcrModule
 
 function getNativeClientOcrModule(): NativeClientOcrModule | null {
   if (Platform.OS !== 'android') return null;
-  const moduleCandidate: unknown = NativeModules['DaidokoOcr'];
+  const moduleCandidate: unknown = NativeModules['SaienOcr'];
   return isNativeClientOcrModule(moduleCandidate) ? moduleCandidate : null;
 }
 

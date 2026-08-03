@@ -16,21 +16,21 @@ const ML_KIT_DEPENDENCIES = [
   'implementation("com.google.android.gms:play-services-mlkit-text-recognition-japanese:16.0.1")',
   'implementation("com.google.android.gms:play-services-mlkit-image-labeling:16.0.8")',
 ];
-const OCR_IMPORT = 'import com.daidoko.app.ocr.DaidokoOcrPackage';
+const OCR_IMPORT = 'import com.saientecho.app.ocr.SaienOcrPackage';
 // Inserted inside `PackageList(this).packages.apply { ... }` in the SDK 54
 // MainApplication template (indentation matches that block).
-const OCR_PACKAGE_REGISTRATION = '              add(DaidokoOcrPackage())';
+const OCR_PACKAGE_REGISTRATION = '              add(SaienOcrPackage())';
 
-const OCR_PACKAGE_SOURCE = `package com.daidoko.app.ocr
+const OCR_PACKAGE_SOURCE = `package com.saientecho.app.ocr
 
 import com.facebook.react.ReactPackage
 import com.facebook.react.bridge.NativeModule
 import com.facebook.react.bridge.ReactApplicationContext
 import com.facebook.react.uimanager.ViewManager
 
-class DaidokoOcrPackage : ReactPackage {
+class SaienOcrPackage : ReactPackage {
   override fun createNativeModules(reactContext: ReactApplicationContext): List<NativeModule> =
-    listOf(DaidokoOcrModule(reactContext))
+    listOf(SaienOcrModule(reactContext))
 
   override fun createViewManagers(
     reactContext: ReactApplicationContext,
@@ -38,7 +38,7 @@ class DaidokoOcrPackage : ReactPackage {
 }
 `;
 
-const OCR_MODULE_SOURCE = `package com.daidoko.app.ocr
+const OCR_MODULE_SOURCE = `package com.saientecho.app.ocr
 
 import android.graphics.BitmapFactory
 import android.graphics.Rect
@@ -58,7 +58,7 @@ import com.google.mlkit.vision.text.Text
 import com.google.mlkit.vision.text.TextRecognition
 import com.google.mlkit.vision.text.japanese.JapaneseTextRecognizerOptions
 
-class DaidokoOcrModule(
+class SaienOcrModule(
   private val reactContext: ReactApplicationContext,
 ) : ReactContextBaseJavaModule(reactContext) {
   private val recognizer by lazy {
@@ -236,7 +236,7 @@ class DaidokoOcrModule(
   }
 
   companion object {
-    const val NAME = "DaidokoOcr"
+    const val NAME = "SaienOcr"
   }
 }
 `;
@@ -249,7 +249,7 @@ function ensureManifestPermission(manifest, permissionName) {
   manifest['uses-permission'] = usesPermission;
 }
 
-function withDaidokoOcrManifest(config) {
+function withSaienOcrManifest(config) {
   return withAndroidManifest(config, (configWithManifest) => {
     const manifest = configWithManifest.modResults.manifest;
     ensureManifestPermission(manifest, 'android.permission.CAMERA');
@@ -261,7 +261,7 @@ function withDaidokoOcrManifest(config) {
 // access, but this app only reads/writes its own app-private documentDirectory,
 // which never requires these permissions. Block them to satisfy Google Play's
 // Photo and Video Permissions policy.
-function withDaidokoBlockedStoragePermissions(config) {
+function withSaienBlockedStoragePermissions(config) {
   return AndroidConfig.Permissions.withBlockedPermissions(config, [
     'android.permission.READ_EXTERNAL_STORAGE',
     'android.permission.WRITE_EXTERNAL_STORAGE',
@@ -276,7 +276,7 @@ function withDaidokoBlockedStoragePermissions(config) {
 // same `com.google.mlkit.vision.DEPENDENCIES` meta-data with only `barcode_ui`,
 // so we emit the UNION here and add `tools:replace` to win the manifest merge
 // (otherwise the two conflicting values fail `processReleaseMainManifest`).
-function withDaidokoMlKitModelMetadata(config) {
+function withSaienMlKitModelMetadata(config) {
   return withAndroidManifest(config, (configWithManifest) => {
     const manifest = configWithManifest.modResults.manifest;
     manifest.$['xmlns:tools'] = manifest.$['xmlns:tools'] || 'http://schemas.android.com/tools';
@@ -299,7 +299,7 @@ function withDaidokoMlKitModelMetadata(config) {
   });
 }
 
-function withDaidokoOcrBuildGradle(config) {
+function withSaienOcrBuildGradle(config) {
   return withAppBuildGradle(config, (configWithGradle) => {
     let contents = configWithGradle.modResults.contents;
     for (const dependency of ML_KIT_DEPENDENCIES) {
@@ -315,7 +315,7 @@ function withDaidokoOcrBuildGradle(config) {
   });
 }
 
-function withDaidokoOcrMainApplication(config) {
+function withSaienOcrMainApplication(config) {
   return withMainApplication(config, (configWithMainApplication) => {
     let contents = configWithMainApplication.modResults.contents;
     // Register the legacy ReactPackage. Anchors target the stock Expo SDK 54
@@ -338,28 +338,28 @@ function withDaidokoOcrMainApplication(config) {
   });
 }
 
-function withDaidokoOcrSources(config) {
+function withSaienOcrSources(config) {
   return withDangerousMod(config, [
     'android',
     async (configWithAndroid) => {
       const ocrDir = path.join(
         configWithAndroid.modRequest.platformProjectRoot,
-        'app/src/main/java/com/daidoko/app/ocr',
+        'app/src/main/java/com/saientecho/app/ocr',
       );
       await fs.promises.mkdir(ocrDir, { recursive: true });
-      await fs.promises.writeFile(path.join(ocrDir, 'DaidokoOcrPackage.kt'), OCR_PACKAGE_SOURCE);
-      await fs.promises.writeFile(path.join(ocrDir, 'DaidokoOcrModule.kt'), OCR_MODULE_SOURCE);
+      await fs.promises.writeFile(path.join(ocrDir, 'SaienOcrPackage.kt'), OCR_PACKAGE_SOURCE);
+      await fs.promises.writeFile(path.join(ocrDir, 'SaienOcrModule.kt'), OCR_MODULE_SOURCE);
       return configWithAndroid;
     },
   ]);
 }
 
-module.exports = function withDaidokoOcr(config) {
-  config = withDaidokoOcrManifest(config);
-  config = withDaidokoBlockedStoragePermissions(config);
-  config = withDaidokoMlKitModelMetadata(config);
-  config = withDaidokoOcrBuildGradle(config);
-  config = withDaidokoOcrMainApplication(config);
-  config = withDaidokoOcrSources(config);
+module.exports = function withSaienOcr(config) {
+  config = withSaienOcrManifest(config);
+  config = withSaienBlockedStoragePermissions(config);
+  config = withSaienMlKitModelMetadata(config);
+  config = withSaienOcrBuildGradle(config);
+  config = withSaienOcrMainApplication(config);
+  config = withSaienOcrSources(config);
   return config;
 };
