@@ -6,6 +6,8 @@ import type { CapturedPhoto } from './photo-capture.service';
 import type { SaveCookingPhotoInput } from './types';
 
 export const MAX_COOKING_LOG_PHOTOS = 6;
+/** 1 レコードあたりの写真上限（R04）。作業ログ・収穫で共通 */
+export const MAX_GARDEN_PHOTOS = 6;
 /** 保存写真の長辺上限（px）。これ以上は縮小してから保存する。 */
 export const PHOTO_MAX_DIMENSION = 1600;
 /** 保存時の JPEG 品質。 */
@@ -196,4 +198,61 @@ export async function persistRecipePhoto(
   const destination = `${directory}${createRecipePhotoFileName(photo.takenAt, extension)}`;
   await adapter.copyAsync({ from: source, to: destination });
   return destination;
+}
+
+// ─── さいえん手帳の写真（作業ログ・収穫・栽培）─────────────────────────────
+// photos テーブルがポリモーフィックなので、保存先ディレクトリも 1 つにまとめる。
+// 作業ログ／収穫でディレクトリを分けると、所有者を付け替えたときに
+// ファイルの移動が要る（R05 のギャラリーは両方を一緒に並べる）。
+
+function getGardenPhotoDirectory(adapter: FileStorageAdapter): string {
+  if (!adapter.documentDirectory) {
+    throw new Error('写真の保存先を取得できませんでした');
+  }
+  return `${adapter.documentDirectory}garden-photos/`;
+}
+
+export function createGardenPhotoFileName(
+  takenAt: string,
+  extension: string,
+  id = generateId(),
+): string {
+  const timestamp = takenAt.replace(/[^0-9]/g, '').slice(0, 14) || String(Date.now());
+  return `garden-photo-${timestamp}-${id}.${extension}`;
+}
+
+/** 撮影した写真をアプリ内へコピーし、保存先パスを返す */
+export async function persistGardenPhotos(
+  photos: CapturedPhoto[],
+  adapter: FileStorageAdapter = expoFileStorageAdapter,
+  compressAdapter: PhotoCompressAdapter = expoPhotoCompressAdapter,
+): Promise<string[]> {
+  if (photos.length > MAX_GARDEN_PHOTOS) {
+    throw new RangeError(`写真は${MAX_GARDEN_PHOTOS}枚まで追加できます`);
+  }
+
+  const directory = getGardenPhotoDirectory(adapter);
+  const info = await adapter.getInfoAsync(directory);
+  if (!info.exists) {
+    await adapter.makeDirectoryAsync(directory, { intermediates: true });
+  }
+
+  const persisted: string[] = [];
+  for (const photo of photos) {
+    const compressed = await compressForStorage(photo.localPath, compressAdapter);
+    const source = compressed ?? photo.localPath;
+    const extension = compressed ? 'jpg' : extensionForPhoto(photo.localPath, photo.mimeType);
+    const destination = `${directory}${createGardenPhotoFileName(photo.takenAt, extension)}`;
+    await adapter.copyAsync({ from: source, to: destination });
+    persisted.push(destination);
+  }
+  return persisted;
+}
+
+/** 端末から写真ファイルを消す。DB の行を消す側から呼ぶ */
+export async function deleteGardenPhotoFiles(
+  paths: string[],
+  adapter: FileStorageAdapter = expoFileStorageAdapter,
+): Promise<void> {
+  await Promise.all(paths.map((path) => adapter.deleteAsync(path, { idempotent: true })));
 }

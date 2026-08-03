@@ -287,3 +287,27 @@ export interface SavePlaceInput {
   kind: string;
   note?: string;
 }
+
+// ─── さいえん手帳: 作業ログ（R04 / WBS 1.8）────────────────────────────────
+
+/** water=水やり / fertilize=追肥 / transplant=植え替え / prune=剪定 / pest=防除 / other */
+export type CareLogKind = 'water' | 'fertilize' | 'transplant' | 'prune' | 'pest' | 'other';
+
+export interface CareLogItem {
+  id: string;
+  plantingId: string;
+  kind: CareLogKind;
+  loggedAt: string;
+  note: string | null;
+  /** 端末内の写真パス。最大 6 枚（R04） */
+  photoUris: string[];
+}
+
+export interface SaveCareLogInput {
+  plantingId: string;
+  kind: CareLogKind;
+  /** 未指定なら「今」（R04 の日時自動設定） */
+  loggedAt?: string;
+  note?: string;
+  photoUris?: string[];
+}
