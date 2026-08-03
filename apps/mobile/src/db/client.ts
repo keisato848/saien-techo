@@ -44,7 +44,9 @@ export async function initDatabase(): Promise<void> {
   const { openDatabaseSync } = await import('expo-sqlite');
   const schemaModule = await import('./schema');
 
-  const expoDb = openDatabaseSync('daidoko.db');
+  // だいどこ由来のファイル名から改名した。さいえん手帳は未リリースなので
+  // 移行処理は不要（開発端末の古い DB は再インストールで作り直す）。
+  const expoDb = openDatabaseSync('saien-techo.db');
 
   // Set recommended pragmas
   expoDb.execSync('PRAGMA journal_mode = WAL');

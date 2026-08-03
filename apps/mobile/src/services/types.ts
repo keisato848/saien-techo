@@ -210,3 +210,59 @@ export interface PantryItem {
   lowStockThreshold: number | null;
   janCode: string | null;
 }
+
+// ─── さいえん手帳: 栽培（R01）───────────────────────────────────────────────
+
+/** 種から / 苗から。R01 の「植え付け日(種/苗)」 */
+export type PlantedAs = 'seed' | 'seedling';
+
+/** 栽培終了の理由。R01 のアーカイブ */
+export type PlantingEndedReason = 'harvested' | 'died' | 'other';
+
+export interface PlaceItem {
+  id: string;
+  name: string;
+  /** planter=プランター / row=畝 / plot=区画 / other */
+  kind: string | null;
+}
+
+export interface PlantingListItem {
+  id: string;
+  cropName: string;
+  variety: string | null;
+  placeName: string | null;
+  plantedOn: string;
+  plantedAs: PlantedAs;
+  /** 植え付けからの経過日数。栽培終了後は終了日までの日数 */
+  elapsedDays: number;
+  tags: string[];
+  coverPhotoUri: string | null;
+  endedAt: string | null;
+  endedReason: PlantingEndedReason | null;
+}
+
+export interface PlantingDetail extends PlantingListItem {
+  cropId: string | null;
+  cropNameReading: string | null;
+  placeId: string | null;
+  note: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface SavePlantingInput {
+  cropName: string;
+  cropNameReading?: string;
+  /** 作物マスターを選んだ場合のみ。自由入力なら未指定 */
+  cropId?: string | null;
+  variety?: string;
+  placeId?: string | null;
+  /** ISO 8601 */
+  plantedOn: string;
+  plantedAs: PlantedAs;
+  coverPhotoPath?: string | null;
+  note?: string;
+  tags: string[];
+}
+
+export type UpdatePlantingInput = SavePlantingInput;

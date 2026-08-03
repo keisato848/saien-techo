@@ -454,10 +454,13 @@ const FOREIGN_IDENTIFIERS = [
   { pattern: /ca-app-pub-2633806931583277/, label: 'だいどこの AdMob ID' }, // daidoko-ref-ok
   { pattern: /DAIDOKO_UPLOAD_/, label: 'だいどこの署名環境変数' }, // daidoko-ref-ok
   { pattern: /keisato848\/daidoko\b/, label: 'だいどこのリポジトリ' }, // daidoko-ref-ok
+  { pattern: /daidoko\.db/, label: 'だいどこの DB ファイル名' }, // daidoko-ref-ok
 ];
 
-const SCAN_DIRS = ['.claude', 'scripts', 'e2e'];
-const SCAN_EXTENSIONS = /\.(md|mjs|js|ts|json)$/;
+// apps を含めるのは、SQLite のファイル名がアプリ本体に残っていたのを
+// この検査が素通りさせたため。ハーネスだけ見ても実体は捕まえられない。
+const SCAN_DIRS = ['.claude', 'scripts', 'e2e', 'apps'];
+const SCAN_EXTENSIONS = /\.(md|mjs|js|ts|tsx|json)$/;
 
 function walk(dir, out = []) {
   if (!existsSync(dir)) return out;

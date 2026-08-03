@@ -49,6 +49,14 @@ export interface Palette {
   harvest: string;
   harvestSoft: string;
   harvestLine: string;
+  /**
+   * エラー・破壊的操作。収穫の暖色とは別に持つ。
+   * harvest を流用すると「削除」と「収穫」が同じ色になり、
+   * 菜園アプリではどちらも頻出するので取り違えが起きる。
+   */
+  danger: string;
+  dangerSoft: string;
+  dangerLine: string;
 }
 
 export const PALETTES: Record<PaletteName, Palette> = {
@@ -70,6 +78,9 @@ export const PALETTES: Record<PaletteName, Palette> = {
     harvest: '#B4622A',
     harvestSoft: '#FBEEE2',
     harvestLine: '#EED6BE',
+    danger: '#C0392B',
+    dangerSoft: '#FBEAE7',
+    dangerLine: '#F0C9C2',
   },
   // 苗床の土とセージ。紙の菜園手帳の延長。彩度が低く写真が主役になる。
   naedoko: {
@@ -89,6 +100,9 @@ export const PALETTES: Record<PaletteName, Palette> = {
     harvest: '#8A6B45',
     harvestSoft: '#F3EADD',
     harvestLine: '#DFCFB8',
+    danger: '#A8503C',
+    dangerSoft: '#F3E7E1',
+    dangerLine: '#E3CDC2',
   },
   // 青みの深い葉緑。輪郭が硬く、記録ツールとしての精度が出る。
   fukamidori: {
@@ -108,6 +122,9 @@ export const PALETTES: Record<PaletteName, Palette> = {
     harvest: '#A85A2E',
     harvestSoft: '#F9EBE2',
     harvestLine: '#EBD2C1',
+    danger: '#B03A2E',
+    dangerSoft: '#F8E9E6',
+    dangerLine: '#EBC9C2',
   },
   // 土の黒に葉の黄緑。夕方の屋外で見やすい暗色案。
   // CLAUDE.md §7 の「明るい緑基調」からは外れるため既定にはしない。
@@ -128,6 +145,9 @@ export const PALETTES: Record<PaletteName, Palette> = {
     harvest: '#D9A05B',
     harvestSoft: '#2A2318',
     harvestLine: '#453A26',
+    danger: '#E0705C',
+    dangerSoft: '#2E1E1A',
+    dangerLine: '#4A2E27',
   },
 };
 
@@ -173,6 +193,9 @@ export const Colors = {
   harvest: p.harvest,
   harvestSoft: p.harvestSoft,
   harvestLine: p.harvestLine,
+  danger: p.danger,
+  dangerSoft: p.dangerSoft,
+  dangerLine: p.dangerLine,
   white: '#FFFFFF',
 
   // ── だいどこ由来の別名（移行期間のみ）───────────────────────────

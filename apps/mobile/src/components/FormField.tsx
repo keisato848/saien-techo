@@ -75,12 +75,12 @@ const styles = StyleSheet.create({
     color: Colors.paper,
   },
   inputError: {
-    borderColor: '#FF6B6B',
+    borderColor: Colors.danger,
   },
   error: {
     fontSize: 12, // xs: エラーメッセージ
     fontWeight: '400',
-    color: '#FF6B6B',
+    color: Colors.danger,
     marginTop: 4,
   },
 });

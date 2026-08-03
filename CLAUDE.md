@@ -53,7 +53,9 @@ Expo SDK 54 / Expo Router v6 / expo-sqlite + Drizzle ORM / Zustand / TanStack Qu
 
 - フックは `node scripts/agent/*.mjs` を参照(配線済み)。`pnpm agent:*` スクリプトも移植済み
 - アプリ ID・スキーム(`app.json`)は さいえん手帳用に差し替え済み。AdMob/RevenueCat の ID は空 or Google 公式テスト ID のプレースホルダー(WBS 3.7 で実 ID を投入)
-- **だいどこ固有の参照が残っている**: ストア掲載素材(`scripts/release/`)、`.claude/workflows/release-readiness.js` のリポジトリ名、OCR config plugin(`withDaidokoOcr`)、DB ファイル名(`daidoko.db`)。WBS 1.2 / 1.3 / 3.8〜3.9 で差し替えること
+- **だいどこ固有の参照が残っている**: ストア掲載素材(`scripts/release/`)、`.claude/workflows/release-readiness.js` のリポジトリ名。WBS 3.8〜3.9 で差し替えること
+- OCR ネイティブモジュール(`plugins/withSaienOcr.js`・`com.saientecho.app.ocr`)と DB ファイル名(`saien-techo.db`)は WBS 1.5 で差し替え済み
+- `scripts/agent/validate-claude-customizations.mjs` の `foreign-app-identifier` 検査が `apps/` も走査する。だいどこの識別子を書くと pre-commit で止まる(意図的な参照は行末に `daidoko-ref-ok`)
 - release-play / update-store-listing / monetize-golive / promo-video 等のリリース系 skill は、差し替え完了までだいどこの値のまま実行しないこと
 
 ## 7. ブランド(未確定 — Q2)

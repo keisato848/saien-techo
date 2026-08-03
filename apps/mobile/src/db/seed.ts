@@ -1484,3 +1484,27 @@ export const seedMaterials = [
     updatedAt: SAIEN_TIMESTAMP,
   },
 ] as const;
+
+/**
+ * 栽培に使うタグ。だいどこの seedTags（肉・汁物・揚げ物…）は料理の語彙なので
+ * 栽培のタグ候補には出さない。tags テーブル自体は共有だが、
+ * 栽培フォームの候補は「栽培に付いているタグ」だけを引く（planting.service）。
+ */
+export const seedPlantingTagMasters = [
+  { id: 'tag-p01', familyId: FAMILY_ID, name: '夏野菜', color: null },
+  { id: 'tag-p02', familyId: FAMILY_ID, name: '実もの', color: null },
+  { id: 'tag-p03', familyId: FAMILY_ID, name: '葉もの', color: null },
+  { id: 'tag-p04', familyId: FAMILY_ID, name: 'ハーブ', color: null },
+  { id: 'tag-p05', familyId: FAMILY_ID, name: 'プランター', color: null },
+] as const;
+
+export const seedPlantingTags = [
+  { plantingId: 'planting-tomato-01', tagId: 'tag-p01' },
+  { plantingId: 'planting-tomato-01', tagId: 'tag-p02' },
+  { plantingId: 'planting-cucumber-01', tagId: 'tag-p01' },
+  { plantingId: 'planting-cucumber-01', tagId: 'tag-p02' },
+  { plantingId: 'planting-shiso-01', tagId: 'tag-p03' },
+  { plantingId: 'planting-shiso-01', tagId: 'tag-p05' },
+  { plantingId: 'planting-basil-01', tagId: 'tag-p04' },
+  { plantingId: 'planting-basil-01', tagId: 'tag-p05' },
+] as const;

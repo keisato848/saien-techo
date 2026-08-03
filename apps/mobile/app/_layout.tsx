@@ -2,6 +2,7 @@ import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { Colors, isDarkPalette } from '../src/constants/theme';
 import { useDatabase } from '../src/hooks/useDatabase';
@@ -32,7 +33,10 @@ export default function RootLayout() {
   }
 
   return (
-    <>
+    // 画面側で useSafeAreaInsets() を使うため Provider をルートに置く。
+    // だいどこは paddingTop: 54 のベタ書きだったが、端末ごとにノッチの高さが
+    // 違うので実測値で組む（実機でヘッダーがステータスバーに潜り込んだ）。
+    <SafeAreaProvider>
       {/* 明色パレットでは白文字のステータスバーが読めない。app.json の
           userInterfaceStyle だけでは Android の文字色は変わらないため、
           パレットの背景の明暗から決める（土案のような暗色では light に戻る）。 */}
@@ -46,7 +50,7 @@ export default function RootLayout() {
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="recipes/[id]/edit" options={{ presentation: 'modal' }} />
       </Stack>
-    </>
+    </SafeAreaProvider>
   );
 }
 

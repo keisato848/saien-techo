@@ -16,6 +16,7 @@
     "@babel/runtime": "^7.29.2",
     "@expo/metro-runtime": "~6.1.2",
     "@hookform/resolvers": "^5.2.2",
+    "@react-native-community/datetimepicker": "8.4.4",
     "@saien/shared": "workspace:*",
     "@tanstack/react-query": "^5.40.0",
     "drizzle-orm": "^0.44.0",
