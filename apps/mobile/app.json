@@ -5,13 +5,13 @@
     "version": "0.1.0",
     "orientation": "default",
     "scheme": "saientecho",
-    "userInterfaceStyle": "dark",
-    "backgroundColor": "#0A0805",
+    "userInterfaceStyle": "light",
+    "backgroundColor": "#F6F8F1",
     "icon": "./assets/icon.png",
     "splash": {
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
-      "backgroundColor": "#0A0805"
+      "backgroundColor": "#F6F8F1"
     },
     "ios": {
       "supportsTablet": false,
@@ -25,7 +25,7 @@
       "versionCode": 1,
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#0A0805"
+        "backgroundColor": "#F6F8F1"
       },
       "blockedPermissions": ["com.google.android.gms.permission.AD_ID"]
     },

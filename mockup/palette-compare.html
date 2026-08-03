@@ -1,0 +1,945 @@
+<title>さいえん手帳 — 画面モック / 配色比較</title>
+
+<style>
+  /* ── ページ側のトークン（ビューアのテーマに追従）───────────────── */
+  :root {
+    --page-bg: #f7f6f2;
+    --page-surface: #ffffff;
+    --page-ink: #1d211c;
+    --page-ink-dim: #5c635a;
+    --page-line: #dfe0d8;
+    --page-accent: #3f6b3a;
+    --radius: 10px;
+    --maxw: 1180px;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --page-bg: #14170f;
+      --page-surface: #1c2018;
+      --page-ink: #e8ebe2;
+      --page-ink-dim: #9aa294;
+      --page-line: #2f342a;
+      --page-accent: #9ec98f;
+    }
+  }
+  :root[data-theme='dark'] {
+    --page-bg: #14170f;
+    --page-surface: #1c2018;
+    --page-ink: #e8ebe2;
+    --page-ink-dim: #9aa294;
+    --page-line: #2f342a;
+    --page-accent: #9ec98f;
+  }
+  :root[data-theme='light'] {
+    --page-bg: #f7f6f2;
+    --page-surface: #ffffff;
+    --page-ink: #1d211c;
+    --page-ink-dim: #5c635a;
+    --page-line: #dfe0d8;
+    --page-accent: #3f6b3a;
+  }
+
+  /* 日本語は端末のシステムフォントで出る（React Native も同様）ので、
+     モックでも webfont を当てず実機に近い見え方にする */
+  body {
+    margin: 0;
+    background: var(--page-bg);
+    color: var(--page-ink);
+    font-family:
+      'Hiragino Kaku Gothic ProN', 'Hiragino Sans', 'Yu Gothic', 'Noto Sans JP', 'Meiryo',
+      sans-serif;
+    line-height: 1.7;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap {
+    max-width: var(--maxw);
+    margin: 0 auto;
+    padding: 40px 20px 72px;
+  }
+
+  header.page {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding-bottom: 22px;
+    border-bottom: 1px solid var(--page-line);
+  }
+  .eyebrow {
+    font-size: 12px;
+    letter-spacing: 0.14em;
+    color: var(--page-ink-dim);
+  }
+  h1 {
+    margin: 0;
+    font-size: clamp(24px, 3.2vw, 34px);
+    letter-spacing: 0.02em;
+    text-wrap: balance;
+  }
+  .lede {
+    margin: 0;
+    max-width: 62ch;
+    color: var(--page-ink-dim);
+    font-size: 15px;
+  }
+
+  /* ── パレット切替 ──────────────────────────────────────────── */
+  .switcher {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin: 26px 0 6px;
+  }
+  .opt {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 14px 10px 10px;
+    border: 1px solid var(--page-line);
+    border-radius: var(--radius);
+    background: var(--page-surface);
+    color: var(--page-ink);
+    font: inherit;
+    font-size: 14px;
+    cursor: pointer;
+    transition: border-color 0.12s ease;
+  }
+  .opt:hover {
+    border-color: var(--page-accent);
+  }
+  .opt[aria-pressed='true'] {
+    border-color: var(--page-accent);
+    box-shadow: inset 0 0 0 1px var(--page-accent);
+  }
+  .opt:focus-visible {
+    outline: 2px solid var(--page-accent);
+    outline-offset: 2px;
+  }
+  .chips {
+    display: flex;
+  }
+  .chip {
+    width: 15px;
+    height: 26px;
+    border: 1px solid rgba(0, 0, 0, 0.14);
+  }
+  .chip:first-child {
+    border-radius: 4px 0 0 4px;
+  }
+  .chip:last-child {
+    border-radius: 0 4px 4px 0;
+  }
+  .opt b {
+    font-weight: 600;
+  }
+  .opt span {
+    color: var(--page-ink-dim);
+    font-size: 12px;
+  }
+
+  .rationale {
+    margin: 14px 0 30px;
+    padding: 14px 16px;
+    border-left: 3px solid var(--page-accent);
+    background: var(--page-surface);
+    border-radius: 0 var(--radius) var(--radius) 0;
+    font-size: 14px;
+    max-width: 74ch;
+  }
+  .rationale strong {
+    display: block;
+    margin-bottom: 3px;
+  }
+
+  /* ── 端末フレーム ──────────────────────────────────────────── */
+  .screens {
+    display: flex;
+    gap: 26px;
+    overflow-x: auto;
+    padding: 4px 4px 18px;
+    scroll-snap-type: x proximity;
+  }
+  .frame {
+    flex: 0 0 auto;
+    scroll-snap-align: start;
+    display: flex;
+    flex-direction: column;
+    gap: 9px;
+  }
+  .frame > figcaption {
+    font-size: 12px;
+    letter-spacing: 0.08em;
+    color: var(--page-ink-dim);
+  }
+  .phone {
+    width: 300px;
+    height: 620px;
+    border-radius: 26px;
+    border: 1px solid var(--page-line);
+    background: var(--app-bg);
+    color: var(--app-ink);
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 10px 26px rgba(0, 0, 0, 0.1);
+    font-size: 13px;
+  }
+
+  /* アプリ内 UI（--app-* トークンで着色）*/
+  .status {
+    display: flex;
+    justify-content: space-between;
+    padding: 9px 16px 3px;
+    font-size: 11px;
+    color: var(--app-ink-dim);
+    font-variant-numeric: tabular-nums;
+  }
+  .appbar {
+    padding: 6px 16px 12px;
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+  }
+  .appbar h2 {
+    margin: 0;
+    font-size: 19px;
+    letter-spacing: 0.01em;
+  }
+  .appbar .sub {
+    font-size: 11px;
+    color: var(--app-ink-dim);
+  }
+  .body {
+    flex: 1;
+    overflow: hidden;
+    padding: 0 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 11px;
+  }
+
+  .card {
+    background: var(--app-card);
+    border: 1px solid var(--app-line);
+    border-radius: 12px;
+    padding: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 7px;
+  }
+  .card.accent {
+    background: var(--app-accent-soft);
+    border-color: var(--app-accent-line);
+  }
+  .card h3 {
+    margin: 0;
+    font-size: 13px;
+    font-weight: 600;
+  }
+  .muted {
+    color: var(--app-ink-dim);
+    font-size: 11.5px;
+    margin: 0;
+  }
+
+  .label {
+    font-size: 10px;
+    letter-spacing: 0.1em;
+    color: var(--app-accent);
+    font-weight: 600;
+  }
+
+  .pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 3px 9px;
+    border-radius: 999px;
+    font-size: 11px;
+    background: var(--app-accent-soft);
+    color: var(--app-accent-ink);
+    border: 1px solid var(--app-accent-line);
+  }
+  .pill.warn {
+    background: var(--app-warn-soft);
+    color: var(--app-warn-ink);
+    border-color: var(--app-warn-line);
+  }
+
+  .row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .thumb {
+    width: 44px;
+    height: 44px;
+    border-radius: 9px;
+    flex: 0 0 auto;
+    background: var(--app-accent-soft);
+    border: 1px solid var(--app-accent-line);
+    display: grid;
+    place-items: center;
+    font-size: 17px;
+  }
+  .grow {
+    flex: 1;
+    min-width: 0;
+  }
+  .title {
+    font-size: 13.5px;
+    font-weight: 600;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .meta {
+    font-size: 11px;
+    color: var(--app-ink-dim);
+    font-variant-numeric: tabular-nums;
+  }
+  .days {
+    font-size: 11px;
+    color: var(--app-accent);
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .quick {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 6px;
+  }
+  .quick button {
+    border: 1px solid var(--app-line);
+    background: var(--app-card);
+    color: var(--app-ink);
+    border-radius: 9px;
+    padding: 8px 2px 6px;
+    font: inherit;
+    font-size: 10px;
+    cursor: default;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 3px;
+  }
+  .quick button.on {
+    background: var(--app-accent);
+    border-color: var(--app-accent);
+    color: var(--app-on-accent);
+  }
+  .quick em {
+    font-size: 15px;
+    font-style: normal;
+  }
+
+  .timeline {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+  }
+  .tl {
+    display: flex;
+    gap: 10px;
+    padding: 8px 0;
+    border-bottom: 1px solid var(--app-line);
+  }
+  .tl:last-child {
+    border-bottom: 0;
+  }
+  .tl .dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 999px;
+    margin-top: 6px;
+    flex: 0 0 auto;
+    background: var(--app-accent);
+  }
+  .tl .dot.harvest {
+    background: var(--app-warn-ink);
+  }
+
+  .gallery {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 5px;
+  }
+  .gallery div {
+    aspect-ratio: 1;
+    border-radius: 7px;
+    background: var(--app-accent-soft);
+    border: 1px solid var(--app-accent-line);
+    display: grid;
+    place-items: center;
+    font-size: 18px;
+  }
+
+  .tabbar {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    border-top: 1px solid var(--app-line);
+    background: var(--app-card);
+    padding: 7px 0 10px;
+  }
+  .tabbar div {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+    font-size: 9.5px;
+    color: var(--app-ink-dim);
+  }
+  .tabbar div.on {
+    color: var(--app-accent);
+    font-weight: 600;
+  }
+  .tabbar em {
+    font-size: 16px;
+    font-style: normal;
+  }
+
+  .fab {
+    position: absolute;
+    right: 16px;
+    bottom: 74px;
+    width: 48px;
+    height: 48px;
+    border-radius: 999px;
+    background: var(--app-accent);
+    color: var(--app-on-accent);
+    display: grid;
+    place-items: center;
+    font-size: 22px;
+    border: 0;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.18);
+  }
+  .phone {
+    position: relative;
+  }
+
+  /* ── トークン表 ────────────────────────────────────────────── */
+  .tokens {
+    margin-top: 38px;
+    border-top: 1px solid var(--page-line);
+    padding-top: 26px;
+  }
+  .tokens h2 {
+    font-size: 17px;
+    margin: 0 0 6px;
+  }
+  .tokens p {
+    margin: 0 0 16px;
+    color: var(--page-ink-dim);
+    font-size: 14px;
+    max-width: 70ch;
+  }
+  .tablewrap {
+    overflow-x: auto;
+  }
+  table {
+    border-collapse: collapse;
+    width: 100%;
+    font-size: 13px;
+  }
+  th,
+  td {
+    text-align: left;
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--page-line);
+    white-space: nowrap;
+  }
+  th {
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    color: var(--page-ink-dim);
+    font-weight: 600;
+  }
+  td code {
+    font-family: ui-monospace, 'SFMono-Regular', 'Cascadia Mono', Menlo, monospace;
+    font-size: 12px;
+  }
+  .sw {
+    display: inline-block;
+    width: 30px;
+    height: 15px;
+    border-radius: 3px;
+    border: 1px solid rgba(0, 0, 0, 0.16);
+    vertical-align: -3px;
+    margin-right: 8px;
+  }
+
+  .note {
+    margin-top: 30px;
+    padding: 16px 18px;
+    border: 1px solid var(--page-line);
+    border-radius: var(--radius);
+    background: var(--page-surface);
+    font-size: 14px;
+    max-width: 78ch;
+  }
+  .note h3 {
+    margin: 0 0 8px;
+    font-size: 14px;
+  }
+  .note ul {
+    margin: 0;
+    padding-left: 1.15em;
+  }
+  .note li + li {
+    margin-top: 5px;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    * {
+      transition: none !important;
+    }
+  }
+</style>
+
+<div class="wrap">
+  <header class="page">
+    <div class="eyebrow">さいえん手帳 — WBS 1.4 / 1.5 の前工程</div>
+    <h1>画面モックと配色案の比較</h1>
+    <p class="lede">
+      v0.1 Alpha で作る 3 画面を、4
+      つの緑系パレットで並べています。ボタンを押すと配色だけが切り替わり、
+      レイアウトは変わりません。決まった案の値はページ下部の表からそのまま
+      <code>theme.ts</code> に入れられます。
+    </p>
+  </header>
+
+  <div class="switcher" role="group" aria-label="配色案">
+    <button class="opt" data-p="wakaba" aria-pressed="true">
+      <span class="chips" aria-hidden="true"
+        ><i class="chip" style="background: #f6f8f1"></i
+        ><i class="chip" style="background: #5b9b3e"></i
+        ><i class="chip" style="background: #2f4a25"></i
+      ></span>
+      <span><b>若葉</b><br /><span>明るい黄緑・初心者向け</span></span>
+    </button>
+    <button class="opt" data-p="naedoko" aria-pressed="false">
+      <span class="chips" aria-hidden="true"
+        ><i class="chip" style="background: #f4f1e8"></i
+        ><i class="chip" style="background: #6b7f4e"></i
+        ><i class="chip" style="background: #8a6b45"></i
+      ></span>
+      <span><b>苗床</b><br /><span>セージ×土色・手帳らしさ</span></span>
+    </button>
+    <button class="opt" data-p="fukamidori" aria-pressed="false">
+      <span class="chips" aria-hidden="true"
+        ><i class="chip" style="background: #f4f7f6"></i
+        ><i class="chip" style="background: #1f6b52"></i
+        ><i class="chip" style="background: #0f3d2e"></i
+      ></span>
+      <span><b>深緑</b><br /><span>青緑・道具寄り</span></span>
+    </button>
+    <button class="opt" data-p="tsuchi" aria-pressed="false">
+      <span class="chips" aria-hidden="true"
+        ><i class="chip" style="background: #17170f"></i
+        ><i class="chip" style="background: #8fbf5f"></i
+        ><i class="chip" style="background: #d8dcc8"></i
+      ></span>
+      <span><b>土（暗）</b><br /><span>夕方の畑・だいどこ寄り</span></span>
+    </button>
+  </div>
+
+  <div class="rationale" id="rationale"></div>
+
+  <div class="screens" id="screens">
+    <!-- ホーム -->
+    <figure class="frame" style="margin: 0">
+      <div class="phone" id="ph1">
+        <div class="status"><span>7:12</span><span>▮▮▮</span></div>
+        <div class="appbar">
+          <h2>今日の菜園</h2>
+          <span class="sub">8月3日（月）</span>
+        </div>
+        <div class="body">
+          <div class="card accent">
+            <span class="label">つぎの作業</span>
+            <h3>トマト（アイコ）— そろそろ追肥</h3>
+            <p class="muted">植え付けから 45 日。前回の追肥は 24 日前です。</p>
+            <div class="row" style="gap: 6px">
+              <span class="pill">記録する</span><span class="pill">あとで</span>
+            </div>
+          </div>
+
+          <div class="card">
+            <span class="label">今月の菜園仕事</span>
+            <p class="muted" style="font-size: 12.5px; color: var(--app-ink)">
+              8 月はダイコン・ハクサイの種まき期。秋どりに向けて畝を準備します。
+            </p>
+          </div>
+
+          <div class="card" style="gap: 4px">
+            <h3 style="margin-bottom: 4px">さいきんの記録</h3>
+            <div class="timeline">
+              <div class="tl">
+                <span class="dot harvest"></span>
+                <span class="grow"
+                  ><span class="title">収穫・トマト 5個</span
+                  ><span class="meta"> ・ 3日前</span></span
+                >
+              </div>
+              <div class="tl">
+                <span class="dot"></span>
+                <span class="grow"
+                  ><span class="title">水やり・キュウリ</span
+                  ><span class="meta"> ・ 昨日</span></span
+                >
+              </div>
+              <div class="tl">
+                <span class="dot"></span>
+                <span class="grow"
+                  ><span class="title">防除・キュウリ</span
+                  ><span class="meta"> ・ 5日前 うどんこ病</span></span
+                >
+              </div>
+            </div>
+          </div>
+        </div>
+        <button class="fab" aria-hidden="true">＋</button>
+        <nav class="tabbar">
+          <div class="on"><em>🏠</em>ホーム</div>
+          <div><em>🌱</em>栽培</div>
+          <div><em>🧺</em>収穫</div>
+          <div><em>⚙</em>設定</div>
+        </nav>
+      </div>
+      <figcaption>ホーム（R05 + R08 + R10）</figcaption>
+    </figure>
+
+    <!-- 栽培一覧 -->
+    <figure class="frame" style="margin: 0">
+      <div class="phone" id="ph2">
+        <div class="status"><span>7:12</span><span>▮▮▮</span></div>
+        <div class="appbar">
+          <h2>栽培</h2>
+          <span class="sub">育成中 3 ・ 終了 1</span>
+        </div>
+        <div class="body">
+          <div class="row" style="gap: 6px">
+            <span class="pill">育成中</span>
+            <span class="pill" style="background: transparent; color: var(--app-ink-dim)"
+              >終了した栽培</span
+            >
+          </div>
+
+          <div class="card">
+            <div class="row">
+              <span class="thumb">🍅</span>
+              <span class="grow">
+                <div class="title">トマト</div>
+                <div class="meta">アイコ ・ 南の畝</div>
+              </span>
+              <span class="days">45日</span>
+            </div>
+          </div>
+          <div class="card">
+            <div class="row">
+              <span class="thumb">🥒</span>
+              <span class="grow">
+                <div class="title">キュウリ</div>
+                <div class="meta">南の畝</div>
+              </span>
+              <span class="days">30日</span>
+            </div>
+          </div>
+          <div class="card">
+            <div class="row">
+              <span class="thumb">🌿</span>
+              <span class="grow">
+                <div class="title">アオジソ</div>
+                <div class="meta">ベランダ プランターA</div>
+              </span>
+              <span class="days">60日</span>
+            </div>
+          </div>
+
+          <p class="muted" style="text-align: center; margin-top: 4px">
+            作物名・品種・タグ・場所で絞り込めます
+          </p>
+        </div>
+        <button class="fab" aria-hidden="true">＋</button>
+        <nav class="tabbar">
+          <div><em>🏠</em>ホーム</div>
+          <div class="on"><em>🌱</em>栽培</div>
+          <div><em>🧺</em>収穫</div>
+          <div><em>⚙</em>設定</div>
+        </nav>
+      </div>
+      <figcaption>栽培一覧（R01 / R03）</figcaption>
+    </figure>
+
+    <!-- 栽培詳細 -->
+    <figure class="frame" style="margin: 0">
+      <div class="phone" id="ph3">
+        <div class="status"><span>7:12</span><span>▮▮▮</span></div>
+        <div class="appbar">
+          <h2>トマト</h2>
+          <span class="sub">アイコ ・ 45日</span>
+        </div>
+        <div class="body">
+          <div class="card" style="gap: 9px">
+            <span class="label">やった！ を記録</span>
+            <div class="quick">
+              <button class="on"><em>💧</em>水やり</button>
+              <button><em>🌾</em>追肥</button>
+              <button><em>✂️</em>剪定</button>
+              <button><em>🛡</em>防除</button>
+              <button><em>🧺</em>収穫</button>
+            </div>
+            <p class="muted">タップで即記録。写真とメモは後から足せます。</p>
+          </div>
+
+          <div class="card">
+            <div class="row" style="justify-content: space-between">
+              <h3>収穫</h3>
+              <span class="pill warn">今季 8 個</span>
+            </div>
+            <div class="gallery">
+              <div>🍅</div>
+              <div>🍅</div>
+              <div>🍅</div>
+            </div>
+          </div>
+
+          <div class="card" style="gap: 4px">
+            <h3 style="margin-bottom: 4px">作業ログ</h3>
+            <div class="timeline">
+              <div class="tl">
+                <span class="dot"></span>
+                <span class="grow"
+                  ><span class="title">水やり</span><span class="meta"> ・ 昨日</span></span
+                >
+              </div>
+              <div class="tl">
+                <span class="dot"></span>
+                <span class="grow"
+                  ><span class="title">剪定</span
+                  ><span class="meta"> ・ 12日前 わき芽かき</span></span
+                >
+              </div>
+              <div class="tl">
+                <span class="dot"></span>
+                <span class="grow"
+                  ><span class="title">追肥</span
+                  ><span class="meta"> ・ 24日前 第一花房</span></span
+                >
+              </div>
+            </div>
+          </div>
+        </div>
+        <nav class="tabbar">
+          <div><em>🏠</em>ホーム</div>
+          <div class="on"><em>🌱</em>栽培</div>
+          <div><em>🧺</em>収穫</div>
+          <div><em>⚙</em>設定</div>
+        </nav>
+      </div>
+      <figcaption>栽培詳細（R04 / R06）</figcaption>
+    </figure>
+  </div>
+
+  <section class="tokens">
+    <h2 id="tokname">トークン</h2>
+    <p>
+      選択中の案の値です。<code>apps/mobile/src/constants/theme.ts</code>
+      に入れる想定で、だいどこのダーク×金のキー名に対応させています。
+    </p>
+    <div class="tablewrap">
+      <table>
+        <thead>
+          <tr>
+            <th>用途</th>
+            <th>キー</th>
+            <th>値</th>
+          </tr>
+        </thead>
+        <tbody id="tokbody"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <div class="note">
+    <h3>このモックで確認したいこと</h3>
+    <ul>
+      <li>
+        <strong>配色の方向</strong> — 4 案のうちどれか。混ぜたい場合（例:「若葉の緑 ×
+        苗床の背景」）も指定できます
+      </li>
+      <li>
+        <strong>ホームの構成</strong> —
+        「つぎの作業」を最上位に置いていますが、収穫を先に見せる案もあります
+      </li>
+      <li>
+        <strong>作業記録の導線</strong> — 栽培詳細の 5 ボタン即記録（R04 の「1〜2
+        タップ」）で足りるか
+      </li>
+      <li>
+        <strong>タブ構成</strong> — ホーム / 栽培 / 収穫 / 設定 の 4 つ。収穫を独立タブにするか、
+        栽培の中に畳むか
+      </li>
+    </ul>
+    <p style="margin: 12px 0 0; color: var(--page-ink-dim); font-size: 13px">
+      日本語は webfont を当てず端末のシステムフォントで表示しています。React Native
+      も同じ挙動のため、 実機に近い見え方になります。
+    </p>
+  </div>
+</div>
+
+<script>
+  const PALETTES = {
+    wakaba: {
+      name: '若葉',
+      why: '春の新芽の黄緑。彩度が高く、明るい紙のような背景に載せる。初心者に「これから育つ」印象を与えたい場合。4 案でいちばん軽い。',
+      t: {
+        bg: '#F6F8F1',
+        card: '#FFFFFF',
+        line: '#DDE5D2',
+        ink: '#1E2A16',
+        inkDim: '#5E6B52',
+        accent: '#5B9B3E',
+        accentInk: '#2F4A25',
+        accentSoft: '#EAF3E0',
+        accentLine: '#CBE0B8',
+        onAccent: '#FFFFFF',
+        warnInk: '#B4622A',
+        warnSoft: '#FBEEE2',
+        warnLine: '#EED6BE',
+      },
+    },
+    naedoko: {
+      name: '苗床',
+      why: '苗床の土とセージの葉。背景を紙色に寄せ、収穫まわりに土色を差す。紙の菜園手帳の延長という位置づけに合う。彩度が低く写真が主役になる。',
+      t: {
+        bg: '#F4F1E8',
+        card: '#FFFDF7',
+        line: '#E0DACA',
+        ink: '#2A2A20',
+        inkDim: '#6B675A',
+        accent: '#6B7F4E',
+        accentInk: '#43512D',
+        accentSoft: '#EDEFE0',
+        accentLine: '#D5D9C0',
+        onAccent: '#FFFDF7',
+        warnInk: '#8A6B45',
+        warnSoft: '#F3EADD',
+        warnLine: '#DFCFB8',
+      },
+    },
+    fukamidori: {
+      name: '深緑',
+      why: '青みの深い葉緑。背景をわずかに寒色へ振り、要素の輪郭をはっきりさせる。記録ツールとしての精度を印象づけたい場合。4 案でいちばん硬い。',
+      t: {
+        bg: '#F4F7F6',
+        card: '#FFFFFF',
+        line: '#D7E2DE',
+        ink: '#12241E',
+        inkDim: '#54655F',
+        accent: '#1F6B52',
+        accentInk: '#0F3D2E',
+        accentSoft: '#E3F0EB',
+        accentLine: '#C2DBD2',
+        onAccent: '#FFFFFF',
+        warnInk: '#A85A2E',
+        warnSoft: '#F9EBE2',
+        warnLine: '#EBD2C1',
+      },
+    },
+    tsuchi: {
+      name: '土（暗）',
+      why: '土の黒に葉の黄緑を差す暗色案。だいどこのダーク×金からの連続性があり、夕方の屋外で見やすい。ただし CLAUDE.md §7 の「明るい緑基調」からは外れる。',
+      t: {
+        bg: '#17170F',
+        card: '#20211A',
+        line: '#33352A',
+        ink: '#E4E8D8',
+        inkDim: '#8E9382',
+        accent: '#8FBF5F',
+        accentInk: '#C6DFA8',
+        accentSoft: '#242A1B',
+        accentLine: '#3C4630',
+        onAccent: '#17170F',
+        warnInk: '#D9A05B',
+        warnSoft: '#2A2318',
+        warnLine: '#453A26',
+      },
+    },
+  };
+
+  const KEYS = [
+    ['画面の背景', 'bg'],
+    ['カード面', 'card'],
+    ['罫線', 'line'],
+    ['本文', 'ink'],
+    ['補助テキスト', 'inkDim'],
+    ['アクセント', 'accent'],
+    ['アクセント文字', 'accentInk'],
+    ['アクセント背景', 'accentSoft'],
+    ['アクセント罫線', 'accentLine'],
+    ['アクセント上の文字', 'onAccent'],
+    ['収穫（強調）', 'warnInk'],
+    ['収穫 背景', 'warnSoft'],
+    ['収穫 罫線', 'warnLine'],
+  ];
+
+  const phones = ['ph1', 'ph2', 'ph3'].map((id) => document.getElementById(id));
+  const rationale = document.getElementById('rationale');
+  const tokbody = document.getElementById('tokbody');
+  const tokname = document.getElementById('tokname');
+
+  function apply(key) {
+    const p = PALETTES[key];
+    for (const el of phones) {
+      el.style.setProperty('--app-bg', p.t.bg);
+      el.style.setProperty('--app-card', p.t.card);
+      el.style.setProperty('--app-line', p.t.line);
+      el.style.setProperty('--app-ink', p.t.ink);
+      el.style.setProperty('--app-ink-dim', p.t.inkDim);
+      el.style.setProperty('--app-accent', p.t.accent);
+      el.style.setProperty('--app-accent-ink', p.t.accentInk);
+      el.style.setProperty('--app-accent-soft', p.t.accentSoft);
+      el.style.setProperty('--app-accent-line', p.t.accentLine);
+      el.style.setProperty('--app-on-accent', p.t.onAccent);
+      el.style.setProperty('--app-warn-ink', p.t.warnInk);
+      el.style.setProperty('--app-warn-soft', p.t.warnSoft);
+      el.style.setProperty('--app-warn-line', p.t.warnLine);
+    }
+
+    rationale.innerHTML = '';
+    const strong = document.createElement('strong');
+    strong.textContent = p.name;
+    rationale.append(strong, document.createTextNode(p.why));
+
+    tokname.textContent = 'トークン — ' + p.name;
+    tokbody.innerHTML = '';
+    for (const [label, k] of KEYS) {
+      const tr = document.createElement('tr');
+      const td1 = document.createElement('td');
+      td1.textContent = label;
+      const td2 = document.createElement('td');
+      const code = document.createElement('code');
+      code.textContent = k;
+      td2.append(code);
+      const td3 = document.createElement('td');
+      const sw = document.createElement('span');
+      sw.className = 'sw';
+      sw.style.background = p.t[k];
+      const val = document.createElement('code');
+      val.textContent = p.t[k];
+      td3.append(sw, val);
+      tr.append(td1, td2, td3);
+      tokbody.append(tr);
+    }
+
+    for (const b of document.querySelectorAll('.opt')) {
+      b.setAttribute('aria-pressed', String(b.dataset.p === key));
+    }
+  }
+
+  for (const b of document.querySelectorAll('.opt')) {
+    b.addEventListener('click', () => apply(b.dataset.p));
+  }
+  apply('wakaba');
+</script>

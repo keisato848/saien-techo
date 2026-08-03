@@ -250,7 +250,7 @@ const styles = StyleSheet.create({
     gap: 6,
     paddingHorizontal: 20,
     paddingVertical: 8,
-    backgroundColor: '#1C1409',
+    backgroundColor: Colors.surfaceInput,
     borderBottomWidth: 1,
     borderBottomColor: Colors.border,
   },
