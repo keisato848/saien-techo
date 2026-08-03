@@ -381,3 +381,265 @@ export const nameAliases = sqliteTable(
     ),
   }),
 );
+
+// ══════════════════════════════════════════════════════════════════════════
+// さいえん手帳（WBS 1.3）
+//
+// だいどこのテーブルとは当面併存する。UI が recipes 系を参照しているため、
+// WBS 1.5（栽培 CRUD）で差し替えるまで両方が存在する。詳細は docs/データ設計.md
+// タイムスタンプは既存テーブルに合わせて TEXT（ISO 8601）で統一する。
+// ══════════════════════════════════════════════════════════════════════════
+
+// ─── Crop（作物マスター）────────────────────────────────────────────────
+// データ投入は WBS 3.1（30 作物）。ここでは器だけ用意する。
+export const crops = sqliteTable('crops', {
+  id: text('id').primaryKey(),
+  name: text('name').notNull(),
+  nameReading: text('name_reading'),
+  // 科（ナス科・ウリ科）。R17 連作障害チェックの判定キー
+  family: text('family'),
+  defaultUnit: text('default_unit'),
+  createdAt: text('created_at').notNull(),
+  updatedAt: text('updated_at').notNull(),
+});
+
+// ─── CropCalendar（栽培暦: 作物 × 地域帯の適期）──────────────────────────
+export const cropCalendars = sqliteTable(
+  'crop_calendars',
+  {
+    id: text('id').primaryKey(),
+    cropId: text('crop_id')
+      .notNull()
+      .references(() => crops.id),
+    // cold=寒冷地 / temperate=中間地 / warm=暖地
+    region: text('region').notNull(),
+    // sow=種まき / plant=植え付け / harvest=収穫
+    kind: text('kind').notNull(),
+    // 1〜12。年またぎは start > end で表す（例: 10月〜翌2月 = 10, 2）
+    startMonth: integer('start_month').notNull(),
+    endMonth: integer('end_month').notNull(),
+  },
+  (table) => ({
+    cropRegionKindIdx: uniqueIndex('idx_crop_calendars_crop_region_kind').on(
+      table.cropId,
+      table.region,
+      table.kind,
+    ),
+  }),
+);
+
+// ─── CropGuide（作物ガイド）──────────────────────────────────────────────
+export const cropGuides = sqliteTable('crop_guides', {
+  cropId: text('crop_id')
+    .primaryKey()
+    .references(() => crops.id),
+  spacingCm: integer('spacing_cm'),
+  // full=日なた / partial=半日陰 / shade=日陰
+  sunlight: text('sunlight'),
+  wateringNote: text('watering_note'),
+  // R10「次の作業」の判定に使う経過日数
+  fertilizeAfterDays: integer('fertilize_after_days'),
+  harvestAfterDays: integer('harvest_after_days'),
+  // JSON 配列
+  commonPests: text('common_pests'),
+  tips: text('tips'),
+});
+
+// ─── Place（場所・区画）──────────────────────────────────────────────────
+export const places = sqliteTable(
+  'places',
+  {
+    id: text('id').primaryKey(),
+    familyId: text('family_id')
+      .notNull()
+      .references(() => families.id),
+    name: text('name').notNull(),
+    // planter=プランター / row=畝 / plot=区画 / other
+    kind: text('kind'),
+    note: text('note'),
+    sortOrder: integer('sort_order'),
+    archivedAt: text('archived_at'),
+    createdAt: text('created_at').notNull(),
+    updatedAt: text('updated_at').notNull(),
+  },
+  (table) => ({
+    familyIdx: index('idx_places_family').on(table.familyId),
+  }),
+);
+
+// ─── Planting（栽培）─────────────────────────────────────────────────────
+// R01 の中核。だいどこの recipes に相当するが版管理は持たない。
+export const plantings = sqliteTable(
+  'plantings',
+  {
+    id: text('id').primaryKey(),
+    familyId: text('family_id')
+      .notNull()
+      .references(() => families.id),
+    // マスターにない作物も登録できるよう nullable
+    cropId: text('crop_id').references(() => crops.id),
+    // 表示名。マスター参照時もコピーを持つ — マスターの名称変更で
+    // 過去の栽培記録の表示が変わらないようにするため
+    cropName: text('crop_name').notNull(),
+    cropNameReading: text('crop_name_reading'),
+    variety: text('variety'),
+    placeId: text('place_id').references(() => places.id),
+    plantedOn: text('planted_on').notNull(),
+    // seed=種 / seedling=苗
+    plantedAs: text('planted_as').notNull(),
+    coverPhotoPath: text('cover_photo_path'),
+    note: text('note'),
+    // NULL = 栽培中
+    endedAt: text('ended_at'),
+    // harvested=収穫完了 / died=枯死 / other
+    endedReason: text('ended_reason'),
+    createdAt: text('created_at').notNull(),
+    updatedAt: text('updated_at').notNull(),
+  },
+  (table) => ({
+    familyEndedIdx: index('idx_plantings_family_ended').on(table.familyId, table.endedAt),
+    placeIdx: index('idx_plantings_place').on(table.placeId),
+    cropIdx: index('idx_plantings_crop').on(table.cropId),
+  }),
+);
+
+// ─── PlantingTag（栽培 ↔ タグ）───────────────────────────────────────────
+export const plantingTags = sqliteTable(
+  'planting_tags',
+  {
+    plantingId: text('planting_id')
+      .notNull()
+      .references(() => plantings.id),
+    tagId: text('tag_id')
+      .notNull()
+      .references(() => tags.id),
+  },
+  (table) => ({
+    pk: uniqueIndex('idx_planting_tags_pk').on(table.plantingId, table.tagId),
+    tagIdx: index('idx_planting_tags_tag').on(table.tagId),
+  }),
+);
+
+// ─── CareLog（作業ログ）──────────────────────────────────────────────────
+// R04。収穫は含めない（harvests へ分離）。
+export const careLogs = sqliteTable(
+  'care_logs',
+  {
+    id: text('id').primaryKey(),
+    plantingId: text('planting_id')
+      .notNull()
+      .references(() => plantings.id),
+    // water=水やり / fertilize=追肥 / transplant=植え替え /
+    // prune=剪定 / pest=防除 / other
+    kind: text('kind').notNull(),
+    loggedAt: text('logged_at').notNull(),
+    note: text('note'),
+    createdAt: text('created_at').notNull(),
+    updatedAt: text('updated_at').notNull(),
+  },
+  (table) => ({
+    plantingDateIdx: index('idx_care_logs_planting_date').on(table.plantingId, table.loggedAt),
+    dateIdx: index('idx_care_logs_date').on(table.loggedAt),
+  }),
+);
+
+// ─── Harvest（収穫記録）──────────────────────────────────────────────────
+// R06。数量・単位を持ち、R07 アルバムと R18 統計の対象になるため care_logs から分離。
+export const harvests = sqliteTable(
+  'harvests',
+  {
+    id: text('id').primaryKey(),
+    plantingId: text('planting_id')
+      .notNull()
+      .references(() => plantings.id),
+    harvestedAt: text('harvested_at').notNull(),
+    // 任意入力（R06 の受け入れ基準）。写真だけでも成立する
+    quantity: real('quantity'),
+    // piece=個 / g / kg / bunch=束 / plant=株
+    unit: text('unit'),
+    note: text('note'),
+    createdAt: text('created_at').notNull(),
+    updatedAt: text('updated_at').notNull(),
+  },
+  (table) => ({
+    plantingDateIdx: index('idx_harvests_planting_date').on(table.plantingId, table.harvestedAt),
+    dateIdx: index('idx_harvests_date').on(table.harvestedAt),
+  }),
+);
+
+// ─── Photo（写真）────────────────────────────────────────────────────────
+// 作業ログ・収穫・栽培のいずれにも付くポリモーフィック参照。
+// 分けるとギャラリー（R05/R07）が 3 テーブルの UNION になるため 1 つにまとめる。
+// FK 制約は張れないので、削除時のカスケードはアプリ側で行う。
+export const photos = sqliteTable(
+  'photos',
+  {
+    id: text('id').primaryKey(),
+    // care_log / harvest / planting
+    ownerType: text('owner_type').notNull(),
+    ownerId: text('owner_id').notNull(),
+    localPath: text('local_path').notNull(),
+    width: integer('width'),
+    height: integer('height'),
+    // 1 レコードあたり最大 6 枚（R04）
+    sortOrder: integer('sort_order').notNull(),
+    createdAt: text('created_at').notNull(),
+  },
+  (table) => ({
+    ownerIdx: index('idx_photos_owner').on(table.ownerType, table.ownerId),
+  }),
+);
+
+// ─── Reminder（繰り返しリマインダー）─────────────────────────────────────
+// R11。だいどこの単発通知を拡張する。繰り返しスケジュールは新規実装。
+export const reminders = sqliteTable(
+  'reminders',
+  {
+    id: text('id').primaryKey(),
+    plantingId: text('planting_id')
+      .notNull()
+      .references(() => plantings.id),
+    // care_logs.kind と同じ語彙
+    kind: text('kind').notNull(),
+    // daily / interval_days / weekly
+    scheduleKind: text('schedule_kind').notNull(),
+    intervalDays: integer('interval_days'),
+    // weekly のとき使う。0=日曜のカンマ区切り
+    weekdays: text('weekdays'),
+    hour: integer('hour').notNull(),
+    minute: integer('minute').notNull(),
+    enabled: integer('enabled').notNull(),
+    lastFiredAt: text('last_fired_at'),
+    createdAt: text('created_at').notNull(),
+    updatedAt: text('updated_at').notNull(),
+  },
+  (table) => ({
+    plantingIdx: index('idx_reminders_planting').on(table.plantingId),
+  }),
+);
+
+// ─── Material（資材在庫）─────────────────────────────────────────────────
+// R12。だいどこの pantry_items に相当。
+export const materials = sqliteTable(
+  'materials',
+  {
+    id: text('id').primaryKey(),
+    familyId: text('family_id')
+      .notNull()
+      .references(() => families.id),
+    name: text('name').notNull(),
+    // seed=種 / fertilizer=肥料 / pesticide=薬剤 / soil=土 / tool=道具 / other
+    category: text('category').notNull(),
+    quantity: real('quantity'),
+    unit: text('unit'),
+    // 閾値割れで通知（R12）
+    lowThreshold: real('low_threshold'),
+    janCode: text('jan_code'),
+    note: text('note'),
+    createdAt: text('created_at').notNull(),
+    updatedAt: text('updated_at').notNull(),
+  },
+  (table) => ({
+    familyCategoryIdx: index('idx_materials_family_category').on(table.familyId, table.category),
+  }),
+);
