@@ -239,6 +239,8 @@ export interface PlantingListItem {
   coverPhotoUri: string | null;
   endedAt: string | null;
   endedReason: PlantingEndedReason | null;
+  /** 場所順の並べ替え用。場所未設定は末尾（R03 / WBS 1.7） */
+  placeSortKey: number;
 }
 
 export interface PlantingDetail extends PlantingListItem {

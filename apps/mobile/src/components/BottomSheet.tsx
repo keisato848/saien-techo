@@ -2,6 +2,7 @@
  * Reusable modal bottom sheet
  */
 import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Colors } from '../constants/theme';
 
@@ -13,10 +14,17 @@ interface BottomSheetProps {
 }
 
 export function BottomSheet({ visible, onClose, title, children }: BottomSheetProps) {
+  const insets = useSafeAreaInsets();
+
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
       <Pressable style={styles.backdrop} onPress={onClose}>
-        <Pressable style={styles.sheet} onPress={(e) => e.stopPropagation()}>
+        {/* ジェスチャーバーのぶんを足さないと、シート末尾のボタンが飲まれる
+            （絞り込みシートの「閉じる」で実際に踏んだ） */}
+        <Pressable
+          style={[styles.sheet, { paddingBottom: 24 + insets.bottom }]}
+          onPress={(e) => e.stopPropagation()}
+        >
           <View style={styles.handle} />
           {title && <Text style={styles.title}>{title}</Text>}
           {children}
@@ -39,7 +47,6 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: 16,
     borderTopRightRadius: 16,
     padding: 20,
-    paddingBottom: 32,
     maxHeight: '80%',
   },
   handle: {
@@ -52,7 +59,7 @@ const styles = StyleSheet.create({
   },
   title: {
     fontSize: 14,
-    color: Colors.paper,
+    color: Colors.ink,
     letterSpacing: 1,
     marginBottom: 16,
     textAlign: 'center',
