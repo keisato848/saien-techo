@@ -27,6 +27,8 @@
     "agent:hooks:install": "node scripts/agent/install-git-hooks.mjs",
     "agent:hooks:test": "node scripts/agent/test-customizations.mjs",
     "agent:preflight": "node scripts/agent/preflight.mjs",
+    "assets:brand": "node scripts/assets/generate-brand-assets.mjs",
+    "assets:brand:check": "node scripts/assets/generate-brand-assets.mjs --check",
     "agent:scaffold": "node scripts/agent/scaffold-feature-plan.mjs",
     "agent:triage:e2e": "node scripts/agent/triage-e2e-report.mjs",
     "agent:validate": "node scripts/agent/validate-changed-slice.mjs",
@@ -43,7 +45,7 @@
     "eslint": "^8.57.0",
     "eslint-plugin-react-hooks": "^4.6.0",
     "prettier": "^3.2.0",
-    "sharp": "^0.33.0",
+    "sharp": "^0.33.5",
     "typescript": "^5.9.2",
     "vitest": "^1.6.0"
   }
