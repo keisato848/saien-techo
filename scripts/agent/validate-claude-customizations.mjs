@@ -14,6 +14,7 @@
  *   node scripts/agent/validate-claude-customizations.mjs --json     # JSON で出力
  *   node scripts/agent/validate-claude-customizations.mjs --strict   # WARN もエラー終了扱い
  */
+import { execFileSync } from 'node:child_process';
 import { readdirSync, readFileSync, statSync, existsSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -455,6 +456,15 @@ const FOREIGN_IDENTIFIERS = [
   { pattern: /DAIDOKO_UPLOAD_/, label: 'だいどこの署名環境変数' }, // daidoko-ref-ok
   { pattern: /keisato848\/daidoko\b/, label: 'だいどこのリポジトリ' }, // daidoko-ref-ok
   { pattern: /daidoko\.db/, label: 'だいどこの DB ファイル名' }, // daidoko-ref-ok
+  // 画面に出る文字列。実際に「だいどこの移行バックアップを共有」等が
+  // 設定画面から見える状態で残っていた。
+  // 対象は .tsx のみ・コメント行は除外する（由来の説明として残すのは問題ない）
+  {
+    pattern: /(だいどこ|臺所|DAIDOKO)/,
+    label: 'だいどこのアプリ名（画面に出る文字列）',
+    filesOnly: /\.tsx$/,
+    skipComments: true,
+  }, // daidoko-ref-ok
 ];
 
 // apps を含めるのは、SQLite のファイル名がアプリ本体に残っていたのを
@@ -473,6 +483,54 @@ function walk(dir, out = []) {
   return out;
 }
 
+/**
+ * 検出したときの説明。識別子はだいどこ側の資産を操作しうるが、
+ * 画面文言はそうではない（見え方の問題）ので分けて書く。
+ */
+function messageFor(label, isUserFacing) {
+  return isUserFacing
+    ? `${label}が残っている。利用者にだいどこの名前が見えるため、さいえん手帳の文言へ置き換えること`
+    : `${label}が残っている。実行するとだいどこ側の資産を操作する。さいえん手帳の値かプレースホルダへ置き換えること`;
+}
+
+/**
+ * アプリのソースが .gitignore に飲まれていないか。
+ *
+ * `.gitignore` の `logs/`（実行時ログ用）が app/.../logs/ のルートを丸ごと無視し、
+ * WBS 1.8 の画面 2 枚が git status にも出ないままコミットから漏れた。
+ * パターンを個別に禁止するより、結果（ソースが無視されている）を見る方が確実。
+ */
+function validateIgnoredSources() {
+  const targets = ['apps/mobile/app', 'apps/mobile/src', 'apps/server/src'].filter((dir) =>
+    existsSync(join(rootDir, dir)),
+  );
+  if (targets.length === 0) return;
+
+  let out = '';
+  try {
+    out = execFileSync(
+      'git',
+      ['ls-files', '--others', '--ignored', '--exclude-standard', '--', ...targets],
+      { cwd: rootDir, encoding: 'utf8' },
+    );
+  } catch {
+    return; // git が無い環境では検査しない
+  }
+
+  for (const file of out
+    .split('\n')
+    .map((line) => line.trim())
+    .filter(Boolean)) {
+    add(
+      'ERROR',
+      'ignored-source-file',
+      file,
+      '.gitignore に無視されている。コミットに含まれず git status にも出ないため、' +
+        '画面やサービスが丸ごと欠落する。無視パターンを絞るか、置き場所を変えること',
+    );
+  }
+}
+
 function validateForeignIdentifiers() {
   for (const dirName of SCAN_DIRS) {
     for (const file of walk(join(rootDir, dirName))) {
@@ -481,13 +539,16 @@ function validateForeignIdentifiers() {
       lines.forEach((line, index) => {
         // 意図的な参照は行末に daidoko-ref-ok を書いて除外する
         if (line.includes('daidoko-ref-ok')) return;
-        for (const { pattern, label } of FOREIGN_IDENTIFIERS) {
+        for (const { pattern, label, filesOnly, skipComments } of FOREIGN_IDENTIFIERS) {
+          if (filesOnly && !filesOnly.test(rel)) continue;
+          // 由来の説明としてコメントに書くぶんには害がないので見逃す
+          if (skipComments && /^\s*(\/\/|\*|\/\*)/.test(line)) continue;
           if (pattern.test(line)) {
             add(
               'ERROR',
               'foreign-app-identifier',
               `${rel}:${index + 1}`,
-              `${label}が残っている。実行するとだいどこ側の資産を操作する。さいえん手帳の値かプレースホルダへ置き換えること`,
+              messageFor(label, skipComments),
             );
           }
         }
@@ -514,6 +575,7 @@ validateSkills();
 validateAgents();
 validateHooks();
 validateForeignIdentifiers();
+validateIgnoredSources();
 
 const errors = findings.filter((finding) => finding.severity === 'ERROR');
 const warnings = findings.filter((finding) => finding.severity === 'WARN');

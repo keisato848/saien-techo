@@ -25,7 +25,7 @@ export default function LicensesScreen() {
         <View style={styles.summaryBox}>
           <Text style={styles.summaryTitle}>オープンソースライセンス</Text>
           <Text style={styles.summaryText}>
-            だいどこは以下の OSS
+            さいえん手帳は以下の OSS
             パッケージを利用しています。各パッケージの著作権表示と完全なライセンス本文は配布元のパッケージに従います。
           </Text>
         </View>

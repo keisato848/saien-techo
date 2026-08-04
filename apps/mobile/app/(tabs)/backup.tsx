@@ -145,7 +145,7 @@ export default function BackupScreen() {
       }
 
       await Sharing.shareAsync(latestMigration.uri, {
-        dialogTitle: 'だいどこの移行バックアップを共有',
+        dialogTitle: 'さいえん手帳の移行バックアップを共有',
         mimeType: 'application/zip',
         UTI: 'public.zip',
       });
