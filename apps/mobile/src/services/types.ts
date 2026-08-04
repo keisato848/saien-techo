@@ -266,3 +266,22 @@ export interface SavePlantingInput {
 }
 
 export type UpdatePlantingInput = SavePlantingInput;
+
+// ─── さいえん手帳: 場所（R02 / WBS 1.6）────────────────────────────────────
+
+export interface PlaceDetail extends PlaceItem {
+  note: string | null;
+  sortOrder: number | null;
+  archivedAt: string | null;
+  /** この場所で育てた栽培の総数（終了分を含む） */
+  plantingCount: number;
+  /** うち育成中 */
+  growingCount: number;
+}
+
+export interface SavePlaceInput {
+  name: string;
+  /** planter=プランター / row=畝 / plot=区画 / other */
+  kind: string;
+  note?: string;
+}

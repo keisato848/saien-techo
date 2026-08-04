@@ -63,6 +63,7 @@ export default function TabLayout() {
       {/* Non-tab screens within the (tabs) group — hidden from tab bar */}
       {/* recipes 系は WBS 1.5 でタブから外した。画面自体は削除まで残す */}
       <Tabs.Screen name="recipes" options={{ href: null }} />
+      <Tabs.Screen name="places" options={{ href: null }} />
       <Tabs.Screen name="backup" options={{ href: null }} />
       <Tabs.Screen name="licenses" options={{ href: null }} />
       <Tabs.Screen name="ai-key" options={{ href: null }} />
