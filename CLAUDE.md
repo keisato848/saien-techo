@@ -63,12 +63,19 @@ Expo SDK 54 / Expo Router v6 / expo-sqlite + Drizzle ORM / Zustand / TanStack Qu
 - `scripts/agent/validate-claude-customizations.mjs` の `foreign-app-identifier` 検査が `apps/` も走査する。だいどこの識別子を書くと pre-commit で止まる(意図的な参照は行末に `daidoko-ref-ok`)
 - release-play / update-store-listing / monetize-golive / promo-video 等のリリース系 skill は、差し替え完了までだいどこの値のまま実行しないこと
 
-## 7. ブランド(未確定 — Q2)
+## 7. ブランド(Q2 — 確定)
 
 配色は**「若葉」に決定**(2026-08-03)。明るい黄緑基調で、だいどこのダーク×金は流用しない。
+シンボルは**「畝と芽」に決定**(2026-08-04)。4 案から選定。畝(明るい緑)を最後に描いて
+茎の根元を覆うことで「植わっている」ように見せている — 芽を宙に浮かせると
+畑ではなく観葉植物に見えるため。
+
+**マークの正は `apps/mobile/assets/brand/mark.svg`。** アイコン・スプラッシュ・favicon は
+`pnpm assets:brand` で SVG から書き出す。**PNG を直接編集しないこと**(pre-commit で
+`--check` が走り、SVG と食い違うと落ちる)。
 4 案を `apps/mobile/src/constants/theme.ts` の `PALETTES` に持ち、`ACTIVE_PALETTE` の変更だけで入れ替わる
-(実機比較は `EXPO_PUBLIC_PALETTE=naedoko` でビルド)。比較モックは `mockup/palette-compare.html`、
-配色と画面構成の根拠は `docs/画面設計.md`。**ロゴ・アイコンは未確定**で仮のまま。UI 表記は「さいえん手帳」。
+(実機比較は `EXPO_PUBLIC_PALETTE=naedoko` でビルド)。比較モックは `mockup/palette-compare.html`、配色・シンボル・画面構成の根拠は `docs/画面設計.md`。
+UI 表記は「さいえん手帳」。
 
 ## 8. 実装フェーズ(詳細は docs/WBS.md)
 

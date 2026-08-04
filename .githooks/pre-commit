@@ -16,8 +16,12 @@ fi
 # 4) .claude カスタマイズの仕様準拠検証（test-customizations は .github しか見ない）
 node scripts/agent/validate-claude-customizations.mjs || exit 1
 
-# 5) レビュー記録の書式検証
+# 5) ブランド素材（アイコン・スプラッシュ）が mark.svg と一致しているか
+#    PNG は生成物。SVG を直したまま書き出し忘れると、リポジトリと実機がずれる
+node scripts/assets/generate-brand-assets.mjs --check || exit 1
+
+# 6) レビュー記録の書式検証
 node scripts/agent/review-log.mjs check || exit 1
 
-# 6) .github カスタマイズの検証
+# 7) .github カスタマイズの検証
 node scripts/agent/test-customizations.mjs
