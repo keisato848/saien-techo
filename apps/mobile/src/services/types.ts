@@ -324,8 +324,44 @@ export interface GardenTimelineEntry {
   plantingId: string;
   cropName: string;
   variety: string | null;
-  kind: CareLogKind;
+  /** 作業ログのときだけ入る */
+  kind: CareLogKind | null;
+  /** 収穫のときだけ入りうる（数量は任意 — R06） */
+  quantity: number | null;
+  unit: HarvestUnit | null;
   loggedAt: string;
   note: string | null;
   photoUris: string[];
+}
+
+// ─── さいえん手帳: 収穫（R06 / WBS 2.1）────────────────────────────────────
+
+/** piece=個 / g / kg / bunch=束 / plant=株 */
+export type HarvestUnit = 'piece' | 'g' | 'kg' | 'bunch' | 'plant';
+
+export interface HarvestItem {
+  id: string;
+  plantingId: string;
+  harvestedAt: string;
+  /** 任意入力（R06）。写真だけでも成立する */
+  quantity: number | null;
+  unit: HarvestUnit | null;
+  note: string | null;
+  photoUris: string[];
+}
+
+export interface SaveHarvestInput {
+  plantingId: string;
+  /** 未指定なら「今」 */
+  harvestedAt?: string;
+  quantity?: number | null;
+  unit?: HarvestUnit | null;
+  note?: string;
+  photoUris?: string[];
+}
+
+/** 単位ごとの合計。単位が混ざる（個と g）ので 1 つの数にまとめられない */
+export interface HarvestTotal {
+  unit: HarvestUnit;
+  quantity: number;
 }

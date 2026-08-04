@@ -20,6 +20,8 @@ export default function PlantingsLayout() {
           WBS 1.8 の 2 画面がコミットから漏れた） */}
       <Stack.Screen name="[id]/care-logs/new" options={{ presentation: 'modal' }} />
       <Stack.Screen name="[id]/care-logs/[logId]" options={{ presentation: 'modal' }} />
+      <Stack.Screen name="[id]/harvests/new" options={{ presentation: 'modal' }} />
+      <Stack.Screen name="[id]/harvests/[harvestId]" options={{ presentation: 'modal' }} />
     </Stack>
   );
 }

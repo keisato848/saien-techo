@@ -22,6 +22,7 @@ jest.mock('../photo-storage.service', () => ({
 }));
 
 import { createCareLog } from '../care-log.service';
+import { createHarvest } from '../harvest.service';
 import { getTimeline, groupByDay } from '../garden-timeline.service';
 import { createPlanting } from '../planting.service';
 import type { GardenTimelineEntry } from '../types';
@@ -155,6 +156,8 @@ describeIfSqlite('garden-timeline.service (real SQLite)', () => {
         cropName: 'トマト',
         variety: null,
         kind: 'water',
+        quantity: null,
+        unit: null,
         loggedAt,
         note: null,
         photoUris: [],
@@ -188,5 +191,102 @@ describeIfSqlite('garden-timeline.service (real SQLite)', () => {
     it('空配列なら空', () => {
       expect(groupByDay([])).toEqual([]);
     });
+  });
+});
+
+describeIfSqlite('収穫の合流 (R06 / WBS 2.1)', () => {
+  let tomato: string;
+
+  beforeEach(async () => {
+    mockHandles = createTestDb();
+    seedFamily();
+    tomato = await createPlanting({
+      cropName: 'トマト',
+      plantedOn: daysAgoNoon(60),
+      plantedAs: 'seedling',
+      tags: [],
+    });
+  });
+
+  afterEach(() => mockHandles.close());
+
+  it('作業ログと収穫が同じ並びに混ざる', async () => {
+    await createCareLog({ plantingId: tomato, kind: 'water', loggedAt: daysAgoNoon(3) });
+    await createHarvest({
+      plantingId: tomato,
+      harvestedAt: daysAgoNoon(1),
+      quantity: 5,
+      unit: 'piece',
+    });
+    await createCareLog({ plantingId: tomato, kind: 'prune', loggedAt: daysAgoNoon(5) });
+
+    const entries = await getTimeline();
+    expect(entries.map((entry) => entry.type)).toEqual(['harvest', 'care_log', 'care_log']);
+  });
+
+  it('収穫には数量と単位が載り、kind は null', async () => {
+    await createHarvest({ plantingId: tomato, quantity: 300, unit: 'g' });
+
+    const [entry] = await getTimeline();
+    expect(entry.type).toBe('harvest');
+    expect(entry.quantity).toBe(300);
+    expect(entry.unit).toBe('g');
+    expect(entry.kind).toBeNull();
+    expect(entry.cropName).toBe('トマト');
+  });
+
+  it('作業ログには kind が載り、数量は null', async () => {
+    await createCareLog({ plantingId: tomato, kind: 'water' });
+
+    const [entry] = await getTimeline();
+    expect(entry.kind).toBe('water');
+    expect(entry.quantity).toBeNull();
+    expect(entry.unit).toBeNull();
+  });
+
+  it('同じ時刻なら収穫が先に来る', async () => {
+    const when = daysAgoNoon(2);
+    await createCareLog({ plantingId: tomato, kind: 'water', loggedAt: when });
+    await createHarvest({ plantingId: tomato, harvestedAt: when });
+
+    expect((await getTimeline()).map((entry) => entry.type)).toEqual(['harvest', 'care_log']);
+  });
+
+  it('写真が種別をまたいで取り違えられない', async () => {
+    await createCareLog({
+      plantingId: tomato,
+      kind: 'water',
+      loggedAt: daysAgoNoon(2),
+      photoUris: ['/care.jpg'],
+    });
+    await createHarvest({
+      plantingId: tomato,
+      harvestedAt: daysAgoNoon(1),
+      photoUris: ['/harvest.jpg'],
+    });
+
+    const entries = await getTimeline();
+    expect(entries[0].photoUris).toEqual(['/harvest.jpg']);
+    expect(entries[1].photoUris).toEqual(['/care.jpg']);
+  });
+
+  it('期間の絞り込みが収穫にも効く', async () => {
+    await createHarvest({ plantingId: tomato, harvestedAt: daysAgoNoon(10) });
+    await createHarvest({ plantingId: tomato, harvestedAt: daysAgoNoon(2) });
+
+    expect(await getTimeline({ from: daysAgoNoon(5) })).toHaveLength(1);
+  });
+
+  it('件数制限は混ぜたあとに効く', async () => {
+    for (let i = 1; i <= 3; i++) {
+      await createCareLog({ plantingId: tomato, kind: 'water', loggedAt: daysAgoNoon(i * 2) });
+      await createHarvest({ plantingId: tomato, harvestedAt: daysAgoNoon(i * 2 - 1) });
+    }
+    // 6 件中、新しい 3 件は 収穫(1) 作業(2) 収穫(3)
+    expect((await getTimeline({ limit: 3 })).map((entry) => entry.type)).toEqual([
+      'harvest',
+      'care_log',
+      'harvest',
+    ]);
   });
 });
