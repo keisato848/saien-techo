@@ -133,7 +133,7 @@ export default function PaywallScreen() {
         <View style={styles.crownWrap}>
           <Crown size={40} color={Colors.gold} />
         </View>
-        <Text style={styles.title}>DAIDOKO プレミアム</Text>
+        <Text style={styles.title}>さいえん手帳 プレミアム</Text>
         <Text style={styles.subtitle}>
           無料で使えるAI写真レシピは1日{FREE_DAILY_LIMIT}回まで。{'\n'}
           プレミアムなら、回数を気にせず使えます。
