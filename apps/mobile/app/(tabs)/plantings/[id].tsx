@@ -5,7 +5,18 @@
  * 「やった！」の記録ボタンと作業ログは WBS 1.8、収穫は WBS 2.1 で足す。
  */
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
-import { ChevronLeft, Pencil, RotateCcw, Sprout, Trash2 } from 'lucide-react-native';
+import {
+  ChevronLeft,
+  Droplets,
+  Leaf,
+  Pencil,
+  Plus,
+  RotateCcw,
+  Scissors,
+  ShieldCheck,
+  Sprout,
+  Trash2,
+} from 'lucide-react-native';
 import { useCallback, useState } from 'react';
 import { Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -19,12 +30,23 @@ import { Toast } from '../../../src/components/Toast';
 import { Colors, Typography } from '../../../src/constants/theme';
 import { formatDateLabel } from '../../../src/components/DateField';
 import {
+  CARE_KIND_LABEL,
+  createCareLog,
+  getCareLogs,
+  QUICK_CARE_KINDS,
+} from '../../../src/services/care-log.service';
+import {
   deletePlanting,
   endPlanting,
   getPlantingDetail,
   resumePlanting,
 } from '../../../src/services/planting.service';
-import type { PlantingDetail, PlantingEndedReason } from '../../../src/services/types';
+import type {
+  CareLogItem,
+  CareLogKind,
+  PlantingDetail,
+  PlantingEndedReason,
+} from '../../../src/services/types';
 import {
   ENDED_REASON_LABEL,
   PLANTED_AS_LABEL,
@@ -36,6 +58,7 @@ export default function PlantingDetailScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const [planting, setPlanting] = useState<PlantingDetail | null>(null);
+  const [careLogs, setCareLogs] = useState<CareLogItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [endSheetOpen, setEndSheetOpen] = useState(false);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
@@ -43,8 +66,23 @@ export default function PlantingDetailScreen() {
 
   const load = useCallback(async () => {
     setPlanting(await getPlantingDetail(id));
+    setCareLogs(await getCareLogs(id));
     setLoading(false);
   }, [id]);
+
+  /**
+   * クイック記録（R04 の「1〜2 タップ」）。
+   * 即保存してトーストを出すだけにして、メモ・写真は後から足せるようにする。
+   * ここでシートを挟むとタップ数が増えて要件を満たせない。
+   */
+  const handleQuickLog = useCallback(
+    async (kind: CareLogKind) => {
+      await createCareLog({ plantingId: id, kind });
+      await load();
+      setToast(`${CARE_KIND_LABEL[kind]}を記録しました`);
+    },
+    [id, load],
+  );
 
   useFocusEffect(
     useCallback(() => {
@@ -146,7 +184,70 @@ export default function PlantingDetailScreen() {
           </View>
         ) : null}
 
-        {/* 作業ログ（WBS 1.8）・収穫（WBS 2.1）はここに入る */}
+        {!ended ? (
+          <View style={styles.quickCard}>
+            <Text style={styles.sectionLabel}>やった！を記録</Text>
+            <View style={styles.quickRow}>
+              {QUICK_CARE_KINDS.map((kind) => (
+                <PressableScale
+                  key={kind}
+                  containerStyle={styles.flexItem}
+                  style={styles.quickButton}
+                  onPress={() => void handleQuickLog(kind)}
+                  accessibilityLabel={`${CARE_KIND_LABEL[kind]}を記録`}
+                >
+                  <CareKindIcon kind={kind} />
+                  <Text style={styles.quickText}>{CARE_KIND_LABEL[kind]}</Text>
+                </PressableScale>
+              ))}
+            </View>
+            <PressableScale
+              style={styles.detailedButton}
+              onPress={() => router.push(`/plantings/${planting.id}/care-logs/new`)}
+            >
+              <Plus size={14} color={Colors.accent} />
+              <Text style={styles.detailedText}>写真やメモを付けて記録</Text>
+            </PressableScale>
+          </View>
+        ) : null}
+
+        <View style={styles.logSection}>
+          <Text style={styles.sectionLabel}>作業ログ</Text>
+          {careLogs.length === 0 ? (
+            <Text style={styles.emptyLog}>まだ記録がありません。</Text>
+          ) : (
+            careLogs.map((log) => (
+              <PressableScale
+                key={log.id}
+                style={styles.logRow}
+                onPress={() => router.push(`/plantings/${planting.id}/care-logs/${log.id}`)}
+              >
+                <View style={styles.logDot} />
+                <View style={styles.logBody}>
+                  <Text style={styles.logKind}>{CARE_KIND_LABEL[log.kind]}</Text>
+                  {log.note ? (
+                    <Text style={styles.logNote} numberOfLines={2}>
+                      {log.note}
+                    </Text>
+                  ) : null}
+                  {log.photoUris.length > 0 ? (
+                    <View style={styles.logPhotos}>
+                      {log.photoUris.slice(0, 4).map((uri) => (
+                        <Image key={uri} source={{ uri }} style={styles.logPhoto} />
+                      ))}
+                      {log.photoUris.length > 4 ? (
+                        <Text style={styles.logPhotoMore}>+{log.photoUris.length - 4}</Text>
+                      ) : null}
+                    </View>
+                  ) : null}
+                </View>
+                <Text style={styles.logDate}>{formatDateLabel(log.loggedAt)}</Text>
+              </PressableScale>
+            ))
+          )}
+        </View>
+
+        {/* 収穫（WBS 2.1）はここに入る */}
 
         <View style={styles.actions}>
           {ended ? (
@@ -204,6 +305,15 @@ export default function PlantingDetailScreen() {
       <Toast message={toast ?? ''} visible={toast != null} onDismiss={() => setToast(null)} />
     </View>
   );
+}
+
+function CareKindIcon({ kind }: { kind: CareLogKind }) {
+  const color = Colors.accentInk;
+  if (kind === 'water') return <Droplets size={18} color={color} />;
+  if (kind === 'fertilize') return <Leaf size={18} color={color} />;
+  if (kind === 'prune') return <Scissors size={18} color={color} />;
+  if (kind === 'pest') return <ShieldCheck size={18} color={color} />;
+  return <Sprout size={18} color={color} />;
 }
 
 function InfoRow({ label, value }: { label: string; value: string }) {
@@ -277,6 +387,60 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   sectionLabel: { fontSize: Typography.size.sm, color: Colors.inkDim },
+  flexItem: { flex: 1 },
+  quickCard: {
+    borderRadius: 12,
+    backgroundColor: Colors.surface,
+    borderWidth: 1,
+    borderColor: Colors.line,
+    padding: 14,
+    gap: 12,
+  },
+  quickRow: { flexDirection: 'row', gap: 8 },
+  quickButton: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 12,
+    borderRadius: 10,
+    backgroundColor: Colors.accentSoft,
+    borderWidth: 1,
+    borderColor: Colors.accentLine,
+  },
+  quickText: { fontSize: Typography.size.xs, color: Colors.accentInk },
+  detailedButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 },
+  detailedText: { fontSize: Typography.size.sm, color: Colors.accent },
+  logSection: { gap: 10 },
+  emptyLog: { fontSize: Typography.size.sm, color: Colors.inkDim },
+  logRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 10,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    borderRadius: 12,
+    backgroundColor: Colors.surface,
+    borderWidth: 1,
+    borderColor: Colors.line,
+  },
+  logDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: Colors.accent,
+    marginTop: 6,
+  },
+  logBody: { flex: 1, gap: 6 },
+  logKind: {
+    fontSize: Typography.size.base,
+    fontWeight: Typography.weight.medium,
+    color: Colors.ink,
+  },
+  logNote: { fontSize: Typography.size.sm, color: Colors.inkDim, lineHeight: 19 },
+  logPhotos: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 2 },
+  logPhoto: { width: 44, height: 44, borderRadius: 6, backgroundColor: Colors.surfaceInput },
+  logPhotoMore: { fontSize: Typography.size.xs, color: Colors.inkDim },
+  logDate: { fontSize: Typography.size.xs, color: Colors.inkDim },
   noteText: { fontSize: Typography.size.base, color: Colors.ink, lineHeight: 22 },
   actions: { gap: 10, marginTop: 8 },
   secondaryButton: {

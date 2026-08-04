@@ -22,7 +22,9 @@ keystore.properties
 web-build/
 
 # Logs
-logs/
+# 先頭の / が無いと、アプリのルートディレクトリ（app/.../logs/）まで
+# 無視してしまう。実際に WBS 1.8 の画面がコミットから漏れた。
+/logs/
 *.log
 npm-debug.log*
 pnpm-debug.log*
