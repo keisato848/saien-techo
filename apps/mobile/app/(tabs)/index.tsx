@@ -1,571 +1,269 @@
 /**
- * S01: Home / Timeline screen
- * Shows recent cooking logs with filter tabs
+ * S01: ホーム — 今日の菜園（R05 / WBS 1.9）
+ *
+ * だいどこの調理記録タイムラインを、栽培の作業ログのタイムラインに差し替えた。
+ * 元の画面は recipes/home-legacy.tsx に退避してある（recipes 一式の削除時に消す）。
+ *
+ * WBS 1.9 の範囲は「育てているもの」と「さいきんの記録」まで。
+ * 「つぎの作業」（R10 / WBS 3.4）と「今月の菜園仕事」（R08 / WBS 3.2）は
+ * 作物暦（WBS 3.1）が入ってから上に積む。docs/画面設計.md S01 参照。
  */
 import { useFocusEffect, useRouter } from 'expo-router';
-import { CalendarDays, LayoutGrid, ShoppingCart, Trash2, X } from 'lucide-react-native';
-import { useCallback, useMemo, useRef, useState } from 'react';
-import { Alert, FlatList, Image, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Plus } from 'lucide-react-native';
+import { useCallback, useState } from 'react';
+import { Image, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { Avatar } from '../../src/components/Avatar';
-import { CoachMarkOverlay } from '../../src/components/CoachMarkOverlay';
-import { HelpButton } from '../../src/components/HelpButton';
 import { EmptyState } from '../../src/components/EmptyState';
 import { Loading } from '../../src/components/Loading';
-import { MonthlyStats } from '../../src/components/MonthlyStats';
 import { PressableScale } from '../../src/components/PressableScale';
-import { Stars } from '../../src/components/Stars';
-import { Colors } from '../../src/constants/theme';
-import { useCoachMarks } from '../../src/hooks/useCoachMarks';
-import { deleteCookingLog } from '../../src/services/cooking-log.service';
-import { getTimeline } from '../../src/services/timeline.service';
-import type { TimelineEntry } from '../../src/services/types';
-import { formatProfileDisplayName } from '../../src/utils/profile';
-import { computeMonthlyStats } from '../../src/utils/timelineStats';
+import { Colors, Typography } from '../../src/constants/theme';
+import { CARE_KIND_LABEL } from '../../src/services/care-log.service';
+import {
+  getTimeline,
+  groupByDay,
+  type TimelineDay,
+} from '../../src/services/garden-timeline.service';
+import { getPlantingList } from '../../src/services/planting.service';
+import type { PlantingListItem } from '../../src/services/types';
 
-type FilterTab = 'week' | 'month' | 'all';
+/** ホームに出す件数。多すぎると「今日の菜園」ではなくなる */
+const TIMELINE_LIMIT = 30;
 
-const FILTER_LABELS: Record<FilterTab, string> = {
-  week: '今週',
-  month: '今月',
-  all: 'すべて',
-};
+/**
+ * 日付見出し。菜園では「何日前にやったか」が知りたい情報なので、
+ * 直近 1 週間は相対表記にする。
+ */
+export function formatDayLabel(date: string, now = new Date()): string {
+  const [year, month, day] = date.split('-').map(Number);
+  const target = new Date(year, month - 1, day);
+  const today = new Date(now);
+  today.setHours(0, 0, 0, 0);
+  const diffDays = Math.round((today.getTime() - target.getTime()) / 86_400_000);
 
-function formatDate(isoDate: string): string {
-  const d = new Date(isoDate);
-  return `${String(d.getMonth() + 1).padStart(2, '0')}月${String(d.getDate()).padStart(2, '0')}日`;
-}
-
-function getFilterDate(filter: FilterTab): Date | null {
-  const now = new Date();
-  if (filter === 'week') {
-    const weekAgo = new Date(now);
-    weekAgo.setDate(weekAgo.getDate() - 7);
-    return weekAgo;
-  }
-  if (filter === 'month') {
-    const monthAgo = new Date(now);
-    monthAgo.setMonth(monthAgo.getMonth() - 1);
-    return monthAgo;
-  }
-  return null;
+  if (diffDays === 0) return '今日';
+  if (diffDays === 1) return 'きのう';
+  if (diffDays > 1 && diffDays < 7) return `${diffDays}日前`;
+  return `${month}月${day}日`;
 }
 
 export default function HomeScreen() {
   const router = useRouter();
-  const [allEntries, setAllEntries] = useState<TimelineEntry[]>([]);
+  const insets = useSafeAreaInsets();
+  const [days, setDays] = useState<TimelineDay[]>([]);
+  const [growing, setGrowing] = useState<PlantingListItem[]>([]);
   const [loading, setLoading] = useState(true);
-  const [filter, setFilter] = useState<FilterTab>('all');
-  const [selectMode, setSelectMode] = useState(false);
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
-  // 初回利用ガイド（コーチマーク）
-  const cartRef = useRef<View>(null);
-  const fabRef = useRef<View>(null);
-  const coach = useCoachMarks(
-    'home',
-    [
-      {
-        key: 'fab',
-        title: '記録もレシピもここから',
-        text: '作った料理の記録や、レシピの追加（手入力・写真からAI作成）は「＋」から始めます。',
-        ref: fabRef,
-      },
-      {
-        key: 'cart',
-        title: '買い物リストと在庫',
-        text: '買い物リスト・家の在庫・レシート読み取り・「この在庫で作れるレシピ」はこのカートから。',
-        ref: cartRef,
-      },
-    ],
-    !loading && !selectMode,
-  );
-
-  const loadTimeline = useCallback(async () => {
-    setAllEntries(await getTimeline());
+  const load = useCallback(async () => {
+    const [entries, plantings] = await Promise.all([
+      getTimeline({ limit: TIMELINE_LIMIT }),
+      getPlantingList(),
+    ]);
+    setDays(groupByDay(entries));
+    setGrowing(plantings);
     setLoading(false);
   }, []);
 
-  const entries = useMemo(() => {
-    const filterDate = getFilterDate(filter);
-    return filterDate ? allEntries.filter((l) => new Date(l.cookedAt) >= filterDate) : allEntries;
-  }, [allEntries, filter]);
-
-  const monthlyStats = useMemo(() => computeMonthlyStats(allEntries), [allEntries]);
-  const monthLabel = `${new Date().getMonth() + 1}月`;
-
   useFocusEffect(
     useCallback(() => {
-      void loadTimeline();
-    }, [loadTimeline]),
+      void load();
+    }, [load]),
   );
 
-  const exitSelectMode = useCallback(() => {
-    setSelectMode(false);
-    setSelectedIds(new Set());
-  }, []);
+  if (loading) return <Loading />;
 
-  const toggleSelect = useCallback((id: string) => {
-    setSelectedIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) {
-        next.delete(id);
-      } else {
-        next.add(id);
-      }
-      return next;
-    });
-  }, []);
-
-  const handleSelectAll = useCallback(() => {
-    setSelectedIds(new Set(entries.map((entry) => entry.id)));
-  }, [entries]);
-
-  const handleBulkDelete = useCallback(() => {
-    const count = selectedIds.size;
-    if (count === 0) return;
-
-    Alert.alert(
-      '調理ログを削除',
-      `${count}件の調理ログを削除しますか？この操作は取り消せません。`,
-      [
-        { text: 'キャンセル', style: 'cancel' },
-        {
-          text: '削除',
-          style: 'destructive',
-          onPress: async () => {
-            await Promise.all([...selectedIds].map((id) => deleteCookingLog(id)));
-            exitSelectMode();
-            await loadTimeline();
-          },
-        },
-      ],
-    );
-  }, [selectedIds, exitSelectMode, loadTimeline]);
-
-  const renderItem = ({ item, index }: { item: TimelineEntry; index: number }) => {
-    const showDateHeader =
-      index === 0 || formatDate(entries[index - 1].cookedAt) !== formatDate(item.cookedAt);
-    const isSelected = selectedIds.has(item.id);
-    const userName = formatProfileDisplayName(item.userName);
-
-    return (
-      <View>
-        {showDateHeader && <Text style={styles.dateHeader}>{formatDate(item.cookedAt)}</Text>}
-        <PressableScale
-          style={[styles.card, isSelected && styles.cardSelected]}
-          onPress={() => {
-            if (selectMode) {
-              toggleSelect(item.id);
-            } else if (item.recipeId) {
-              router.push(`/(tabs)/recipes/${item.recipeId}`);
-            }
-          }}
-          onLongPress={() => {
-            if (!selectMode) {
-              setSelectMode(true);
-              setSelectedIds(new Set([item.id]));
-            }
-          }}
-        >
-          {selectMode && (
-            <View style={[styles.checkBadge, isSelected && styles.checkBadgeSelected]}>
-              {isSelected && <Text style={styles.checkMark}>✓</Text>}
-            </View>
-          )}
-          <View style={styles.cardRow}>
-            {item.photos.length > 0 && (
-              <Image
-                source={{ uri: item.photos[0].cloudUrl ?? item.photos[0].localPath }}
-                style={styles.thumbnail}
-              />
-            )}
-            <View style={styles.cardContent}>
-              <View style={styles.cardHeader}>
-                <Text style={styles.recipeTitle} numberOfLines={1}>
-                  {item.recipeTitle}
-                </Text>
-                {item.rating != null && <Stars rating={item.rating} size={12} />}
-              </View>
-              <View style={styles.cardUser}>
-                <Avatar name={userName} size={22} />
-                <Text style={styles.userName}>{userName}</Text>
-              </View>
-              {item.memo ? (
-                <Text style={styles.memo} numberOfLines={1}>
-                  &quot;{item.memo}&quot;
-                </Text>
-              ) : null}
-            </View>
-          </View>
-        </PressableScale>
-      </View>
-    );
-  };
+  const hasAnything = growing.length > 0 || days.length > 0;
 
   return (
-    <View style={styles.container}>
-      {selectMode ? (
-        <View style={styles.selectHeader}>
-          <Pressable style={styles.selectCancelBtn} onPress={exitSelectMode}>
-            <X size={18} color={Colors.paper} />
-          </Pressable>
-          <Text style={styles.selectCount}>{selectedIds.size}件選択中</Text>
-          <Pressable style={styles.selectAllBtn} onPress={handleSelectAll}>
-            <Text style={styles.selectAllText}>すべて選択</Text>
-          </Pressable>
-        </View>
-      ) : (
-        <View style={styles.filterBar}>
-          <View style={styles.tabs}>
-            {(Object.keys(FILTER_LABELS) as FilterTab[]).map((key) => (
-              <Pressable key={key} onPress={() => setFilter(key)}>
-                <Text style={[styles.tab, filter === key ? styles.tabActive : styles.tabInactive]}>
-                  {FILTER_LABELS[key]}
-                </Text>
-                {filter === key && <View style={styles.tabIndicator} />}
-              </Pressable>
-            ))}
-          </View>
-          <View style={styles.headerActions}>
-            <Pressable
-              onPress={() => router.push('/calendar')}
-              hitSlop={10}
-              accessibilityLabel="カレンダー"
-            >
-              <CalendarDays size={19} color={Colors.goldDim} />
-            </Pressable>
-            <Pressable
-              onPress={() => router.push('/gallery')}
-              hitSlop={10}
-              accessibilityLabel="ギャラリー"
-            >
-              <LayoutGrid size={19} color={Colors.goldDim} />
-            </Pressable>
-            <Pressable
-              ref={cartRef}
-              collapsable={false}
-              onPress={() => router.push('/(tabs)/shopping')}
-              hitSlop={10}
-              accessibilityLabel="買い物リスト"
-            >
-              <ShoppingCart size={19} color={Colors.goldDim} />
-            </Pressable>
-            <HelpButton onPress={coach.show} size={19} />
-          </View>
-        </View>
-      )}
+    <View style={styles.root}>
+      <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
+        <Text style={styles.title}>今日の菜園</Text>
+      </View>
 
-      {loading ? (
-        <Loading message="調理記録を読み込んでいます" />
-      ) : (
-        <FlatList
-          data={entries}
-          keyExtractor={(item) => item.id}
-          renderItem={renderItem}
-          contentContainerStyle={[
-            styles.list,
-            selectMode && styles.listWithActionBar,
-            entries.length === 0 && styles.listEmpty,
-          ]}
-          showsVerticalScrollIndicator={false}
-          ListHeaderComponent={
-            !selectMode && monthlyStats.count > 0 ? (
-              <MonthlyStats stats={monthlyStats} monthLabel={monthLabel} />
-            ) : null
-          }
-          ListEmptyComponent={
-            <EmptyState
-              icon={filter === 'all' ? '🍳' : '🗓'}
-              title={
-                filter === 'all'
-                  ? 'まだ調理記録がありません'
-                  : `${FILTER_LABELS[filter]}の記録がありません`
-              }
-              message={
-                filter === 'all'
-                  ? '料理をつくったら「＋」から記録しましょう。家族の記録もここに並びます。'
-                  : '別の期間を選ぶか、新しく記録を追加してみましょう。'
-              }
-              actionLabel={filter === 'all' ? '記録を追加' : undefined}
-              onAction={filter === 'all' ? () => router.push('/(tabs)/add') : undefined}
-            />
-          }
+      {!hasAnything ? (
+        <EmptyState
+          icon="🌱"
+          title="さいえん手帳へようこそ"
+          message="育てているものを登録すると、経過日数と作業の記録がここに並びます。"
+          actionLabel="栽培を追加"
+          onAction={() => router.push('/plantings/new')}
         />
-      )}
-
-      {selectMode ? (
-        <View style={styles.actionBar}>
-          <Pressable
-            style={[
-              styles.actionBtn,
-              styles.actionBtnDelete,
-              selectedIds.size === 0 && styles.actionBtnDisabled,
-            ]}
-            onPress={handleBulkDelete}
-            disabled={selectedIds.size === 0}
-          >
-            <Trash2 size={16} color={selectedIds.size === 0 ? Colors.muted : Colors.bg} />
-            <Text
-              style={[styles.actionBtnText, selectedIds.size === 0 && styles.actionBtnTextDisabled]}
-            >
-              削除
-            </Text>
-          </Pressable>
-        </View>
       ) : (
-        <View ref={fabRef} collapsable={false} style={styles.fabContainer}>
-          <PressableScale
-            style={styles.fab}
-            scaleTo={0.9}
-            onPress={() => router.push('/(tabs)/add')}
-          >
-            <Text style={styles.fabText}>＋</Text>
-          </PressableScale>
-        </View>
-      )}
+        <ScrollView contentContainerStyle={styles.body}>
+          {growing.length > 0 ? (
+            <View style={styles.section}>
+              <Text style={styles.sectionLabel}>育てているもの</Text>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.growingRow}
+              >
+                {growing.map((planting) => (
+                  <PressableScale
+                    key={planting.id}
+                    style={styles.growingCard}
+                    onPress={() => router.push(`/plantings/${planting.id}`)}
+                  >
+                    {planting.coverPhotoUri ? (
+                      <Image source={{ uri: planting.coverPhotoUri }} style={styles.growingThumb} />
+                    ) : (
+                      <View style={[styles.growingThumb, styles.growingThumbPlaceholder]}>
+                        <Text style={styles.growingEmoji}>🌱</Text>
+                      </View>
+                    )}
+                    <Text style={styles.growingName} numberOfLines={1}>
+                      {planting.cropName}
+                    </Text>
+                    <Text style={styles.growingDays}>{planting.elapsedDays}日目</Text>
+                  </PressableScale>
+                ))}
+                <PressableScale
+                  style={[styles.growingCard, styles.growingAdd]}
+                  onPress={() => router.push('/plantings/new')}
+                  accessibilityLabel="栽培を追加"
+                >
+                  <Plus size={22} color={Colors.accent} />
+                  <Text style={styles.growingAddText}>追加</Text>
+                </PressableScale>
+              </ScrollView>
+            </View>
+          ) : null}
 
-      <CoachMarkOverlay
-        visible={coach.visible}
-        step={coach.step}
-        index={coach.index}
-        total={coach.total}
-        onNext={coach.next}
-        onSkip={coach.skip}
-      />
+          <View style={styles.section}>
+            <Text style={styles.sectionLabel}>さいきんの記録</Text>
+            {days.length === 0 ? (
+              <Text style={styles.empty}>
+                まだ作業の記録がありません。栽培を開いて「やった！」から記録できます。
+              </Text>
+            ) : (
+              days.map((day) => (
+                <View key={day.date} style={styles.day}>
+                  <Text style={styles.dayLabel}>{formatDayLabel(day.date)}</Text>
+                  {day.entries.map((entry) => (
+                    <PressableScale
+                      key={entry.id}
+                      style={styles.entry}
+                      onPress={() =>
+                        router.push(`/plantings/${entry.plantingId}/care-logs/${entry.id}`)
+                      }
+                    >
+                      <View style={styles.entryDot} />
+                      <View style={styles.entryBody}>
+                        <Text style={styles.entryTitle}>
+                          <Text style={styles.entryCrop}>{entry.cropName}</Text>
+                          {'　'}
+                          {CARE_KIND_LABEL[entry.kind]}
+                        </Text>
+                        {entry.note ? (
+                          <Text style={styles.entryNote} numberOfLines={2}>
+                            {entry.note}
+                          </Text>
+                        ) : null}
+                        {entry.photoUris.length > 0 ? (
+                          <View style={styles.entryPhotos}>
+                            {entry.photoUris.slice(0, 4).map((uri) => (
+                              <Image key={uri} source={{ uri }} style={styles.entryPhoto} />
+                            ))}
+                            {entry.photoUris.length > 4 ? (
+                              <Text style={styles.entryPhotoMore}>
+                                +{entry.photoUris.length - 4}
+                              </Text>
+                            ) : null}
+                          </View>
+                        ) : null}
+                      </View>
+                    </PressableScale>
+                  ))}
+                </View>
+              ))
+            )}
+          </View>
+        </ScrollView>
+      )}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: Colors.bg,
+  root: { flex: 1, backgroundColor: Colors.bg },
+  header: { paddingHorizontal: 16, paddingBottom: 12 },
+  title: {
+    fontSize: Typography.size.lg,
+    fontWeight: Typography.weight.medium,
+    color: Colors.ink,
   },
-  filterBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
+  body: { paddingBottom: 32, gap: 24 },
+  section: { gap: 10 },
+  sectionLabel: {
+    fontSize: Typography.size.sm,
+    color: Colors.inkDim,
     paddingHorizontal: 16,
-    paddingTop: 54,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.border,
   },
-  tabs: {
-    flex: 1,
-    flexDirection: 'row',
-  },
-  headerActions: {
-    flexDirection: 'row',
+  growingRow: { paddingHorizontal: 16, gap: 10 },
+  growingCard: {
+    width: 92,
     alignItems: 'center',
-    gap: 14,
-    paddingBottom: 8,
-  },
-  tab: {
-    paddingHorizontal: 14,
-    paddingVertical: 4,
-    paddingBottom: 8,
-    fontSize: 13, // sm: フィルタータブ
-    fontWeight: '400',
-  },
-  tabActive: {
-    color: Colors.gold,
-  },
-  tabInactive: {
-    color: Colors.muted,
-  },
-  tabIndicator: {
-    height: 2,
-    backgroundColor: Colors.gold,
-    marginTop: -1,
-  },
-  list: {
-    paddingVertical: 8,
-    paddingBottom: 80,
-  },
-  listWithActionBar: {
-    paddingBottom: 104,
-  },
-  listEmpty: {
-    flexGrow: 1,
-  },
-  dateHeader: {
-    paddingHorizontal: 20,
-    paddingTop: 10,
-    paddingBottom: 4,
-    fontSize: 12, // xs: タイムスタンプ・日付ヘッダー
-    color: Colors.paperDim,
-    letterSpacing: 2,
-  },
-  card: {
-    marginHorizontal: 16,
-    marginVertical: 6,
-    padding: 14,
-    backgroundColor: Colors.bgCard,
-    borderRadius: 8,
+    gap: 6,
+    padding: 10,
+    borderRadius: 12,
+    backgroundColor: Colors.surface,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: Colors.line,
   },
-  cardSelected: {
-    borderColor: Colors.gold,
-    borderWidth: 2,
-  },
-  cardRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  thumbnail: {
-    width: 56,
-    height: 56,
-    borderRadius: 6,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    backgroundColor: '#1A1108',
-  },
-  cardContent: {
-    flex: 1,
-    gap: 4,
-  },
-  checkBadge: {
-    position: 'absolute',
-    top: 8,
-    right: 8,
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-    borderWidth: 1.5,
-    borderColor: Colors.muted,
-    backgroundColor: Colors.bg,
+  growingThumb: { width: 64, height: 64, borderRadius: 10 },
+  growingThumbPlaceholder: {
+    backgroundColor: Colors.accentSoft,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  checkBadgeSelected: {
-    borderColor: Colors.gold,
-    backgroundColor: Colors.gold,
+  growingEmoji: { fontSize: 26 },
+  growingName: { fontSize: Typography.size.sm, color: Colors.ink },
+  growingDays: {
+    fontSize: Typography.size.xs,
+    color: Colors.accent,
+    fontVariant: ['tabular-nums'],
   },
-  checkMark: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: Colors.bg,
-    lineHeight: 16,
+  growingAdd: {
+    justifyContent: 'center',
+    backgroundColor: Colors.accentSoft,
+    borderStyle: 'dashed',
   },
-  cardHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  recipeTitle: {
-    color: Colors.paper,
-    fontSize: 15, // base: カードタイトル
-    fontWeight: '500',
-  },
-  cardUser: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    marginTop: 2,
-  },
-  userName: {
-    fontSize: 13, // sm: ユーザー名
-    color: Colors.paperDim,
-    fontWeight: '400',
-  },
-  memo: {
-    fontSize: 13, // sm: メモ
-    color: Colors.goldDim,
-    fontStyle: 'italic',
-    marginTop: 2,
-  },
-  selectHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
+  growingAddText: { fontSize: Typography.size.xs, color: Colors.accent },
+  empty: {
+    fontSize: Typography.size.sm,
+    color: Colors.inkDim,
+    lineHeight: 20,
     paddingHorizontal: 16,
-    paddingTop: 54,
-    paddingBottom: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.border,
-    gap: 12,
   },
-  selectCancelBtn: {
-    padding: 4,
+  day: { gap: 8, paddingHorizontal: 16, marginBottom: 6 },
+  dayLabel: {
+    fontSize: Typography.size.xs,
+    color: Colors.inkDim,
+    fontWeight: Typography.weight.medium,
+    marginTop: 6,
   },
-  selectCount: {
-    flex: 1,
-    fontSize: 15,
-    fontWeight: '500',
-    color: Colors.paper,
-  },
-  selectAllBtn: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 6,
-    borderWidth: 1,
-    borderColor: Colors.border,
-  },
-  selectAllText: {
-    fontSize: 13,
-    fontWeight: '400',
-    color: Colors.paperDim,
-  },
-  actionBar: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
+  entry: {
     flexDirection: 'row',
-    justifyContent: 'flex-end',
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    paddingBottom: 28,
-    backgroundColor: Colors.bg,
-    borderTopWidth: 1,
-    borderTopColor: Colors.border,
+    alignItems: 'flex-start',
     gap: 10,
-  },
-  actionBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 8,
-  },
-  actionBtnDelete: {
-    backgroundColor: '#7A1F1F',
-  },
-  actionBtnDisabled: {
-    backgroundColor: Colors.bgCard,
+    padding: 12,
+    borderRadius: 12,
+    backgroundColor: Colors.surface,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: Colors.line,
   },
-  actionBtnText: {
-    fontSize: 15,
-    fontWeight: '500',
-    color: Colors.bg,
+  entryDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: Colors.accent,
+    marginTop: 6,
   },
-  actionBtnTextDisabled: {
-    color: Colors.muted,
-  },
-  fabContainer: {
-    position: 'absolute',
-    bottom: 16,
-    right: 16,
-  },
-  fab: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: Colors.gold,
-    alignItems: 'center',
-    justifyContent: 'center',
-    elevation: 8,
-    shadowColor: Colors.gold,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.4,
-    shadowRadius: 16,
-  },
-  fabText: {
-    fontSize: 24,
-    color: Colors.bg,
-  },
+  entryBody: { flex: 1, gap: 6 },
+  entryTitle: { fontSize: Typography.size.base, color: Colors.inkDim },
+  entryCrop: { color: Colors.ink, fontWeight: Typography.weight.medium },
+  entryNote: { fontSize: Typography.size.sm, color: Colors.inkDim, lineHeight: 19 },
+  entryPhotos: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 2 },
+  entryPhoto: { width: 52, height: 52, borderRadius: 6, backgroundColor: Colors.surfaceInput },
+  entryPhotoMore: { fontSize: Typography.size.xs, color: Colors.inkDim },
 });
