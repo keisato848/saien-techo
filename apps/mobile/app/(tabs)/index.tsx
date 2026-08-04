@@ -19,6 +19,7 @@ import { Loading } from '../../src/components/Loading';
 import { PressableScale } from '../../src/components/PressableScale';
 import { Colors, Typography } from '../../src/constants/theme';
 import { CARE_KIND_LABEL } from '../../src/services/care-log.service';
+import { HARVEST_UNIT_LABEL } from '../../src/services/harvest.service';
 import {
   getTimeline,
   groupByDay,
@@ -144,15 +145,31 @@ export default function HomeScreen() {
                       key={entry.id}
                       style={styles.entry}
                       onPress={() =>
-                        router.push(`/plantings/${entry.plantingId}/care-logs/${entry.id}`)
+                        router.push(
+                          entry.type === 'harvest'
+                            ? `/plantings/${entry.plantingId}/harvests/${entry.id}`
+                            : `/plantings/${entry.plantingId}/care-logs/${entry.id}`,
+                        )
                       }
                     >
-                      <View style={styles.entryDot} />
+                      {/* 収穫は暖色のドットで作業ログと区別する（docs/画面設計.md S01） */}
+                      <View
+                        style={[
+                          styles.entryDot,
+                          entry.type === 'harvest' && styles.entryDotHarvest,
+                        ]}
+                      />
                       <View style={styles.entryBody}>
                         <Text style={styles.entryTitle}>
                           <Text style={styles.entryCrop}>{entry.cropName}</Text>
                           {'　'}
-                          {CARE_KIND_LABEL[entry.kind]}
+                          {entry.type === 'harvest'
+                            ? entry.quantity != null && entry.unit
+                              ? `収穫 ${entry.quantity}${HARVEST_UNIT_LABEL[entry.unit]}`
+                              : '収穫'
+                            : entry.kind
+                              ? CARE_KIND_LABEL[entry.kind]
+                              : ''}
                         </Text>
                         {entry.note ? (
                           <Text style={styles.entryNote} numberOfLines={2}>
@@ -259,6 +276,7 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.accent,
     marginTop: 6,
   },
+  entryDotHarvest: { backgroundColor: Colors.harvest },
   entryBody: { flex: 1, gap: 6 },
   entryTitle: { fontSize: Typography.size.base, color: Colors.inkDim },
   entryCrop: { color: Colors.ink, fontWeight: Typography.weight.medium },

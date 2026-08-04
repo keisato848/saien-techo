@@ -11,6 +11,7 @@ import {
   Leaf,
   Pencil,
   Plus,
+  ShoppingBasket,
   RotateCcw,
   Scissors,
   ShieldCheck,
@@ -36,6 +37,11 @@ import {
   QUICK_CARE_KINDS,
 } from '../../../src/services/care-log.service';
 import {
+  getHarvests,
+  getHarvestTotals,
+  HARVEST_UNIT_LABEL,
+} from '../../../src/services/harvest.service';
+import {
   deletePlanting,
   endPlanting,
   getPlantingDetail,
@@ -44,6 +50,8 @@ import {
 import type {
   CareLogItem,
   CareLogKind,
+  HarvestItem,
+  HarvestTotal,
   PlantingDetail,
   PlantingEndedReason,
 } from '../../../src/services/types';
@@ -59,6 +67,8 @@ export default function PlantingDetailScreen() {
   const insets = useSafeAreaInsets();
   const [planting, setPlanting] = useState<PlantingDetail | null>(null);
   const [careLogs, setCareLogs] = useState<CareLogItem[]>([]);
+  const [harvests, setHarvests] = useState<HarvestItem[]>([]);
+  const [totals, setTotals] = useState<HarvestTotal[]>([]);
   const [loading, setLoading] = useState(true);
   const [endSheetOpen, setEndSheetOpen] = useState(false);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
@@ -67,6 +77,8 @@ export default function PlantingDetailScreen() {
   const load = useCallback(async () => {
     setPlanting(await getPlantingDetail(id));
     setCareLogs(await getCareLogs(id));
+    setHarvests(await getHarvests(id));
+    setTotals(await getHarvestTotals(id));
     setLoading(false);
   }, [id]);
 
@@ -201,6 +213,20 @@ export default function PlantingDetailScreen() {
                 </PressableScale>
               ))}
             </View>
+            {/*
+              収穫は保存先が harvests で違うが、利用者にとっては同じ「やったことの記録」。
+              導線を分けると R06 の最短 3 タップに収まらないのでここに混ぜる。
+              色だけ暖色にして、作業ログとは別物だと分かるようにしている。
+            */}
+            <PressableScale
+              style={styles.harvestButton}
+              onPress={() => router.push(`/plantings/${planting.id}/harvests/new`)}
+              accessibilityLabel="収穫を記録"
+            >
+              <ShoppingBasket size={18} color={Colors.harvest} />
+              <Text style={styles.harvestButtonText}>収穫した</Text>
+            </PressableScale>
+
             <PressableScale
               style={styles.detailedButton}
               onPress={() => router.push(`/plantings/${planting.id}/care-logs/new`)}
@@ -247,7 +273,47 @@ export default function PlantingDetailScreen() {
           )}
         </View>
 
-        {/* 収穫（WBS 2.1）はここに入る */}
+        {harvests.length > 0 ? (
+          <View style={styles.logSection}>
+            <View style={styles.harvestHeader}>
+              <Text style={styles.sectionLabel}>収穫</Text>
+              {totals.length > 0 ? (
+                <View style={styles.totals}>
+                  {totals.map((total) => (
+                    <Text key={total.unit} style={styles.totalPill}>
+                      {total.quantity}
+                      {HARVEST_UNIT_LABEL[total.unit]}
+                    </Text>
+                  ))}
+                </View>
+              ) : null}
+            </View>
+
+            {/* 写真が主役なので、一覧は行ではなくサムネイルの並び（R06 / R07） */}
+            <View style={styles.harvestGrid}>
+              {harvests.map((harvest) => (
+                <PressableScale
+                  key={harvest.id}
+                  style={styles.harvestCell}
+                  onPress={() => router.push(`/plantings/${planting.id}/harvests/${harvest.id}`)}
+                >
+                  {harvest.photoUris.length > 0 ? (
+                    <Image source={{ uri: harvest.photoUris[0] }} style={styles.harvestPhoto} />
+                  ) : (
+                    <View style={[styles.harvestPhoto, styles.harvestPhotoEmpty]}>
+                      <ShoppingBasket size={20} color={Colors.harvest} />
+                    </View>
+                  )}
+                  <Text style={styles.harvestCaption} numberOfLines={1}>
+                    {harvest.quantity != null && harvest.unit
+                      ? `${harvest.quantity}${HARVEST_UNIT_LABEL[harvest.unit]}`
+                      : formatDateLabel(harvest.harvestedAt)}
+                  </Text>
+                </PressableScale>
+              ))}
+            </View>
+          </View>
+        ) : null}
 
         <View style={styles.actions}>
           {ended ? (
@@ -408,6 +474,50 @@ const styles = StyleSheet.create({
     borderColor: Colors.accentLine,
   },
   quickText: { fontSize: Typography.size.xs, color: Colors.accentInk },
+  harvestButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 12,
+    borderRadius: 10,
+    backgroundColor: Colors.harvestSoft,
+    borderWidth: 1,
+    borderColor: Colors.harvestLine,
+  },
+  harvestButtonText: {
+    fontSize: Typography.size.base,
+    color: Colors.harvest,
+    fontWeight: Typography.weight.medium,
+  },
+  harvestHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  totals: { flexDirection: 'row', gap: 6 },
+  totalPill: {
+    fontSize: Typography.size.xs,
+    color: Colors.harvest,
+    backgroundColor: Colors.harvestSoft,
+    borderWidth: 1,
+    borderColor: Colors.harvestLine,
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 3,
+    overflow: 'hidden',
+    fontVariant: ['tabular-nums'],
+  },
+  harvestGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  harvestCell: { width: 84, gap: 4 },
+  harvestPhoto: { width: 84, height: 84, borderRadius: 10, backgroundColor: Colors.surfaceInput },
+  harvestPhotoEmpty: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: Colors.harvestSoft,
+  },
+  harvestCaption: {
+    fontSize: Typography.size.xs,
+    color: Colors.inkDim,
+    textAlign: 'center',
+    fontVariant: ['tabular-nums'],
+  },
   detailedButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 },
   detailedText: { fontSize: Typography.size.sm, color: Colors.accent },
   logSection: { gap: 10 },

@@ -4,17 +4,20 @@
  * 作業ログを栽培をまたいで時系列に並べる。だいどこの timeline.service は
  * 調理記録専用なので新設した（あちらは WBS 1.2 の削除対象に残っている）。
  *
- * 収穫（harvests）は WBS 2.1 でこの並びに合流させる。そのときテーブルを
- * またぐ UNION が要るので、返す型は最初から「作業ログ」と「収穫」を
- * 区別できる形にしてある。
+ * 作業ログと収穫は別テーブルなので、それぞれ引いてから時系列にマージする。
+ * SQL の UNION にしないのは、写真がポリモーフィックな photos テーブルにあり、
+ * どちらの owner_type かで引き分ける必要があって結局 2 回引くことになるため。
  */
 import { and, desc, eq, gte, inArray, lte } from 'drizzle-orm';
 
 import { getDb, isNativePlatform } from '../db/client';
 import * as schema from '../db/schema';
-import type { CareLogKind, GardenTimelineEntry } from './types';
+import type { CareLogKind, GardenTimelineEntry, HarvestUnit } from './types';
 
-const PHOTO_OWNER = 'care_log';
+const CARE_PHOTO_OWNER = 'care_log';
+const HARVEST_PHOTO_OWNER = 'harvest';
+
+const HARVEST_UNITS: readonly string[] = ['piece', 'g', 'kg', 'bunch', 'plant'];
 
 export interface TimelineOptions {
   /** 未指定なら全栽培 */
@@ -38,12 +41,12 @@ export async function getTimeline(options: TimelineOptions = {}): Promise<Garden
 
   const db = getDb();
 
-  const conditions = [];
-  if (options.plantingId) conditions.push(eq(schema.careLogs.plantingId, options.plantingId));
-  if (options.from) conditions.push(gte(schema.careLogs.loggedAt, options.from));
-  if (options.to) conditions.push(lte(schema.careLogs.loggedAt, options.to));
+  const careConditions = [];
+  if (options.plantingId) careConditions.push(eq(schema.careLogs.plantingId, options.plantingId));
+  if (options.from) careConditions.push(gte(schema.careLogs.loggedAt, options.from));
+  if (options.to) careConditions.push(lte(schema.careLogs.loggedAt, options.to));
 
-  let query = db
+  let careQuery = db
     .select({
       id: schema.careLogs.id,
       plantingId: schema.careLogs.plantingId,
@@ -56,50 +59,106 @@ export async function getTimeline(options: TimelineOptions = {}): Promise<Garden
     .from(schema.careLogs)
     .innerJoin(schema.plantings, eq(schema.careLogs.plantingId, schema.plantings.id))
     .$dynamic();
+  if (careConditions.length === 1) careQuery = careQuery.where(careConditions[0]);
+  else if (careConditions.length > 1) careQuery = careQuery.where(and(...careConditions));
 
-  if (conditions.length === 1) query = query.where(conditions[0]);
-  else if (conditions.length > 1) query = query.where(and(...conditions));
+  const harvestConditions = [];
+  if (options.plantingId) {
+    harvestConditions.push(eq(schema.harvests.plantingId, options.plantingId));
+  }
+  if (options.from) harvestConditions.push(gte(schema.harvests.harvestedAt, options.from));
+  if (options.to) harvestConditions.push(lte(schema.harvests.harvestedAt, options.to));
 
-  const rows = await query.orderBy(desc(schema.careLogs.loggedAt));
-  const limited = options.limit ? rows.slice(0, options.limit) : rows;
-  if (limited.length === 0) return [];
-
-  // 写真は 1 クエリでまとめて引く。行ごとに引くと件数ぶん往復して重くなる
-  const photoRows = await db
+  let harvestQuery = db
     .select({
-      ownerId: schema.photos.ownerId,
-      localPath: schema.photos.localPath,
-      sortOrder: schema.photos.sortOrder,
+      id: schema.harvests.id,
+      plantingId: schema.harvests.plantingId,
+      cropName: schema.plantings.cropName,
+      variety: schema.plantings.variety,
+      quantity: schema.harvests.quantity,
+      unit: schema.harvests.unit,
+      loggedAt: schema.harvests.harvestedAt,
+      note: schema.harvests.note,
     })
-    .from(schema.photos)
-    .where(
-      and(
-        eq(schema.photos.ownerType, PHOTO_OWNER),
-        inArray(
-          schema.photos.ownerId,
-          limited.map((row) => row.id),
-        ),
-      ),
-    );
-
-  const byOwner = new Map<string, string[]>();
-  for (const row of [...photoRows].sort((a, b) => a.sortOrder - b.sortOrder)) {
-    const list = byOwner.get(row.ownerId) ?? [];
-    list.push(row.localPath);
-    byOwner.set(row.ownerId, list);
+    .from(schema.harvests)
+    .innerJoin(schema.plantings, eq(schema.harvests.plantingId, schema.plantings.id))
+    .$dynamic();
+  if (harvestConditions.length === 1) harvestQuery = harvestQuery.where(harvestConditions[0]);
+  else if (harvestConditions.length > 1) {
+    harvestQuery = harvestQuery.where(and(...harvestConditions));
   }
 
-  return limited.map((row) => ({
-    id: row.id,
-    type: 'care_log' as const,
-    plantingId: row.plantingId,
-    cropName: row.cropName,
-    variety: row.variety,
-    kind: row.kind as CareLogKind,
-    loggedAt: row.loggedAt,
-    note: row.note,
-    photoUris: byOwner.get(row.id) ?? [],
-  }));
+  const [careRows, harvestRows] = await Promise.all([
+    careQuery.orderBy(desc(schema.careLogs.loggedAt)),
+    harvestQuery.orderBy(desc(schema.harvests.harvestedAt)),
+  ]);
+
+  const merged: GardenTimelineEntry[] = [
+    ...careRows.map((row) => ({
+      id: row.id,
+      type: 'care_log' as const,
+      plantingId: row.plantingId,
+      cropName: row.cropName,
+      variety: row.variety,
+      kind: row.kind as CareLogKind,
+      quantity: null,
+      unit: null,
+      loggedAt: row.loggedAt,
+      note: row.note,
+      photoUris: [] as string[],
+    })),
+    ...harvestRows.map((row) => ({
+      id: row.id,
+      type: 'harvest' as const,
+      plantingId: row.plantingId,
+      cropName: row.cropName,
+      variety: row.variety,
+      kind: null,
+      quantity: row.quantity,
+      unit: HARVEST_UNITS.includes(row.unit ?? '') ? (row.unit as HarvestUnit) : null,
+      loggedAt: row.loggedAt,
+      note: row.note,
+      photoUris: [] as string[],
+    })),
+  ];
+
+  // 同じ時刻なら収穫を先に出す。まとめて記録したときは収穫の方が見たい情報
+  merged.sort(
+    (a, b) =>
+      b.loggedAt.localeCompare(a.loggedAt) ||
+      (a.type === b.type ? 0 : a.type === 'harvest' ? -1 : 1),
+  );
+
+  const limited = options.limit ? merged.slice(0, options.limit) : merged;
+  if (limited.length === 0) return [];
+
+  // 写真は owner_type ごとに 1 クエリでまとめて引く。
+  // 行ごとに引くと件数ぶん往復して重くなる
+  const byOwner = new Map<string, string[]>();
+  for (const ownerType of [CARE_PHOTO_OWNER, HARVEST_PHOTO_OWNER]) {
+    const wantCareLog = ownerType === CARE_PHOTO_OWNER;
+    const ids = limited
+      .filter((entry) => (entry.type === 'care_log') === wantCareLog)
+      .map((entry) => entry.id);
+    if (ids.length === 0) continue;
+
+    const photoRows = await db
+      .select({
+        ownerId: schema.photos.ownerId,
+        localPath: schema.photos.localPath,
+        sortOrder: schema.photos.sortOrder,
+      })
+      .from(schema.photos)
+      .where(and(eq(schema.photos.ownerType, ownerType), inArray(schema.photos.ownerId, ids)));
+
+    for (const row of [...photoRows].sort((a, b) => a.sortOrder - b.sortOrder)) {
+      const list = byOwner.get(row.ownerId) ?? [];
+      list.push(row.localPath);
+      byOwner.set(row.ownerId, list);
+    }
+  }
+
+  return limited.map((entry) => ({ ...entry, photoUris: byOwner.get(entry.id) ?? [] }));
 }
 
 /**
