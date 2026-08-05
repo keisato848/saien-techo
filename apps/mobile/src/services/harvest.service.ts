@@ -13,7 +13,14 @@ import { getDb, isNativePlatform } from '../db/client';
 import * as schema from '../db/schema';
 import { generateId } from '../utils/id';
 import { deleteGardenPhotoFiles, MAX_GARDEN_PHOTOS } from './photo-storage.service';
-import type { HarvestItem, HarvestTotal, HarvestUnit, SaveHarvestInput } from './types';
+import type {
+  HarvestItem,
+  HarvestMonth,
+  HarvestPhotoCell,
+  HarvestTotal,
+  HarvestUnit,
+  SaveHarvestInput,
+} from './types';
 
 const PHOTO_OWNER = 'harvest';
 
@@ -256,4 +263,105 @@ async function replacePhotos(
       createdAt: now,
     });
   }
+}
+
+// ─── アルバム（R07 / WBS 2.2）──────────────────────────────────────────────
+
+export interface HarvestAlbumOptions {
+  /** 作物名で絞る。同じ作物を別の年に作っても横断して見たいので名前で持つ */
+  cropName?: string;
+  /** 特定の栽培だけ */
+  plantingId?: string;
+}
+
+/**
+ * アルバムのマスを新しい順に返す。
+ *
+ * 作物名で絞るのに crop_id ではなく plantings.crop_name を使うのは、
+ * マスターに無い作物（自由入力）も同じ名前でまとまってほしいため。
+ */
+export async function getHarvestAlbum(
+  options: HarvestAlbumOptions = {},
+): Promise<HarvestPhotoCell[]> {
+  if (!isNativePlatform) return [];
+
+  const db = getDb();
+
+  const conditions = [];
+  if (options.plantingId) conditions.push(eq(schema.harvests.plantingId, options.plantingId));
+  if (options.cropName) conditions.push(eq(schema.plantings.cropName, options.cropName));
+
+  let query = db
+    .select({
+      id: schema.harvests.id,
+      plantingId: schema.harvests.plantingId,
+      cropName: schema.plantings.cropName,
+      harvestedAt: schema.harvests.harvestedAt,
+      quantity: schema.harvests.quantity,
+      unit: schema.harvests.unit,
+    })
+    .from(schema.harvests)
+    .innerJoin(schema.plantings, eq(schema.harvests.plantingId, schema.plantings.id))
+    .$dynamic();
+  if (conditions.length === 1) query = query.where(conditions[0]);
+  else if (conditions.length > 1) query = query.where(and(...conditions));
+
+  const rows = await query.orderBy(desc(schema.harvests.harvestedAt));
+  if (rows.length === 0) return [];
+
+  const photos = await getPhotoPaths(
+    db,
+    rows.map((row) => row.id),
+  );
+
+  const cells: HarvestPhotoCell[] = [];
+  for (const row of rows) {
+    const base = {
+      harvestId: row.id,
+      plantingId: row.plantingId,
+      cropName: row.cropName,
+      harvestedAt: row.harvestedAt,
+      quantity: row.quantity,
+      unit: isHarvestUnit(row.unit) ? row.unit : null,
+    };
+    const uris = photos.get(row.id) ?? [];
+    if (uris.length === 0) {
+      cells.push({ ...base, key: row.id, photoUri: null });
+      continue;
+    }
+    uris.forEach((photoUri, index) => {
+      cells.push({ ...base, key: `${row.id}-${index}`, photoUri });
+    });
+  }
+  return cells;
+}
+
+/** フィルタに出す作物名。収穫が 1 件でもあるものだけ、名前順で返す */
+export async function getHarvestCropNames(): Promise<string[]> {
+  if (!isNativePlatform) return [];
+
+  const db = getDb();
+  const rows = await db
+    .selectDistinct({ cropName: schema.plantings.cropName })
+    .from(schema.harvests)
+    .innerJoin(schema.plantings, eq(schema.harvests.plantingId, schema.plantings.id));
+
+  return rows.map((row) => row.cropName).sort((a, b) => a.localeCompare(b, 'ja'));
+}
+
+/**
+ * 月ごとに束ねる。
+ * 端末のタイムゾーンで決める（toISOString() の日付で束ねると
+ * 月初 0 時台の記録が前月に混ざる）。
+ */
+export function groupByMonth(cells: HarvestPhotoCell[]): HarvestMonth[] {
+  const months: HarvestMonth[] = [];
+  for (const cell of cells) {
+    const at = new Date(cell.harvestedAt);
+    const month = `${at.getFullYear()}-${String(at.getMonth() + 1).padStart(2, '0')}`;
+    const last = months[months.length - 1];
+    if (last && last.month === month) last.cells.push(cell);
+    else months.push({ month, cells: [cell] });
+  }
+  return months;
 }

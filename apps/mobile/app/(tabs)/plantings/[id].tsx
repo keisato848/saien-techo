@@ -276,7 +276,12 @@ export default function PlantingDetailScreen() {
         {harvests.length > 0 ? (
           <View style={styles.logSection}>
             <View style={styles.harvestHeader}>
-              <Text style={styles.sectionLabel}>収穫</Text>
+              <PressableScale
+                onPress={() => router.push(`/harvests?plantingId=${planting.id}`)}
+                accessibilityLabel="この栽培の収穫をアルバムで見る"
+              >
+                <Text style={styles.sectionLinkLabel}>収穫 ›</Text>
+              </PressableScale>
               {totals.length > 0 ? (
                 <View style={styles.totals}>
                   {totals.map((total) => (
@@ -453,6 +458,7 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   sectionLabel: { fontSize: Typography.size.sm, color: Colors.inkDim },
+  sectionLinkLabel: { fontSize: Typography.size.sm, color: Colors.harvest },
   flexItem: { flex: 1 },
   quickCard: {
     borderRadius: 12,

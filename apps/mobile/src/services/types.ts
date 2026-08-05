@@ -365,3 +365,31 @@ export interface HarvestTotal {
   unit: HarvestUnit;
   quantity: number;
 }
+
+// ─── さいえん手帳: 収穫アルバム（R07 / WBS 2.2）────────────────────────────
+
+/**
+ * アルバムの 1 マス。
+ *
+ * **収穫 1 件ではなく写真 1 枚が 1 マス**。1 回の収穫で複数枚撮ったとき、
+ * 1 枚しか見えないとアルバムとして意味を成さない。
+ * 写真の無い収穫も 1 マスとして出す（photoUri が null）。
+ * 写真だけを並べると、数量だけ記録した収穫が一覧から消えてしまう。
+ */
+export interface HarvestPhotoCell {
+  /** 写真ごとに一意。同じ収穫の 2 枚目以降も区別できる */
+  key: string;
+  harvestId: string;
+  plantingId: string;
+  cropName: string;
+  harvestedAt: string;
+  quantity: number | null;
+  unit: HarvestUnit | null;
+  photoUri: string | null;
+}
+
+export interface HarvestMonth {
+  /** YYYY-MM（端末のタイムゾーン） */
+  month: string;
+  cells: HarvestPhotoCell[];
+}
