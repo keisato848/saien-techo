@@ -1,41 +1,48 @@
 /**
- * Cooking-log Calendar view (R12 / 利用フロー §5)
- * Monthly grid marking days that have cooking logs. Tap a day to see its logs.
+ * カレンダー — R05 / WBS 2.3
+ *
+ * 作業ログと収穫を月グリッドで見る。だいどこの調理記録カレンダーを
+ * 菜園の記録に書き換えたもの（升目づくりは utils/monthMatrix.ts で共通）。
+ *
+ * **点は「作業」「収穫」の 2 色だけ。** 作業種別ごとに 6 色を割り当てる案もあったが、
+ * 1 マスが 40px 前後しかなく、色を増やすと何色なのか判別できない。
+ * 栽培の件数を点の数で表す案も試したが、凡例の「緑=作業 / 橙=収穫」と衝突して
+ * 読めなくなった（実機で確認）。種別は日を選んだときの一覧で読める。
  */
 import { useFocusEffect, useRouter } from 'expo-router';
 import { ChevronLeft, ChevronRight, X } from 'lucide-react-native';
 import { useCallback, useMemo, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { Avatar } from '../src/components/Avatar';
 import { Loading } from '../src/components/Loading';
 import { PressableScale } from '../src/components/PressableScale';
-import { Stars } from '../src/components/Stars';
 import { Colors, Typography } from '../src/constants/theme';
-import { getTimeline } from '../src/services/timeline.service';
-import type { TimelineEntry } from '../src/services/types';
-import {
-  buildMonthMatrix,
-  groupEntriesByDay,
-  localDayKey,
-  WEEKDAY_LABELS,
-} from '../src/utils/calendar';
-import { formatProfileDisplayName } from '../src/utils/profile';
+import { CARE_KIND_LABEL } from '../src/services/care-log.service';
+import { getTimeline } from '../src/services/garden-timeline.service';
+import { HARVEST_UNIT_LABEL } from '../src/services/harvest.service';
+import type { GardenTimelineEntry } from '../src/services/types';
+import { groupGardenEntriesByDay } from '../src/utils/gardenCalendar';
+import { buildMonthMatrix, localDayKey, WEEKDAY_LABELS } from '../src/utils/monthMatrix';
 
 export default function CalendarScreen() {
   const router = useRouter();
-  const [entries, setEntries] = useState<TimelineEntry[]>([]);
+  const insets = useSafeAreaInsets();
+
+  const today = useMemo(() => new Date(), []);
+  const [year, setYear] = useState(today.getFullYear());
+  const [month, setMonth] = useState(today.getMonth());
+  const [entries, setEntries] = useState<GardenTimelineEntry[]>([]);
+  const [selected, setSelected] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-  const [cursor, setCursor] = useState(() => {
-    const now = new Date();
-    return { year: now.getFullYear(), month: now.getMonth() };
-  });
-  const [selectedKey, setSelectedKey] = useState<string>(() => localDayKey(new Date()));
 
   const load = useCallback(async () => {
-    setEntries(await getTimeline());
+    // 表示中の月だけ引く。全期間を引くと記録が増えたときに開くのが遅くなる
+    const from = new Date(year, month, 1).toISOString();
+    const to = new Date(year, month + 1, 0, 23, 59, 59, 999).toISOString();
+    setEntries(await getTimeline({ from, to }));
     setLoading(false);
-  }, []);
+  }, [year, month]);
 
   useFocusEffect(
     useCallback(() => {
@@ -43,278 +50,254 @@ export default function CalendarScreen() {
     }, [load]),
   );
 
-  const byDay = useMemo(() => groupEntriesByDay(entries), [entries]);
-  const weeks = useMemo(() => buildMonthMatrix(cursor.year, cursor.month), [cursor]);
-  const selectedLogs = byDay.get(selectedKey) ?? [];
+  const weeks = useMemo(() => buildMonthMatrix(year, month), [year, month]);
+  const byDay = useMemo(() => groupGardenEntriesByDay(entries), [entries]);
+  const todayKey = localDayKey(today);
+  const selectedEntries = selected ? (byDay.get(selected)?.entries ?? []) : [];
 
-  const goMonth = (delta: number) => {
-    setCursor((prev) => {
-      const d = new Date(prev.year, prev.month + delta, 1);
-      return { year: d.getFullYear(), month: d.getMonth() };
-    });
+  const shift = (delta: number) => {
+    const next = new Date(year, month + delta, 1);
+    setLoading(true);
+    setSelected(null);
+    setYear(next.getFullYear());
+    setMonth(next.getMonth());
   };
 
-  const monthLabel = `${cursor.year}年${cursor.month + 1}月`;
-
-  if (loading) {
-    return (
-      <View style={styles.container}>
-        <View style={styles.header}>
-          <Pressable onPress={() => router.back()} hitSlop={12}>
-            <X size={20} color={Colors.muted} />
-          </Pressable>
-          <Text style={styles.headerTitle}>カレンダー</Text>
-          <View style={styles.headerSpacer} />
-        </View>
-        <Loading message="調理記録を読み込んでいます" />
-      </View>
-    );
-  }
-
   return (
-    <View style={styles.container}>
-      <View style={styles.header}>
-        <Pressable onPress={() => router.back()} hitSlop={12}>
-          <X size={20} color={Colors.muted} />
+    <View style={styles.root}>
+      <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
+        <Pressable onPress={() => router.back()} hitSlop={12} accessibilityLabel="閉じる">
+          <X size={20} color={Colors.inkDim} />
         </Pressable>
-        <Text style={styles.headerTitle}>カレンダー</Text>
+        <Text style={styles.title}>カレンダー</Text>
         <View style={styles.headerSpacer} />
       </View>
 
       <View style={styles.monthBar}>
-        <Pressable onPress={() => goMonth(-1)} hitSlop={12} accessibilityLabel="前の月">
-          <ChevronLeft size={22} color={Colors.gold} />
+        <Pressable onPress={() => shift(-1)} hitSlop={12} accessibilityLabel="前の月">
+          <ChevronLeft size={22} color={Colors.accent} />
         </Pressable>
-        <Text style={styles.monthLabel}>{monthLabel}</Text>
-        <Pressable onPress={() => goMonth(1)} hitSlop={12} accessibilityLabel="次の月">
-          <ChevronRight size={22} color={Colors.gold} />
+        <Text style={styles.monthLabel}>
+          {year}年{month + 1}月
+        </Text>
+        <Pressable onPress={() => shift(1)} hitSlop={12} accessibilityLabel="次の月">
+          <ChevronRight size={22} color={Colors.accent} />
         </Pressable>
       </View>
 
-      <View style={styles.weekHeader}>
-        {WEEKDAY_LABELS.map((w) => (
-          <Text key={w} style={styles.weekHeaderCell}>
-            {w}
+      <View style={styles.weekdays}>
+        {WEEKDAY_LABELS.map((label) => (
+          <Text key={label} style={styles.weekday}>
+            {label}
           </Text>
         ))}
       </View>
 
-      <View style={styles.grid}>
-        {weeks.map((week, wi) => (
-          <View key={wi} style={styles.week}>
-            {week.map((cell) => {
-              const count = byDay.get(cell.key)?.length ?? 0;
-              const isSelected = cell.key === selectedKey;
-              return (
-                <Pressable
-                  key={cell.key}
-                  style={styles.cell}
-                  onPress={() => setSelectedKey(cell.key)}
-                >
-                  <View style={[styles.cellInner, isSelected && styles.cellSelected]}>
-                    <Text
-                      style={[
-                        styles.cellDay,
-                        !cell.inMonth && styles.cellDayMuted,
-                        isSelected && styles.cellDaySelected,
-                      ]}
+      {loading ? (
+        <Loading />
+      ) : (
+        <ScrollView contentContainerStyle={styles.body}>
+          <View style={styles.grid}>
+            {weeks.map((week, weekIndex) => (
+              <View key={weekIndex} style={styles.week}>
+                {week.map((cell) => {
+                  const summary = cell.inMonth ? byDay.get(cell.key) : undefined;
+                  const isSelected = selected === cell.key;
+                  return (
+                    <Pressable
+                      key={cell.key}
+                      style={styles.cell}
+                      disabled={!summary}
+                      onPress={() => setSelected(isSelected ? null : cell.key)}
+                      accessibilityLabel={`${cell.day}日${summary ? `　記録 ${summary.entries.length} 件` : ''}`}
                     >
-                      {cell.day}
-                    </Text>
-                  </View>
-                  {count > 0 && <View style={styles.dot} />}
-                </Pressable>
-              );
-            })}
+                      <View
+                        style={[
+                          styles.dayCircle,
+                          cell.key === todayKey && styles.dayToday,
+                          isSelected && styles.daySelected,
+                        ]}
+                      >
+                        <Text
+                          style={[
+                            styles.dayText,
+                            !cell.inMonth && styles.dayOutside,
+                            isSelected && styles.dayTextSelected,
+                          ]}
+                        >
+                          {cell.day}
+                        </Text>
+                      </View>
+                      <View style={styles.dots}>
+                        {summary?.hasCareLog ? <View style={styles.dot} /> : null}
+                        {summary?.hasHarvest ? (
+                          <View style={[styles.dot, styles.dotHarvest]} />
+                        ) : null}
+                      </View>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            ))}
           </View>
-        ))}
-      </View>
 
-      <View style={styles.dayHeader}>
-        <Text style={styles.dayHeaderText}>{selectedKey.replace(/-/g, '/')}</Text>
-        <Text style={styles.dayHeaderCount}>{selectedLogs.length}件</Text>
-      </View>
+          <View style={styles.legend}>
+            <View style={styles.legendItem}>
+              <View style={styles.dot} />
+              <Text style={styles.legendText}>作業</Text>
+            </View>
+            <View style={styles.legendItem}>
+              <View style={[styles.dot, styles.dotHarvest]} />
+              <Text style={styles.legendText}>収穫</Text>
+            </View>
+          </View>
 
-      <ScrollView contentContainerStyle={styles.logList}>
-        {selectedLogs.length === 0 ? (
-          <Text style={styles.emptyDay}>この日の調理記録はありません</Text>
-        ) : (
-          selectedLogs.map((log) => {
-            const userName = formatProfileDisplayName(log.userName);
-            return (
-              <PressableScale
-                key={log.id}
-                style={styles.logCard}
-                onPress={() => {
-                  if (log.recipeId) router.push(`/(tabs)/recipes/${log.recipeId}`);
-                }}
-              >
-                <View style={styles.logHeader}>
-                  <Text style={styles.logTitle} numberOfLines={1}>
-                    {log.recipeTitle}
-                  </Text>
-                  {log.rating != null && <Stars rating={log.rating} size={12} />}
-                </View>
-                <View style={styles.logUser}>
-                  <Avatar name={userName} size={20} />
-                  <Text style={styles.logUserName}>{userName}</Text>
-                </View>
-                {log.memo ? (
-                  <Text style={styles.logMemo} numberOfLines={1}>
-                    &quot;{log.memo}&quot;
-                  </Text>
-                ) : null}
-              </PressableScale>
-            );
-          })
-        )}
-      </ScrollView>
+          {selected ? (
+            <View style={styles.detail}>
+              <Text style={styles.detailLabel}>
+                {Number(selected.split('-')[1])}月{Number(selected.split('-')[2])}日
+              </Text>
+              {selectedEntries.map((entry) => (
+                <PressableScale
+                  key={entry.id}
+                  style={styles.entry}
+                  onPress={() =>
+                    router.push(
+                      entry.type === 'harvest'
+                        ? `/plantings/${entry.plantingId}/harvests/${entry.id}`
+                        : `/plantings/${entry.plantingId}/care-logs/${entry.id}`,
+                    )
+                  }
+                >
+                  <View style={[styles.dot, entry.type === 'harvest' && styles.dotHarvest]} />
+                  <View style={styles.entryBody}>
+                    <Text style={styles.entryTitle}>
+                      <Text style={styles.entryCrop}>{entry.cropName}</Text>
+                      {'　'}
+                      {entry.type === 'harvest'
+                        ? entry.quantity != null && entry.unit
+                          ? `収穫 ${entry.quantity}${HARVEST_UNIT_LABEL[entry.unit]}`
+                          : '収穫'
+                        : entry.kind
+                          ? CARE_KIND_LABEL[entry.kind]
+                          : ''}
+                    </Text>
+                    {entry.note ? (
+                      <Text style={styles.entryNote} numberOfLines={2}>
+                        {entry.note}
+                      </Text>
+                    ) : null}
+                  </View>
+                  {entry.photoUris.length > 0 ? (
+                    <Image source={{ uri: entry.photoUris[0] }} style={styles.entryPhoto} />
+                  ) : null}
+                </PressableScale>
+              ))}
+            </View>
+          ) : entries.length === 0 ? (
+            <Text style={styles.empty}>この月の記録はありません。</Text>
+          ) : (
+            <Text style={styles.empty}>日付を選ぶと、その日の記録が出ます。</Text>
+          )}
+        </ScrollView>
+      )}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: Colors.bg },
+  root: { flex: 1, backgroundColor: Colors.bg },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingTop: 54,
-    paddingBottom: 14,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.border,
+    paddingHorizontal: 16,
+    paddingBottom: 12,
   },
-  headerTitle: {
+  title: {
     fontSize: Typography.size.md,
     fontWeight: Typography.weight.medium,
-    color: Colors.paper,
-    letterSpacing: 0.5,
+    color: Colors.ink,
   },
   headerSpacer: { width: 20 },
   monthBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 32,
-    paddingVertical: 14,
+    justifyContent: 'center',
+    gap: 24,
+    paddingBottom: 12,
   },
   monthLabel: {
-    fontSize: Typography.size.lg,
-    fontWeight: Typography.weight.medium,
-    color: Colors.paper,
-    letterSpacing: 1,
+    fontSize: Typography.size.md,
+    color: Colors.ink,
+    fontVariant: ['tabular-nums'],
+    minWidth: 128,
+    textAlign: 'center',
   },
-  weekHeader: {
-    flexDirection: 'row',
-    paddingHorizontal: 8,
-  },
-  weekHeaderCell: {
+  weekdays: { flexDirection: 'row', paddingHorizontal: 12, paddingBottom: 6 },
+  weekday: {
     flex: 1,
     textAlign: 'center',
     fontSize: Typography.size.xs,
-    color: Colors.muted,
-    paddingVertical: 4,
+    color: Colors.inkDim,
   },
-  grid: {
-    paddingHorizontal: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.border,
-    paddingBottom: 8,
-  },
+  body: { paddingBottom: 40 },
+  grid: { paddingHorizontal: 12 },
   week: { flexDirection: 'row' },
-  cell: {
-    flex: 1,
-    alignItems: 'center',
-    paddingVertical: 6,
-    gap: 3,
-  },
-  cellInner: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
+  cell: { flex: 1, alignItems: 'center', paddingVertical: 5, gap: 4 },
+  dayCircle: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  cellSelected: {
-    backgroundColor: Colors.gold,
-  },
-  cellDay: {
+  // 丸めを条件側にも持たせている。dayCircle 側だけに borderRadius を置くと、
+  // 選択日が Android で角丸の効かない四角に出た（実機で確認）。
+  // 同じ形（素のスタイルに borderRadius、条件側で背景色）でも正しく丸まる箇所が
+  // あり原因は特定できていないため、確実な側に倒している。
+  dayToday: { borderRadius: 16, borderWidth: 1, borderColor: Colors.accentLine },
+  daySelected: { borderRadius: 16, backgroundColor: Colors.accent },
+  dayText: {
     fontSize: Typography.size.sm,
-    color: Colors.paper,
+    color: Colors.ink,
+    fontVariant: ['tabular-nums'],
   },
-  cellDayMuted: {
-    color: Colors.muted,
-  },
-  cellDaySelected: {
-    color: Colors.bg,
-    fontWeight: Typography.weight.semibold,
-  },
-  dot: {
-    width: 5,
-    height: 5,
-    borderRadius: 2.5,
-    backgroundColor: Colors.gold,
-  },
-  dayHeader: {
+  dayOutside: { color: Colors.line },
+  dayTextSelected: { color: Colors.onAccent, fontWeight: Typography.weight.semibold },
+  dots: { flexDirection: 'row', gap: 3, height: 6 },
+  dot: { width: 6, height: 6, borderRadius: 3, backgroundColor: Colors.accent },
+  dotHarvest: { backgroundColor: Colors.harvest },
+  legend: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingTop: 14,
-    paddingBottom: 6,
-  },
-  dayHeaderText: {
-    fontSize: Typography.size.sm,
-    color: Colors.paperDim,
-    letterSpacing: 1,
-  },
-  dayHeaderCount: {
-    fontSize: Typography.size.xs,
-    color: Colors.goldDim,
-  },
-  logList: {
+    gap: 16,
     paddingHorizontal: 16,
-    paddingBottom: 24,
-    gap: 8,
+    paddingTop: 16,
   },
-  emptyDay: {
-    fontSize: Typography.size.sm,
-    color: Colors.muted,
-    textAlign: 'center',
-    paddingVertical: 28,
-  },
-  logCard: {
+  legendItem: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  legendText: { fontSize: Typography.size.xs, color: Colors.inkDim },
+  detail: { paddingHorizontal: 16, paddingTop: 20, gap: 8 },
+  detailLabel: { fontSize: Typography.size.sm, color: Colors.inkDim },
+  entry: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
     padding: 12,
-    backgroundColor: Colors.bgCard,
-    borderRadius: 8,
+    borderRadius: 12,
+    backgroundColor: Colors.surface,
     borderWidth: 1,
-    borderColor: Colors.border,
-    gap: 4,
+    borderColor: Colors.line,
   },
-  logHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  logTitle: {
-    flex: 1,
-    fontSize: Typography.size.base,
-    fontWeight: Typography.weight.medium,
-    color: Colors.paper,
-  },
-  logUser: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  logUserName: {
+  entryBody: { flex: 1, gap: 4 },
+  entryTitle: { fontSize: Typography.size.base, color: Colors.inkDim },
+  entryCrop: { color: Colors.ink, fontWeight: Typography.weight.medium },
+  entryNote: { fontSize: Typography.size.sm, color: Colors.inkDim },
+  entryPhoto: { width: 44, height: 44, borderRadius: 8, backgroundColor: Colors.surfaceInput },
+  empty: {
     fontSize: Typography.size.sm,
-    color: Colors.paperDim,
-  },
-  logMemo: {
-    fontSize: Typography.size.sm,
-    color: Colors.goldDim,
-    fontStyle: 'italic',
+    color: Colors.inkDim,
+    textAlign: 'center',
+    paddingTop: 28,
   },
 });
