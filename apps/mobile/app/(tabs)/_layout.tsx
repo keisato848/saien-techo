@@ -1,5 +1,5 @@
 import { Tabs, useRouter } from 'expo-router';
-import { Home, Plus, Settings, Sprout } from 'lucide-react-native';
+import { Home, Plus, Settings, ShoppingBasket, Sprout } from 'lucide-react-native';
 import { StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -51,6 +51,15 @@ export default function TabLayout() {
             event.preventDefault();
             router.push('/plantings/new');
           },
+        }}
+      />
+      {/* 収穫は 3 本柱のひとつ。栽培の中に畳むと「今日の採れたてを撮る」導線が
+          2 階層深くなり、R06 の最短 3 タップを満たせない（docs/画面設計.md §3） */}
+      <Tabs.Screen
+        name="harvests"
+        options={{
+          title: '収穫',
+          tabBarIcon: ({ color, size }) => <ShoppingBasket size={size} color={color} />,
         }}
       />
       <Tabs.Screen

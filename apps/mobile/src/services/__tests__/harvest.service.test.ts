@@ -28,6 +28,9 @@ jest.mock('../photo-storage.service', () => ({
 import {
   createHarvest,
   deleteHarvest,
+  getHarvestAlbum,
+  getHarvestCropNames,
+  groupByMonth,
   getDefaultUnitForPlanting,
   getHarvest,
   getHarvests,
@@ -301,5 +304,162 @@ describeIfSqlite('harvest.service (real SQLite)', () => {
     for (const unit of HARVEST_UNITS) {
       expect(HARVEST_UNIT_LABEL[unit]).toBeTruthy();
     }
+  });
+});
+
+describeIfSqlite('収穫アルバム (R07 / WBS 2.2)', () => {
+  let tomato: string;
+  let cucumber: string;
+
+  beforeEach(async () => {
+    mockHandles = createTestDb();
+    mockDeletedFiles.length = 0;
+    seedFamily();
+    tomato = await createPlanting({
+      cropName: 'トマト',
+      plantedOn: daysAgoIso(90),
+      plantedAs: 'seedling',
+      tags: [],
+    });
+    cucumber = await createPlanting({
+      cropName: 'キュウリ',
+      plantedOn: daysAgoIso(60),
+      plantedAs: 'seedling',
+      tags: [],
+    });
+  });
+
+  afterEach(() => mockHandles.close());
+
+  it('写真 1 枚が 1 マスになる（収穫 1 件ではない）', async () => {
+    await createHarvest({ plantingId: tomato, photoUris: ['/a.jpg', '/b.jpg', '/c.jpg'] });
+
+    const cells = await getHarvestAlbum();
+    expect(cells).toHaveLength(3);
+    expect(cells.map((cell) => cell.photoUri)).toEqual(['/a.jpg', '/b.jpg', '/c.jpg']);
+  });
+
+  it('同じ収穫の複数マスでも key が重複しない', async () => {
+    await createHarvest({ plantingId: tomato, photoUris: ['/a.jpg', '/b.jpg'] });
+
+    const keys = (await getHarvestAlbum()).map((cell) => cell.key);
+    expect(new Set(keys).size).toBe(keys.length);
+  });
+
+  it('写真の無い収穫も 1 マスとして出す（記録が消えない）', async () => {
+    await createHarvest({ plantingId: tomato, quantity: 5, unit: 'piece' });
+
+    const cells = await getHarvestAlbum();
+    expect(cells).toHaveLength(1);
+    expect(cells[0].photoUri).toBeNull();
+    expect(cells[0].quantity).toBe(5);
+  });
+
+  it('新しい順に並ぶ', async () => {
+    await createHarvest({ plantingId: tomato, harvestedAt: daysAgoIso(30), photoUris: ['/old'] });
+    await createHarvest({ plantingId: tomato, harvestedAt: daysAgoIso(1), photoUris: ['/new'] });
+
+    expect((await getHarvestAlbum()).map((cell) => cell.photoUri)).toEqual(['/new', '/old']);
+  });
+
+  it('作物名で絞れる', async () => {
+    await createHarvest({ plantingId: tomato, photoUris: ['/t.jpg'] });
+    await createHarvest({ plantingId: cucumber, photoUris: ['/c.jpg'] });
+
+    const cells = await getHarvestAlbum({ cropName: 'トマト' });
+    expect(cells).toHaveLength(1);
+    expect(cells[0].cropName).toBe('トマト');
+  });
+
+  it('作物名で絞ると、同じ名前の別の栽培もまとまる（年をまたぐ想定）', async () => {
+    const lastYear = await createPlanting({
+      cropName: 'トマト',
+      plantedOn: daysAgoIso(400),
+      plantedAs: 'seedling',
+      tags: [],
+    });
+    await createHarvest({ plantingId: tomato, photoUris: ['/now.jpg'] });
+    await createHarvest({
+      plantingId: lastYear,
+      harvestedAt: daysAgoIso(380),
+      photoUris: ['/past.jpg'],
+    });
+
+    expect(await getHarvestAlbum({ cropName: 'トマト' })).toHaveLength(2);
+  });
+
+  it('栽培で絞れる', async () => {
+    await createHarvest({ plantingId: tomato, photoUris: ['/t.jpg'] });
+    await createHarvest({ plantingId: cucumber, photoUris: ['/c.jpg'] });
+
+    const cells = await getHarvestAlbum({ plantingId: cucumber });
+    expect(cells).toHaveLength(1);
+    expect(cells[0].plantingId).toBe(cucumber);
+  });
+
+  it('収穫が無ければ空', async () => {
+    expect(await getHarvestAlbum()).toEqual([]);
+  });
+
+  describe('getHarvestCropNames', () => {
+    it('収穫のある作物だけを名前順で返す', async () => {
+      await createHarvest({ plantingId: cucumber });
+      await createHarvest({ plantingId: tomato });
+
+      expect(await getHarvestCropNames()).toEqual(['キュウリ', 'トマト']);
+    });
+
+    it('同じ作物は 1 つに畳む', async () => {
+      await createHarvest({ plantingId: tomato });
+      await createHarvest({ plantingId: tomato });
+
+      expect(await getHarvestCropNames()).toEqual(['トマト']);
+    });
+
+    it('収穫の無い栽培は出さない', async () => {
+      await createHarvest({ plantingId: tomato });
+      expect(await getHarvestCropNames()).not.toContain('キュウリ');
+    });
+  });
+
+  describe('groupByMonth', () => {
+    function cell(harvestedAt: string, key: string) {
+      return {
+        key,
+        harvestId: key,
+        plantingId: 'p',
+        cropName: 'トマト',
+        harvestedAt,
+        quantity: null,
+        unit: null,
+        photoUri: null,
+      };
+    }
+
+    it('同じ月をまとめる', () => {
+      const months = groupByMonth([
+        cell('2026-08-20T03:00:00.000Z', 'a'),
+        cell('2026-08-02T03:00:00.000Z', 'b'),
+        cell('2026-07-30T03:00:00.000Z', 'c'),
+      ]);
+
+      expect(months.map((m) => m.month)).toEqual(['2026-08', '2026-07']);
+      expect(months[0].cells).toHaveLength(2);
+    });
+
+    it('端末のタイムゾーンで月を決める', () => {
+      // 月初 0 時台。toISOString() の日付で束ねると前月に混ざる
+      const local = new Date();
+      local.setDate(1);
+      local.setHours(0, 30, 0, 0);
+
+      const [month] = groupByMonth([cell(local.toISOString(), 'a')]);
+      const expected = `${local.getFullYear()}-${String(local.getMonth() + 1).padStart(2, '0')}`;
+      expect(month.month).toBe(expected);
+    });
+
+    it('空配列なら空', () => {
+      expect(groupByMonth([])).toEqual([]);
+    });
   });
 });
