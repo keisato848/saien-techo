@@ -48,6 +48,8 @@ export default function RootLayout() {
         }}
       >
         <Stack.Screen name="(tabs)" />
+        <Stack.Screen name="calendar" options={{ presentation: 'modal' }} />
+        <Stack.Screen name="gallery" options={{ presentation: 'modal' }} />
         <Stack.Screen name="recipes/[id]/edit" options={{ presentation: 'modal' }} />
       </Stack>
     </SafeAreaProvider>

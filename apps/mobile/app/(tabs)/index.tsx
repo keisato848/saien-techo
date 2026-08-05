@@ -9,9 +9,9 @@
  * 作物暦（WBS 3.1）が入ってから上に積む。docs/画面設計.md S01 参照。
  */
 import { useFocusEffect, useRouter } from 'expo-router';
-import { Plus } from 'lucide-react-native';
+import { CalendarDays, Images, Plus } from 'lucide-react-native';
 import { useCallback, useState } from 'react';
-import { Image, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { EmptyState } from '../../src/components/EmptyState';
@@ -79,6 +79,24 @@ export default function HomeScreen() {
     <View style={styles.root}>
       <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
         <Text style={styles.title}>今日の菜園</Text>
+        {/* カレンダーと写真は「振り返る」ための画面。毎日使うものではないので
+            タブには出さず、ホームの右上から開く（R05 / WBS 2.3） */}
+        <View style={styles.headerActions}>
+          <Pressable
+            onPress={() => router.push('/calendar')}
+            hitSlop={10}
+            accessibilityLabel="カレンダーを開く"
+          >
+            <CalendarDays size={20} color={Colors.inkDim} />
+          </Pressable>
+          <Pressable
+            onPress={() => router.push('/gallery')}
+            hitSlop={10}
+            accessibilityLabel="写真を開く"
+          >
+            <Images size={20} color={Colors.inkDim} />
+          </Pressable>
+        </View>
       </View>
 
       {!hasAnything ? (
@@ -203,7 +221,14 @@ export default function HomeScreen() {
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: Colors.bg },
-  header: { paddingHorizontal: 16, paddingBottom: 12 },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingBottom: 12,
+  },
+  headerActions: { flexDirection: 'row', gap: 18 },
   title: {
     fontSize: Typography.size.lg,
     fontWeight: Typography.weight.medium,

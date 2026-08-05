@@ -1,28 +1,50 @@
 /**
- * Cooking-photo Gallery view (利用フロー §5)
- * Grid of all cooking-log photos, newest first. Tap a photo to open its recipe.
+ * ギャラリー — R05 / WBS 2.3
+ *
+ * 菜園の写真をぜんぶ 1 本に並べる。作業ログの写真も収穫の写真も混ぜる。
+ * 収穫だけを見たいときは収穫タブのアルバム（R07 / WBS 2.2）がある。
+ *
+ * アルバムが月別グリッドなのに対し、こちらは**日付で区切らない密なグリッド**。
+ * 「いつ撮ったか」ではなく「どんな写真があるか」を眺めるための画面なので、
+ * 見出しを挟まず 1 画面に多く入れる。
  */
 import { useFocusEffect, useRouter } from 'expo-router';
 import { X } from 'lucide-react-native';
-import { useCallback, useMemo, useState } from 'react';
-import { FlatList, Image, Pressable, StyleSheet, Text, View } from 'react-native';
+import { useCallback, useState } from 'react';
+import {
+  Image,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  useWindowDimensions,
+  View,
+} from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { EmptyState } from '../src/components/EmptyState';
 import { Loading } from '../src/components/Loading';
+import { PressableScale } from '../src/components/PressableScale';
 import { Colors, Typography } from '../src/constants/theme';
-import { getTimeline } from '../src/services/timeline.service';
-import type { TimelineEntry } from '../src/services/types';
-import { flattenGalleryPhotos } from '../src/utils/gallery';
+import { getTimeline } from '../src/services/garden-timeline.service';
+import { flattenGardenPhotos, type GardenPhoto } from '../src/utils/gardenCalendar';
 
 const COLUMNS = 3;
+const GAP = 3;
+const PADDING = 12;
 
 export default function GalleryScreen() {
   const router = useRouter();
-  const [entries, setEntries] = useState<TimelineEntry[]>([]);
+  const insets = useSafeAreaInsets();
+  const { width } = useWindowDimensions();
+
+  const [photos, setPhotos] = useState<GardenPhoto[]>([]);
   const [loading, setLoading] = useState(true);
 
+  const cellSize = Math.floor((width - PADDING * 2 - GAP * (COLUMNS - 1)) / COLUMNS);
+
   const load = useCallback(async () => {
-    setEntries(await getTimeline());
+    setPhotos(flattenGardenPhotos(await getTimeline()));
     setLoading(false);
   }, []);
 
@@ -32,83 +54,85 @@ export default function GalleryScreen() {
     }, [load]),
   );
 
-  const photos = useMemo(() => flattenGalleryPhotos(entries), [entries]);
-
   return (
-    <View style={styles.container}>
-      <View style={styles.header}>
-        <Pressable onPress={() => router.back()} hitSlop={12}>
-          <X size={20} color={Colors.muted} />
+    <View style={styles.root}>
+      <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
+        <Pressable onPress={() => router.back()} hitSlop={12} accessibilityLabel="閉じる">
+          <X size={20} color={Colors.inkDim} />
         </Pressable>
-        <Text style={styles.headerTitle}>ギャラリー</Text>
-        <View style={styles.headerSpacer} />
+        <Text style={styles.title}>写真</Text>
+        <Text style={styles.count}>{photos.length > 0 ? photos.length : ''}</Text>
       </View>
 
       {loading ? (
-        <Loading message="写真を読み込んでいます" />
-      ) : (
-        <FlatList
-          data={photos}
-          keyExtractor={(item) => item.id}
-          numColumns={COLUMNS}
-          contentContainerStyle={photos.length === 0 ? styles.emptyContainer : styles.grid}
-          showsVerticalScrollIndicator={false}
-          renderItem={({ item }) => (
-            <Pressable
-              style={styles.cell}
-              onPress={() => {
-                if (item.recipeId) router.push(`/(tabs)/recipes/${item.recipeId}`);
-              }}
-            >
-              <Image source={{ uri: item.uri }} style={styles.photo} />
-            </Pressable>
-          )}
-          ListEmptyComponent={
-            <EmptyState
-              icon="🖼"
-              title="まだ写真がありません"
-              message="調理を記録するときに写真を添えると、ここに料理の記録が並びます。"
-            />
-          }
+        <Loading />
+      ) : photos.length === 0 ? (
+        <EmptyState
+          icon="📷"
+          title="まだ写真がありません"
+          message="作業ログや収穫に写真を付けると、ここにまとまります。"
         />
+      ) : (
+        <ScrollView contentContainerStyle={styles.body}>
+          <View style={styles.grid}>
+            {photos.map((photo) => (
+              <PressableScale
+                key={photo.key}
+                onPress={() =>
+                  router.push(
+                    photo.type === 'harvest'
+                      ? `/plantings/${photo.plantingId}/harvests/${photo.entryId}`
+                      : `/plantings/${photo.plantingId}/care-logs/${photo.entryId}`,
+                  )
+                }
+                accessibilityLabel={`${photo.cropName}の写真`}
+              >
+                <Image
+                  source={{ uri: photo.uri }}
+                  style={[styles.photo, { width: cellSize, height: cellSize }]}
+                />
+                {/* 収穫の写真は角に暖色の印を置く。混在するので出所が分かる必要がある */}
+                {photo.type === 'harvest' ? <View style={styles.harvestMark} /> : null}
+              </PressableScale>
+            ))}
+          </View>
+        </ScrollView>
       )}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: Colors.bg },
+  root: { flex: 1, backgroundColor: Colors.bg },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingTop: 54,
-    paddingBottom: 14,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.border,
+    paddingHorizontal: 16,
+    paddingBottom: 12,
   },
-  headerTitle: {
+  title: {
     fontSize: Typography.size.md,
     fontWeight: Typography.weight.medium,
-    color: Colors.paper,
-    letterSpacing: 0.5,
+    color: Colors.ink,
   },
-  headerSpacer: { width: 20 },
-  grid: {
-    padding: 2,
+  count: {
+    fontSize: Typography.size.sm,
+    color: Colors.inkDim,
+    minWidth: 20,
+    textAlign: 'right',
+    fontVariant: ['tabular-nums'],
   },
-  emptyContainer: {
-    flexGrow: 1,
-  },
-  cell: {
-    flex: 1 / COLUMNS,
-    aspectRatio: 1,
-    padding: 2,
-  },
-  photo: {
-    flex: 1,
+  body: { paddingHorizontal: PADDING, paddingBottom: 32 },
+  grid: { flexDirection: 'row', flexWrap: 'wrap', gap: GAP },
+  photo: { borderRadius: 4, backgroundColor: Colors.surfaceInput },
+  harvestMark: {
+    position: 'absolute',
+    top: 6,
+    right: 6,
+    width: 8,
+    height: 8,
     borderRadius: 4,
-    backgroundColor: '#1A1108',
+    backgroundColor: Colors.harvest,
   },
 });
