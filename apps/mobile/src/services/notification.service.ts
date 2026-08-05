@@ -113,3 +113,81 @@ export async function cancelTimerNotification(id: string | null): Promise<void> 
     // already fired or cancelled — nothing to do
   }
 }
+
+// ─── さいえん手帳のリマインダー（R11 / WBS 2.4）─────────────────────────────
+
+const REMINDER_CHANNEL_ID = 'garden-reminder';
+
+/** 予約通知がさいえん手帳のリマインダーかどうかを data で見分ける */
+const REMINDER_MARKER = 'saien-reminder';
+
+/**
+ * リマインダー 1 件を予約する。
+ *
+ * 繰り返しトリガー（DAILY/WEEKLY）ではなく**日時指定で 1 回ずつ**積む。
+ * N 日おきに OS の繰り返しトリガーが無く、種類ごとに載せ方を変えると
+ * 「毎日だけ動く」ような差が出るため、全部同じ扱いにして
+ * 起動時の syncScheduledReminders で積み直す。
+ *
+ * Doze 下では時刻が数十分ずれうる。水やりの声かけに秒精度は要らないので許容する。
+ */
+export async function scheduleReminderNotification(
+  reminder: { id: string; plantingId: string; kind: string },
+  at: Date,
+): Promise<boolean> {
+  if (!isNativePlatform) return false;
+  const granted = await ensureNotificationPermission();
+  if (!granted) return false;
+
+  try {
+    if (Platform.OS === 'android') {
+      await Notifications.setNotificationChannelAsync(REMINDER_CHANNEL_ID, {
+        name: '菜園のリマインダー',
+        importance: Notifications.AndroidImportance.DEFAULT,
+        sound: 'default',
+      });
+    }
+
+    await Notifications.scheduleNotificationAsync({
+      content: {
+        title: 'さいえん手帳',
+        body: '今日の作業の時間です',
+        data: {
+          marker: REMINDER_MARKER,
+          reminderId: reminder.id,
+          plantingId: reminder.plantingId,
+          kind: reminder.kind,
+        },
+        ...(Platform.OS === 'android' ? { channelId: REMINDER_CHANNEL_ID } : {}),
+      },
+      trigger: {
+        type: Notifications.SchedulableTriggerInputTypes.DATE,
+        date: at,
+        ...(Platform.OS === 'android' ? { channelId: REMINDER_CHANNEL_ID } : {}),
+      },
+    });
+    return true;
+  } catch {
+    // 予約に失敗しても操作は続行させる（次回の同期で積み直る）
+    return false;
+  }
+}
+
+/**
+ * さいえん手帳のリマインダーの予約だけ取り消す。
+ * タイマーや低在庫の予約まで消さないよう data の marker で選ぶ。
+ */
+export async function cancelReminderNotifications(): Promise<void> {
+  if (!isNativePlatform) return;
+
+  try {
+    const scheduled = await Notifications.getAllScheduledNotificationsAsync();
+    for (const item of scheduled) {
+      if (item.content?.data?.marker === REMINDER_MARKER) {
+        await Notifications.cancelScheduledNotificationAsync(item.identifier);
+      }
+    }
+  } catch {
+    // 取得できない環境では何もしない
+  }
+}

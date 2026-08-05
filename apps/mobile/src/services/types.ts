@@ -393,3 +393,37 @@ export interface HarvestMonth {
   month: string;
   cells: HarvestPhotoCell[];
 }
+
+// ─── さいえん手帳: リマインダー（R11 / WBS 2.4）────────────────────────────
+
+/** daily=毎日 / interval_days=N日おき / weekly=曜日指定 */
+export type ReminderScheduleKind = 'daily' | 'interval_days' | 'weekly';
+
+export interface ReminderItem {
+  id: string;
+  plantingId: string;
+  /** care_logs.kind と同じ語彙。通知から記録画面へ渡す */
+  kind: CareLogKind;
+  scheduleKind: ReminderScheduleKind;
+  /** interval_days のときだけ使う */
+  intervalDays: number | null;
+  /** weekly のときだけ使う。0=日曜 */
+  weekdays: number[];
+  hour: number;
+  minute: number;
+  enabled: boolean;
+  /** 最後に鳴った時刻。interval_days の起点になる */
+  lastFiredAt: string | null;
+  createdAt: string;
+}
+
+export interface SaveReminderInput {
+  plantingId: string;
+  kind: CareLogKind;
+  scheduleKind: ReminderScheduleKind;
+  intervalDays?: number | null;
+  weekdays?: number[];
+  hour: number;
+  minute: number;
+  enabled?: boolean;
+}

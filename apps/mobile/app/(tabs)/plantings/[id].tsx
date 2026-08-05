@@ -9,6 +9,7 @@ import {
   ChevronLeft,
   Droplets,
   Leaf,
+  BellRing,
   Pencil,
   Plus,
   ShoppingBasket,
@@ -30,6 +31,8 @@ import { TagChip } from '../../../src/components/TagChip';
 import { Toast } from '../../../src/components/Toast';
 import { Colors, Typography } from '../../../src/constants/theme';
 import { formatDateLabel } from '../../../src/components/DateField';
+import { getReminders } from '../../../src/services/reminder.service';
+import { describeSchedule } from '../../../src/utils/reminderSchedule';
 import {
   CARE_KIND_LABEL,
   createCareLog,
@@ -54,6 +57,7 @@ import type {
   HarvestTotal,
   PlantingDetail,
   PlantingEndedReason,
+  ReminderItem,
 } from '../../../src/services/types';
 import {
   ENDED_REASON_LABEL,
@@ -69,6 +73,7 @@ export default function PlantingDetailScreen() {
   const [careLogs, setCareLogs] = useState<CareLogItem[]>([]);
   const [harvests, setHarvests] = useState<HarvestItem[]>([]);
   const [totals, setTotals] = useState<HarvestTotal[]>([]);
+  const [reminders, setReminders] = useState<ReminderItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [endSheetOpen, setEndSheetOpen] = useState(false);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
@@ -79,6 +84,7 @@ export default function PlantingDetailScreen() {
     setCareLogs(await getCareLogs(id));
     setHarvests(await getHarvests(id));
     setTotals(await getHarvestTotals(id));
+    setReminders(await getReminders(id));
     setLoading(false);
   }, [id]);
 
@@ -320,6 +326,46 @@ export default function PlantingDetailScreen() {
           </View>
         ) : null}
 
+        {/*
+          お知らせは終了した栽培には出さない。収穫し終えた株の設定を触っても
+          通知は来ない（getActiveReminders が終了分を外す）ので、
+          出すと「設定できるのに来ない」になる。
+        */}
+        {!ended ? (
+          <View style={styles.logSection}>
+            <Text style={styles.sectionLabel}>お知らせ</Text>
+            {reminders.length === 0 ? (
+              <Text style={styles.emptyLog}>設定されていません。</Text>
+            ) : (
+              reminders.map((reminder) => (
+                <PressableScale
+                  key={reminder.id}
+                  style={styles.logRow}
+                  onPress={() => router.push(`/plantings/${planting.id}/reminders/${reminder.id}`)}
+                >
+                  <BellRing size={16} color={reminder.enabled ? Colors.accent : Colors.inkDim} />
+                  <View style={styles.logBody}>
+                    <Text style={[styles.logKind, !reminder.enabled && styles.remindersOff]}>
+                      {CARE_KIND_LABEL[reminder.kind]}
+                    </Text>
+                    <Text style={styles.logNote}>
+                      {describeSchedule(reminder)}
+                      {reminder.enabled ? '' : '（停止中）'}
+                    </Text>
+                  </View>
+                </PressableScale>
+              ))
+            )}
+            <PressableScale
+              style={styles.detailedButton}
+              onPress={() => router.push(`/plantings/${planting.id}/reminders/new`)}
+            >
+              <Plus size={14} color={Colors.accent} />
+              <Text style={styles.detailedText}>お知らせを追加</Text>
+            </PressableScale>
+          </View>
+        ) : null}
+
         <View style={styles.actions}>
           {ended ? (
             <PressableScale style={styles.secondaryButton} onPress={handleResume}>
@@ -553,6 +599,7 @@ const styles = StyleSheet.create({
     color: Colors.ink,
   },
   logNote: { fontSize: Typography.size.sm, color: Colors.inkDim, lineHeight: 19 },
+  remindersOff: { color: Colors.inkDim },
   logPhotos: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 2 },
   logPhoto: { width: 44, height: 44, borderRadius: 6, backgroundColor: Colors.surfaceInput },
   logPhotoMore: { fontSize: Typography.size.xs, color: Colors.inkDim },

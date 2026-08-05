@@ -22,6 +22,8 @@ export default function PlantingsLayout() {
       <Stack.Screen name="[id]/care-logs/[logId]" options={{ presentation: 'modal' }} />
       <Stack.Screen name="[id]/harvests/new" options={{ presentation: 'modal' }} />
       <Stack.Screen name="[id]/harvests/[harvestId]" options={{ presentation: 'modal' }} />
+      <Stack.Screen name="[id]/reminders/new" options={{ presentation: 'modal' }} />
+      <Stack.Screen name="[id]/reminders/[reminderId]" options={{ presentation: 'modal' }} />
     </Stack>
   );
 }
