@@ -45,6 +45,21 @@
 Expo SDK 54 / Expo Router v6 / expo-sqlite + Drizzle ORM / Zustand / TanStack Query v5 / React Hook Form + Zod / Reanimated 3。
 サーバーは Hono(AI Vision 推論のみ・ステートレス)。詳細はだいどこの `docs/アーキテクチャ設計.md` を参照し、fork 時に必要な設計書を本リポジトリへ移植すること。
 
+## 4b. 完了条件(DoD) — WBS 2.4 以降
+
+機能タスクは次の 2 つを満たすまで完了としない(WBS T3)。
+
+1. **画面テスト** — 分岐・サービスへ渡す引数・遷移先を `@testing-library/react-native` で
+2. **実機確認** — エミュレータで該当導線を通し、スクリーンショットを PR に残す
+
+**画面テストは実機確認の代わりにならない。** 実機でしか出ない不具合の実績:
+`PressableScale` の flex 潰れ / `borderRadius` が効かず四角になる /
+ボトムシートがジェスチャーバーに飲まれる / 横スクロール帯が縦にも伸びる。
+いずれも react-test-renderer では再現しない。
+
+サービス層は実 SQLite でテストする(`src/test-support/sqlite-test-db.ts`)。
+モック実装を並走させない — 実 SQL との乖離が「テストは通るが端末で落ちる」を生む。
+
 ## 5. Git ルール
 
 - ブランチ: **`develop` ベース**。機能は `feat/xxx`、修正は `fix/xxx`
