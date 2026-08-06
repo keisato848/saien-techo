@@ -4,19 +4,18 @@ import {
   type SeedSnapshot,
   shouldInstallSampleData,
 } from '../migrate';
-import { seedCookingLogs, seedRecipes, seedUsers } from '../seed';
+import { seedCareLogs, seedPlantings, seedUsers } from '../seed';
 
 function snapshot(overrides: Partial<SeedSnapshot> = {}): SeedSnapshot {
   return {
     userIds: [],
     familyIds: [],
-    recipeIds: [],
-    revisionIds: [],
-    ingredientIds: [],
-    stepIds: [],
     tagIds: [],
-    cookingLogIds: [],
-    cookingPhotoIds: [],
+    placeIds: [],
+    plantingIds: [],
+    careLogIds: [],
+    harvestIds: [],
+    materialIds: [],
     ...overrides,
   };
 }
@@ -31,7 +30,7 @@ describe('database migrations', () => {
 
     expect(result.schemaVersion).toBe(CURRENT_SCHEMA_VERSION);
     expect(statements[0]).toContain('CREATE TABLE IF NOT EXISTS users');
-    expect(statements[0]).toContain('CREATE TABLE IF NOT EXISTS family_members');
+    expect(statements[0]).toContain('CREATE TABLE IF NOT EXISTS plantings');
     expect(statements).toContain(`PRAGMA user_version = ${CURRENT_SCHEMA_VERSION}`);
   });
 
@@ -49,13 +48,13 @@ describe('database migrations', () => {
     });
 
     expect(result.schemaVersion).toBe(CURRENT_SCHEMA_VERSION);
-    expect(statements).toContain('ALTER TABLE recipes ADD COLUMN cover_photo_path TEXT');
-    expect(statements).toContain('ALTER TABLE steps ADD COLUMN photo_path TEXT');
     expect(statements).toContain(`PRAGMA user_version = ${CURRENT_SCHEMA_VERSION}`);
   });
 });
 
 describe('sample data seed guard', () => {
+  // WBS 2.9c で判定対象をだいどこ(レシピ・調理記録)から栽培側へ差し替えた
+
   it('installs sample data into an empty database', () => {
     expect(shouldInstallSampleData(snapshot())).toBe(true);
   });
@@ -65,32 +64,38 @@ describe('sample data seed guard', () => {
       shouldInstallSampleData(
         snapshot({
           userIds: [seedUsers[0].id],
-          recipeIds: [seedRecipes[0].id],
-          cookingLogIds: [seedCookingLogs[0].id],
+          plantingIds: [seedPlantings[0].id],
+          careLogIds: [seedCareLogs[0].id],
         }),
       ),
     ).toBe(true);
   });
 
-  it('does not install sample data over user-created recipes', () => {
+  it('does not install sample data over user-created plantings', () => {
     expect(
       shouldInstallSampleData(
         snapshot({
           userIds: [seedUsers[0].id],
-          recipeIds: [seedRecipes[0].id, 'recipe-user-created'],
+          plantingIds: [seedPlantings[0].id, 'planting-user-created'],
         }),
       ),
     ).toBe(false);
   });
 
-  it('does not install sample data over user-created cooking logs', () => {
+  it('does not install sample data over user-created care logs', () => {
     expect(
       shouldInstallSampleData(
         snapshot({
           userIds: [seedUsers[0].id],
-          cookingLogIds: [seedCookingLogs[0].id, 'log-user-created'],
+          careLogIds: [seedCareLogs[0].id, 'care-user-created'],
         }),
       ),
     ).toBe(false);
+  });
+
+  it('does not install sample data over user-created materials', () => {
+    expect(shouldInstallSampleData(snapshot({ materialIds: ['material-user-created'] }))).toBe(
+      false,
+    );
   });
 });
