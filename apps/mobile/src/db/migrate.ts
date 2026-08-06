@@ -44,7 +44,7 @@ const DEFAULT_INVITE_CODE = 'DK0001';
 
 // サンプルデータの中身を変えたら必ず上げる。据え置くと、既にシード済みの端末は
 // appMeta のマーカーが一致して seedDatabase() が即 return し、新しい行が入らない。
-const SAMPLE_DATA_VERSION = '3';
+const SAMPLE_DATA_VERSION = '4';
 const SAMPLE_DATA_META_KEY = 'sample_data_version';
 
 export interface SeedSnapshot {

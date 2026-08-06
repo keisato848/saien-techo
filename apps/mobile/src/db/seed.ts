@@ -1483,6 +1483,20 @@ export const seedMaterials = [
     createdAt: SAIEN_TIMESTAMP,
     updatedAt: SAIEN_TIMESTAMP,
   },
+  {
+    // 数量を持たない資材。一覧で ± を出さない側の確認用
+    id: 'material-04',
+    familyId: FAMILY_ID,
+    name: '移植ごて',
+    category: 'tool',
+    quantity: null,
+    unit: null,
+    lowThreshold: null,
+    janCode: null,
+    note: null,
+    createdAt: SAIEN_TIMESTAMP,
+    updatedAt: SAIEN_TIMESTAMP,
+  },
 ] as const;
 
 /**

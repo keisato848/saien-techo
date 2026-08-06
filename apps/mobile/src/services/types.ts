@@ -427,3 +427,29 @@ export interface SaveReminderInput {
   minute: number;
   enabled?: boolean;
 }
+
+// ─── さいえん手帳: 資材（R12 / WBS 2.6）────────────────────────────────────
+
+/** seed=種・苗 / fertilizer=肥料 / pesticide=薬剤 / soil=土 / tool=道具 / other */
+export type MaterialCategory = 'seed' | 'fertilizer' | 'pesticide' | 'soil' | 'tool' | 'other';
+
+export interface MaterialItem {
+  id: string;
+  name: string;
+  category: MaterialCategory;
+  /** 数えないもの（道具など）は null */
+  quantity: number | null;
+  unit: string | null;
+  /** これを下回ると通知する。数量が無いときは持たない */
+  lowThreshold: number | null;
+  note: string | null;
+}
+
+export interface SaveMaterialInput {
+  name: string;
+  category: MaterialCategory;
+  quantity?: number | null;
+  unit?: string;
+  lowThreshold?: number | null;
+  note?: string;
+}

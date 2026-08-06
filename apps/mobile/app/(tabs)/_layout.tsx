@@ -73,6 +73,8 @@ export default function TabLayout() {
       {/* recipes 系は WBS 1.5 でタブから外した。画面自体は削除まで残す */}
       <Tabs.Screen name="recipes" options={{ href: null }} />
       <Tabs.Screen name="places" options={{ href: null }} />
+      {/* 資材は設定から入る（R12）。タブに出すと 3 本柱（記録・収穫・アドバイス）がぼやける */}
+      <Tabs.Screen name="materials" options={{ href: null }} />
       <Tabs.Screen name="backup" options={{ href: null }} />
       <Tabs.Screen name="licenses" options={{ href: null }} />
       <Tabs.Screen name="ai-key" options={{ href: null }} />

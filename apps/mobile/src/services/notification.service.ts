@@ -78,10 +78,17 @@ export async function scheduleTimerNotification(seconds: number): Promise<string
 }
 
 /**
- * Present an immediate local notification for low pantry stock (P3).
+ * Present an immediate local notification for low stock (P3).
  * Returns the notification id, or null if unavailable/denied.
+ *
+ * `title` は資材（R12 / WBS 2.6）でも使い回すために差し替えられる。
+ * 通知チャンネルは共通のまま — 「残量のお知らせ」は利用者から見て 1 種類で、
+ * 分けると設定画面のチャンネル一覧が無駄に増える。
  */
-export async function presentLowStockNotification(body: string): Promise<string | null> {
+export async function presentLowStockNotification(
+  body: string,
+  title = '在庫がなくなりそうです',
+): Promise<string | null> {
   if (!isNativePlatform || !body) return null;
   if (!(await ensureNotificationPermission())) return null;
   if (Platform.OS === 'android') {
@@ -93,7 +100,7 @@ export async function presentLowStockNotification(body: string): Promise<string 
   try {
     return await Notifications.scheduleNotificationAsync({
       content: {
-        title: '在庫がなくなりそうです',
+        title,
         body,
         sound: 'default',
       },

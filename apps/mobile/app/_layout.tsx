@@ -8,15 +8,20 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { Colors, isDarkPalette } from '../src/constants/theme';
 import { useDatabase } from '../src/hooks/useDatabase';
 import { markReminderFired, syncScheduledReminders } from '../src/services/reminder.service';
-import { checkAndNotifyLowStock } from '../src/services/low-stock.service';
+import { checkAndNotifyLowMaterials } from '../src/services/low-stock.service';
 
 export default function RootLayout() {
   const { isReady, error } = useDatabase();
   const router = useRouter();
 
-  // 起動時に在庫の残量しきい値をチェック（1日1回まとめて通知; P3）
+  /*
+   * 起動時に資材の残量しきい値をチェックする（R12 / WBS 2.6・1日1回まとめて通知）。
+   *
+   * だいどこは食材の在庫（checkAndNotifyLowStock）を見ていた。食材の画面は
+   * タブから外してあるので、そのままだと菜園アプリが食材の通知を出してしまう。
+   */
   useEffect(() => {
-    if (isReady) checkAndNotifyLowStock().catch(() => undefined);
+    if (isReady) checkAndNotifyLowMaterials().catch(() => undefined);
   }, [isReady]);
 
   /*
