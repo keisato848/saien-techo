@@ -10,15 +10,8 @@ const KEY_PREFIX = 'coach_marks_seen:';
 const SEEN = '1';
 
 /** Screens carrying coach marks (used by the reset action). */
-export const COACH_MARK_SCREENS = [
-  'home',
-  'recipes',
-  'recipe-detail',
-  'shopping',
-  'pantry',
-  'add',
-  'settings',
-] as const;
+// だいどこの画面キーは WBS 2.9c で整理した。いま案内を出すのは設定だけ
+export const COACH_MARK_SCREENS = ['settings'] as const;
 
 export type CoachMarkScreen = (typeof COACH_MARK_SCREENS)[number];
 

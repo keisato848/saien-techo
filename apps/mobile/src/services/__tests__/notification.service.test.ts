@@ -2,45 +2,28 @@ jest.mock('../../db/client', () => ({ isNativePlatform: true }));
 
 import * as Notifications from 'expo-notifications';
 
-import {
-  cancelTimerNotification,
-  ensureNotificationPermission,
-  presentLowStockNotification,
-  scheduleTimerNotification,
-} from '../notification.service';
+import { ensureNotificationPermission, presentLowStockNotification } from '../notification.service';
+
+// だいどこの調理タイマー通知は WBS 2.9c で削除した。
+// リマインダーの予約・解除は reminder.service.test 側で担保している。
 
 describe('notification.service', () => {
   beforeEach(() => jest.clearAllMocks());
-
-  it('does not schedule for non-positive durations', async () => {
-    expect(await scheduleTimerNotification(0)).toBeNull();
-    expect(await scheduleTimerNotification(-5)).toBeNull();
-    expect(Notifications.scheduleNotificationAsync).not.toHaveBeenCalled();
-  });
-
-  it('schedules a one-shot notification and returns its id', async () => {
-    const id = await scheduleTimerNotification(90);
-    expect(id).toBe('mock-notification-id');
-    expect(Notifications.scheduleNotificationAsync).toHaveBeenCalledTimes(1);
-  });
-
-  it('cancels by id, and no-ops when id is null', async () => {
-    await cancelTimerNotification('abc');
-    expect(Notifications.cancelScheduledNotificationAsync).toHaveBeenCalledWith('abc');
-
-    jest.clearAllMocks();
-    await cancelTimerNotification(null);
-    expect(Notifications.cancelScheduledNotificationAsync).not.toHaveBeenCalled();
-  });
 
   it('reports permission granted', async () => {
     expect(await ensureNotificationPermission()).toBe(true);
   });
 
   it('presents an immediate low-stock notification', async () => {
-    const id = await presentLowStockNotification('卵 の残りが少なくなっています。');
+    const id = await presentLowStockNotification('化成肥料の残りが少なくなっています。');
     expect(id).toBe('mock-notification-id');
     expect(Notifications.scheduleNotificationAsync).toHaveBeenCalledTimes(1);
+  });
+
+  it('uses the given title (資材のお知らせで差し替える)', async () => {
+    await presentLowStockNotification('本文', '資材が少なくなっています');
+    const call = (Notifications.scheduleNotificationAsync as jest.Mock).mock.calls[0][0];
+    expect(call.content.title).toBe('資材が少なくなっています');
   });
 
   it('does not present an empty low-stock body', async () => {

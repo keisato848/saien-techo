@@ -1,86 +1,11 @@
 /**
- * FTS5 full-text search service
- * Provides Japanese-aware search with kana normalization
+ * FTS5 全文検索 — 栽培の検索（R03）
+ *
+ * かつてはレシピ検索（recipe_fts）も同居していたが、WBS 2.9c で栽培専用にした。
+ * recipe_fts テーブル自体は 2.9e（テーブル削除）まで残る。
  */
 import { getExpoDb, isNativePlatform } from '../db/client';
 
-/**
- * Search recipes using FTS5 MATCH on native, client-side filter on web.
- * Returns recipe IDs that match the query.
- */
-export async function searchByFts(query: string): Promise<string[]> {
-  if (!isNativePlatform || !query.trim()) {
-    return [];
-  }
-
-  try {
-    const { getExpoDb } = await import('../db/client');
-    const expoDb = getExpoDb();
-
-    // Normalize and create prefix search term
-    const normalized = normalizeForSearch(query.trim());
-    const searchTerm = `${normalized}*`;
-
-    const rows = expoDb.getAllSync<{ recipe_id: string }>(
-      'SELECT recipe_id FROM recipe_fts WHERE recipe_fts MATCH ?',
-      [searchTerm],
-    );
-
-    return rows.map((r) => r.recipe_id);
-  } catch {
-    // FTS table may not exist
-    return [];
-  }
-}
-
-/**
- * Update the FTS index for a single recipe.
- * Called after create/update/delete operations.
- */
-export async function updateFtsIndex(
-  recipeId: string,
-  title: string,
-  titleReading: string,
-  ingredientNames: string[],
-): Promise<void> {
-  if (!isNativePlatform) return;
-
-  try {
-    const { getExpoDb } = await import('../db/client');
-    const expoDb = getExpoDb();
-
-    // Delete existing
-    expoDb.runSync('DELETE FROM recipe_fts WHERE recipe_id = ?', [recipeId]);
-
-    // Insert updated
-    const ingText = ingredientNames.join(' ');
-    expoDb.runSync(
-      'INSERT INTO recipe_fts (recipe_id, title, title_reading, ingredient_names) VALUES (?, ?, ?, ?)',
-      [recipeId, title, titleReading, ingText],
-    );
-  } catch {
-    // FTS table may not exist yet
-  }
-}
-
-/**
- * Remove a recipe from the FTS index.
- */
-export async function removeFtsEntry(recipeId: string): Promise<void> {
-  if (!isNativePlatform) return;
-
-  try {
-    const { getExpoDb } = await import('../db/client');
-    const expoDb = getExpoDb();
-    expoDb.runSync('DELETE FROM recipe_fts WHERE recipe_id = ?', [recipeId]);
-  } catch {
-    // FTS table may not exist
-  }
-}
-
-/**
- * Normalize text for FTS search: katakana -> hiragana, lowercase
- */
 /** カタカナ → ひらがな・小文字化。FTS への投入と検索で同じ関数を通す */
 export function normalizeForSearch(text: string): string {
   // Katakana to hiragana
@@ -89,9 +14,6 @@ export function normalizeForSearch(text: string): string {
   );
   return hiragana.toLowerCase();
 }
-
-// ─── 栽培（さいえん手帳 / R03）─────────────────────────────────────────────
-// recipe_fts と同じ方式。正規化（カタカナ → ひらがな・小文字化）は共通で使う。
 
 /** 栽培を FTS で検索し、planting_id の配列を返す */
 export async function searchPlantingsByFts(query: string): Promise<string[]> {

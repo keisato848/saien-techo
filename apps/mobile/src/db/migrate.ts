@@ -10,24 +10,16 @@ import * as schema from './schema';
 import { isSampleDataEnabled } from './sampleData';
 import {
   seedCareLogs,
-  seedCookingLogs,
-  seedCookingPhotos,
   seedCropCalendars,
   seedCropGuides,
   seedCrops,
   seedFamilies,
   seedHarvests,
-  seedIngredients,
   seedMaterials,
   seedPlaces,
   seedPlantingTagMasters,
   seedPlantingTags,
   seedPlantings,
-  seedRecipeTags,
-  seedRecipes,
-  seedRevisions,
-  seedSteps,
-  seedTags,
   seedUsers,
 } from './seed';
 
@@ -40,40 +32,40 @@ const DEFAULT_USER_ID = 'user-kei';
 const DEFAULT_FAMILY_ID = 'family-001';
 const DEFAULT_MEMBER_ID = 'member-family-001-user-kei';
 const DEFAULT_USER_NAME = '';
-const DEFAULT_FAMILY_NAME = 'わたしの台所';
+const DEFAULT_FAMILY_NAME = 'わたしの菜園';
 const DEFAULT_INVITE_CODE = 'DK0001';
 
 // サンプルデータの中身を変えたら必ず上げる。据え置くと、既にシード済みの端末は
 // appMeta のマーカーが一致して seedDatabase() が即 return し、新しい行が入らない。
-const SAMPLE_DATA_VERSION = '4';
+const SAMPLE_DATA_VERSION = '5';
 const SAMPLE_DATA_META_KEY = 'sample_data_version';
 
 export interface SeedSnapshot {
   userIds: string[];
   familyIds: string[];
-  recipeIds: string[];
-  revisionIds: string[];
-  ingredientIds: string[];
-  stepIds: string[];
   tagIds: string[];
-  cookingLogIds: string[];
-  cookingPhotoIds: string[];
+  placeIds: string[];
+  plantingIds: string[];
+  careLogIds: string[];
+  harvestIds: string[];
+  materialIds: string[];
 }
 
 export interface MigrationResult {
   schemaVersion: number;
 }
 
+// 「利用者が作ったデータの上にサンプルを重ねない」判定の対象。
+// WBS 2.9c でだいどこのレシピ・調理記録から栽培側の記録へ差し替えた。
 const seedIdSets = {
   userIds: new Set(seedUsers.map((item) => item.id)),
   familyIds: new Set(seedFamilies.map((item) => item.id)),
-  recipeIds: new Set(seedRecipes.map((item) => item.id)),
-  revisionIds: new Set(seedRevisions.map((item) => item.id)),
-  ingredientIds: new Set(seedIngredients.map((item) => item.id)),
-  stepIds: new Set(seedSteps.map((item) => item.id)),
-  tagIds: new Set(seedTags.map((item) => item.id)),
-  cookingLogIds: new Set(seedCookingLogs.map((item) => item.id)),
-  cookingPhotoIds: new Set(seedCookingPhotos.map((item) => item.id)),
+  tagIds: new Set(seedPlantingTagMasters.map((item) => item.id)),
+  placeIds: new Set(seedPlaces.map((item) => item.id)),
+  plantingIds: new Set(seedPlantings.map((item) => item.id)),
+  careLogIds: new Set(seedCareLogs.map((item) => item.id)),
+  harvestIds: new Set(seedHarvests.map((item) => item.id)),
+  materialIds: new Set(seedMaterials.map((item) => item.id)),
 } satisfies Record<keyof SeedSnapshot, Set<string>>;
 
 const CREATE_TABLES_SQL = `
@@ -550,11 +542,6 @@ export async function ensureLocalIdentity(database: DB): Promise<void> {
     })
     .onConflictDoNothing();
 
-  const existingMembers = await database
-    .select({ id: schema.familyMembers.id })
-    .from(schema.familyMembers)
-    .where(eq(schema.familyMembers.familyId, DEFAULT_FAMILY_ID));
-
   if (!isSampleDataEnabled()) {
     await database
       .update(schema.users)
@@ -567,14 +554,16 @@ export async function ensureLocalIdentity(database: DB): Promise<void> {
       );
   }
 
-  if (existingMembers.length === 0 && !isSampleDataEnabled()) {
-    await database
-      .update(schema.families)
-      .set({ name: DEFAULT_FAMILY_NAME, inviteCode: DEFAULT_INVITE_CODE, updatedAt: now })
-      .where(
-        and(eq(schema.families.id, DEFAULT_FAMILY_ID), eq(schema.families.name, '佐藤家の台所')),
-      );
-  }
+  // だいどこ時代の既定名から引っ越す（WBS 2.9c）。利用者が付けた名前は触らない
+  await database
+    .update(schema.families)
+    .set({ name: DEFAULT_FAMILY_NAME, updatedAt: now })
+    .where(
+      and(
+        eq(schema.families.id, DEFAULT_FAMILY_ID),
+        inArray(schema.families.name, ['わたしの台所', '佐藤家の台所']),
+      ),
+    );
 
   await database
     .insert(schema.familyMembers)
@@ -604,28 +593,22 @@ export function shouldInstallSampleData(snapshot: SeedSnapshot): boolean {
 async function getSeedSnapshot(database: DB): Promise<SeedSnapshot> {
   const users = await database.select({ id: schema.users.id }).from(schema.users);
   const families = await database.select({ id: schema.families.id }).from(schema.families);
-  const recipes = await database.select({ id: schema.recipes.id }).from(schema.recipes);
-  const revisions = await database
-    .select({ id: schema.recipeRevisions.id })
-    .from(schema.recipeRevisions);
-  const ingredients = await database.select({ id: schema.ingredients.id }).from(schema.ingredients);
-  const steps = await database.select({ id: schema.steps.id }).from(schema.steps);
   const tags = await database.select({ id: schema.tags.id }).from(schema.tags);
-  const cookingLogs = await database.select({ id: schema.cookingLogs.id }).from(schema.cookingLogs);
-  const cookingPhotos = await database
-    .select({ id: schema.cookingPhotos.id })
-    .from(schema.cookingPhotos);
+  const places = await database.select({ id: schema.places.id }).from(schema.places);
+  const plantings = await database.select({ id: schema.plantings.id }).from(schema.plantings);
+  const careLogs = await database.select({ id: schema.careLogs.id }).from(schema.careLogs);
+  const harvests = await database.select({ id: schema.harvests.id }).from(schema.harvests);
+  const materials = await database.select({ id: schema.materials.id }).from(schema.materials);
 
   return {
     userIds: users.map((item) => item.id),
     familyIds: families.map((item) => item.id),
-    recipeIds: recipes.map((item) => item.id),
-    revisionIds: revisions.map((item) => item.id),
-    ingredientIds: ingredients.map((item) => item.id),
-    stepIds: steps.map((item) => item.id),
     tagIds: tags.map((item) => item.id),
-    cookingLogIds: cookingLogs.map((item) => item.id),
-    cookingPhotoIds: cookingPhotos.map((item) => item.id),
+    placeIds: places.map((item) => item.id),
+    plantingIds: plantings.map((item) => item.id),
+    careLogIds: careLogs.map((item) => item.id),
+    harvestIds: harvests.map((item) => item.id),
+    materialIds: materials.map((item) => item.id),
   };
 }
 
@@ -678,41 +661,6 @@ export async function seedDatabase(database: DB): Promise<void> {
     .insert(schema.families)
     .values([...seedFamilies])
     .onConflictDoNothing();
-  await database
-    .insert(schema.recipes)
-    .values([...seedRecipes])
-    .onConflictDoNothing();
-  await database
-    .insert(schema.recipeRevisions)
-    .values([...seedRevisions])
-    .onConflictDoNothing();
-  await database
-    .insert(schema.ingredients)
-    .values([...seedIngredients])
-    .onConflictDoNothing();
-  await database
-    .insert(schema.steps)
-    .values([...seedSteps])
-    .onConflictDoNothing();
-  await database
-    .insert(schema.tags)
-    .values([...seedTags])
-    .onConflictDoNothing();
-  await database
-    .insert(schema.recipeTags)
-    .values([...seedRecipeTags])
-    .onConflictDoNothing();
-  await database
-    .insert(schema.cookingLogs)
-    .values([...seedCookingLogs])
-    .onConflictDoNothing();
-  if (seedCookingPhotos.length > 0) {
-    await database
-      .insert(schema.cookingPhotos)
-      .values([...seedCookingPhotos])
-      .onConflictDoNothing();
-  }
-
   // ── さいえん手帳（WBS 1.5）─────────────────────────────────────────────
   // 作物マスターの本番データ投入は WBS 3.1。ここは画面確認用の最小セット
   await database
@@ -757,7 +705,6 @@ export async function seedDatabase(database: DB): Promise<void> {
     .onConflictDoNothing();
 
   // Populate FTS index
-  await rebuildFts(database);
   await rebuildPlantingFts(database);
   await markSampleDataVersion(database);
 }
