@@ -420,10 +420,13 @@ export const cropCalendars = sqliteTable(
     endMonth: integer('end_month').notNull(),
   },
   (table) => ({
-    cropRegionKindIdx: uniqueIndex('idx_crop_calendars_crop_region_kind').on(
+    // startMonth まで含める。同じ kind でも春秋 2 つの窓を持つ作物がある
+    // （例: ジャガイモの春植え・秋植え）。v10 で 3 列の旧インデックスから移行
+    cropRegionKindIdx: uniqueIndex('idx_crop_calendars_crop_region_kind_start').on(
       table.cropId,
       table.region,
       table.kind,
+      table.startMonth,
     ),
   }),
 );
