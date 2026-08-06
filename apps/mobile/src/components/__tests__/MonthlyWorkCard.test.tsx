@@ -90,6 +90,17 @@ describe('MonthlyWorkCard', () => {
     await waitFor(() => expect(screen.getByText('ダイコン、カブ')).toBeTruthy());
   });
 
+  it('出典を小さく明記する（判断②: 公的資料ベースの目安であること）', async () => {
+    mockGetWork.mockResolvedValue(work({ sow: [{ cropId: 'crop-daikon', name: 'ダイコン' }] }));
+    render(<MonthlyWorkCard />);
+
+    await waitFor(() =>
+      expect(
+        screen.getByText('農林水産省・JAグループ等の公開資料をもとにした目安です'),
+      ).toBeTruthy(),
+    );
+  });
+
   it('地域ラベルから設定へ飛べる', async () => {
     mockGetWork.mockResolvedValue(
       work({ region: 'warm', sow: [{ cropId: 'crop-daikon', name: 'ダイコン' }] }),

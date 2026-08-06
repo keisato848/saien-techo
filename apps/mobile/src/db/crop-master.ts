@@ -19,7 +19,9 @@
 import type { Region } from '../services/region.service';
 
 // v2: 春夏 18 作物を追加して 30 作物に（3.1b 後半）
-export const CROP_MASTER_VERSION = 2;
+// v3: 公的資料と突き合わせて補正（寒冷地を JA 北海道の実期に合わせ 1〜2 か月前倒し、
+//     暖地ジャガイモ秋作の植付を 8〜9 月に）。出典は CROP_MASTER_REFERENCES
+export const CROP_MASTER_VERSION = 3;
 
 export type CropCalendarKind = 'sow' | 'plant' | 'harvest';
 
@@ -61,6 +63,36 @@ export interface CropMaster {
 }
 
 /**
+ * 栽培暦・ガイドの出典（R08/R09）。
+ *
+ * 内容は下記の公開資料を参考に、家庭菜園向けの「月単位の目安」として
+ * 独自にまとめ直したもの（表の転載ではない）。アプリ内では
+ * 「今月の菜園仕事」カードと作物ガイドに小さく出典として表示する。
+ * 検証の記録は docs/栽培暦の出典.md。
+ */
+export const CROP_MASTER_REFERENCES = [
+  {
+    name: '農林水産省「都道府県の施肥基準・野菜栽培技術指針」',
+    url: 'https://www.maff.go.jp/j/seisan/kankyo/hozen_type/h_sehi_kizyun/',
+  },
+  {
+    name: 'JAグループ北海道「チャレンジ！家庭菜園 主要野菜のは種・定植・収穫時期」',
+    url: 'https://ja-dosanko.jp/agriculture/charenge/no7/',
+  },
+  {
+    name: '長崎県農林技術開発センター「バレイショ栽培マニュアル」',
+    url: 'https://www.pref.nagasaki.jp/e-nourin/nougi/manual/kogane2018.pdf',
+  },
+  {
+    name: '農林水産省 消費者相談「国内のジャガイモの栽培時期」',
+    url: 'https://www.maff.go.jp/j/heya/sodan/1204/01a.html',
+  },
+] as const;
+
+/** アプリ内に小さく出す 1 行（カード・ガイドの脚注） */
+export const CROP_MASTER_ATTRIBUTION = '農林水産省・JAグループ等の公開資料をもとにした目安です';
+
+/**
  * 30 作物（WBS 3.1）。秋冬 12 + 春夏 18。
  * 秋冬を先に書いたのは、v1.0 公開（10 月）時点で「今月の仕事」に
  * 実データが載るようにするため。
@@ -73,8 +105,8 @@ export const CROP_MASTER: CropMaster[] = [
     family: 'アブラナ科',
     defaultUnit: 'piece',
     calendars: [
-      { region: 'cold', kind: 'sow', startMonth: 7, endMonth: 8 },
-      { region: 'cold', kind: 'harvest', startMonth: 9, endMonth: 11 },
+      { region: 'cold', kind: 'sow', startMonth: 5, endMonth: 8 },
+      { region: 'cold', kind: 'harvest', startMonth: 7, endMonth: 10 },
       { region: 'temperate', kind: 'sow', startMonth: 8, endMonth: 9 },
       { region: 'temperate', kind: 'harvest', startMonth: 10, endMonth: 12 },
       { region: 'warm', kind: 'sow', startMonth: 9, endMonth: 10 },
@@ -97,8 +129,8 @@ export const CROP_MASTER: CropMaster[] = [
     family: 'アブラナ科',
     defaultUnit: 'piece',
     calendars: [
-      { region: 'cold', kind: 'sow', startMonth: 7, endMonth: 8 },
-      { region: 'cold', kind: 'harvest', startMonth: 9, endMonth: 10 },
+      { region: 'cold', kind: 'sow', startMonth: 5, endMonth: 8 },
+      { region: 'cold', kind: 'harvest', startMonth: 7, endMonth: 10 },
       { region: 'temperate', kind: 'sow', startMonth: 8, endMonth: 10 },
       { region: 'temperate', kind: 'harvest', startMonth: 10, endMonth: 12 },
       { region: 'warm', kind: 'sow', startMonth: 9, endMonth: 10 },
@@ -121,8 +153,8 @@ export const CROP_MASTER: CropMaster[] = [
     family: 'セリ科',
     defaultUnit: 'piece',
     calendars: [
-      { region: 'cold', kind: 'sow', startMonth: 6, endMonth: 7 },
-      { region: 'cold', kind: 'harvest', startMonth: 9, endMonth: 11 },
+      { region: 'cold', kind: 'sow', startMonth: 5, endMonth: 6 },
+      { region: 'cold', kind: 'harvest', startMonth: 8, endMonth: 10 },
       { region: 'temperate', kind: 'sow', startMonth: 7, endMonth: 8 },
       { region: 'temperate', kind: 'harvest', startMonth: 11, endMonth: 1 },
       { region: 'warm', kind: 'sow', startMonth: 8, endMonth: 9 },
@@ -145,8 +177,8 @@ export const CROP_MASTER: CropMaster[] = [
     family: 'ヒユ科',
     defaultUnit: 'bunch',
     calendars: [
-      { region: 'cold', kind: 'sow', startMonth: 8, endMonth: 9 },
-      { region: 'cold', kind: 'harvest', startMonth: 9, endMonth: 11 },
+      { region: 'cold', kind: 'sow', startMonth: 5, endMonth: 8 },
+      { region: 'cold', kind: 'harvest', startMonth: 6, endMonth: 10 },
       { region: 'temperate', kind: 'sow', startMonth: 9, endMonth: 10 },
       { region: 'temperate', kind: 'harvest', startMonth: 11, endMonth: 1 },
       { region: 'warm', kind: 'sow', startMonth: 10, endMonth: 11 },
@@ -169,8 +201,8 @@ export const CROP_MASTER: CropMaster[] = [
     family: 'アブラナ科',
     defaultUnit: 'bunch',
     calendars: [
-      { region: 'cold', kind: 'sow', startMonth: 8, endMonth: 9 },
-      { region: 'cold', kind: 'harvest', startMonth: 9, endMonth: 10 },
+      { region: 'cold', kind: 'sow', startMonth: 5, endMonth: 8 },
+      { region: 'cold', kind: 'harvest', startMonth: 6, endMonth: 10 },
       { region: 'temperate', kind: 'sow', startMonth: 9, endMonth: 10 },
       { region: 'temperate', kind: 'harvest', startMonth: 10, endMonth: 12 },
       { region: 'warm', kind: 'sow', startMonth: 9, endMonth: 11 },
@@ -193,8 +225,8 @@ export const CROP_MASTER: CropMaster[] = [
     family: 'キク科',
     defaultUnit: 'bunch',
     calendars: [
-      { region: 'cold', kind: 'sow', startMonth: 8, endMonth: 8 },
-      { region: 'cold', kind: 'harvest', startMonth: 9, endMonth: 10 },
+      { region: 'cold', kind: 'sow', startMonth: 5, endMonth: 8 },
+      { region: 'cold', kind: 'harvest', startMonth: 7, endMonth: 10 },
       { region: 'temperate', kind: 'sow', startMonth: 9, endMonth: 10 },
       { region: 'temperate', kind: 'harvest', startMonth: 10, endMonth: 12 },
       { region: 'warm', kind: 'sow', startMonth: 9, endMonth: 10 },
@@ -217,8 +249,8 @@ export const CROP_MASTER: CropMaster[] = [
     family: 'アブラナ科',
     defaultUnit: 'plant',
     calendars: [
-      { region: 'cold', kind: 'sow', startMonth: 8, endMonth: 9 },
-      { region: 'cold', kind: 'harvest', startMonth: 9, endMonth: 11 },
+      { region: 'cold', kind: 'sow', startMonth: 5, endMonth: 8 },
+      { region: 'cold', kind: 'harvest', startMonth: 7, endMonth: 10 },
       { region: 'temperate', kind: 'sow', startMonth: 9, endMonth: 10 },
       { region: 'temperate', kind: 'harvest', startMonth: 11, endMonth: 1 },
       { region: 'warm', kind: 'sow', startMonth: 9, endMonth: 11 },
@@ -241,9 +273,9 @@ export const CROP_MASTER: CropMaster[] = [
     family: 'アブラナ科',
     defaultUnit: 'piece',
     calendars: [
-      { region: 'cold', kind: 'sow', startMonth: 7, endMonth: 7 },
-      { region: 'cold', kind: 'plant', startMonth: 7, endMonth: 8 },
-      { region: 'cold', kind: 'harvest', startMonth: 10, endMonth: 11 },
+      { region: 'cold', kind: 'sow', startMonth: 5, endMonth: 7 },
+      { region: 'cold', kind: 'plant', startMonth: 6, endMonth: 8 },
+      { region: 'cold', kind: 'harvest', startMonth: 8, endMonth: 10 },
       { region: 'temperate', kind: 'sow', startMonth: 8, endMonth: 8 },
       { region: 'temperate', kind: 'plant', startMonth: 8, endMonth: 9 },
       { region: 'temperate', kind: 'harvest', startMonth: 11, endMonth: 1 },
@@ -268,8 +300,8 @@ export const CROP_MASTER: CropMaster[] = [
     family: 'アブラナ科',
     defaultUnit: 'piece',
     calendars: [
-      { region: 'cold', kind: 'plant', startMonth: 7, endMonth: 8 },
-      { region: 'cold', kind: 'harvest', startMonth: 10, endMonth: 11 },
+      { region: 'cold', kind: 'plant', startMonth: 5, endMonth: 7 },
+      { region: 'cold', kind: 'harvest', startMonth: 7, endMonth: 10 },
       { region: 'temperate', kind: 'plant', startMonth: 9, endMonth: 10 },
       { region: 'temperate', kind: 'harvest', startMonth: 12, endMonth: 3 },
       { region: 'warm', kind: 'plant', startMonth: 10, endMonth: 11 },
@@ -292,8 +324,8 @@ export const CROP_MASTER: CropMaster[] = [
     family: 'アブラナ科',
     defaultUnit: 'piece',
     calendars: [
-      { region: 'cold', kind: 'plant', startMonth: 7, endMonth: 8 },
-      { region: 'cold', kind: 'harvest', startMonth: 9, endMonth: 11 },
+      { region: 'cold', kind: 'plant', startMonth: 5, endMonth: 7 },
+      { region: 'cold', kind: 'harvest', startMonth: 7, endMonth: 10 },
       { region: 'temperate', kind: 'plant', startMonth: 8, endMonth: 9 },
       { region: 'temperate', kind: 'harvest', startMonth: 11, endMonth: 2 },
       { region: 'warm', kind: 'plant', startMonth: 9, endMonth: 10 },
@@ -317,7 +349,8 @@ export const CROP_MASTER: CropMaster[] = [
     defaultUnit: 'piece',
     calendars: [
       // 寒冷地（北海道など）は春植え・夏どりが主流
-      { region: 'cold', kind: 'plant', startMonth: 4, endMonth: 5 },
+      { region: 'cold', kind: 'sow', startMonth: 3, endMonth: 3 },
+      { region: 'cold', kind: 'plant', startMonth: 5, endMonth: 5 },
       { region: 'cold', kind: 'harvest', startMonth: 8, endMonth: 9 },
       { region: 'temperate', kind: 'sow', startMonth: 9, endMonth: 9 },
       { region: 'temperate', kind: 'plant', startMonth: 11, endMonth: 11 },
@@ -371,7 +404,7 @@ export const CROP_MASTER: CropMaster[] = [
     defaultUnit: 'piece',
     calendars: [
       { region: 'cold', kind: 'plant', startMonth: 5, endMonth: 6 },
-      { region: 'cold', kind: 'harvest', startMonth: 7, endMonth: 9 },
+      { region: 'cold', kind: 'harvest', startMonth: 7, endMonth: 10 },
       { region: 'temperate', kind: 'plant', startMonth: 4, endMonth: 5 },
       { region: 'temperate', kind: 'harvest', startMonth: 6, endMonth: 9 },
       { region: 'warm', kind: 'plant', startMonth: 4, endMonth: 5 },
@@ -395,7 +428,7 @@ export const CROP_MASTER: CropMaster[] = [
     defaultUnit: 'piece',
     calendars: [
       { region: 'cold', kind: 'plant', startMonth: 5, endMonth: 6 },
-      { region: 'cold', kind: 'harvest', startMonth: 7, endMonth: 9 },
+      { region: 'cold', kind: 'harvest', startMonth: 7, endMonth: 10 },
       { region: 'temperate', kind: 'plant', startMonth: 4, endMonth: 5 },
       { region: 'temperate', kind: 'harvest', startMonth: 6, endMonth: 9 },
       { region: 'warm', kind: 'plant', startMonth: 4, endMonth: 5 },
@@ -491,7 +524,7 @@ export const CROP_MASTER: CropMaster[] = [
     defaultUnit: 'bunch',
     calendars: [
       { region: 'cold', kind: 'sow', startMonth: 5, endMonth: 6 },
-      { region: 'cold', kind: 'harvest', startMonth: 8, endMonth: 9 },
+      { region: 'cold', kind: 'harvest', startMonth: 8, endMonth: 10 },
       { region: 'temperate', kind: 'sow', startMonth: 4, endMonth: 6 },
       { region: 'temperate', kind: 'harvest', startMonth: 7, endMonth: 9 },
       { region: 'warm', kind: 'sow', startMonth: 4, endMonth: 6 },
@@ -515,7 +548,7 @@ export const CROP_MASTER: CropMaster[] = [
     defaultUnit: 'piece',
     calendars: [
       { region: 'cold', kind: 'sow', startMonth: 5, endMonth: 6 },
-      { region: 'cold', kind: 'harvest', startMonth: 8, endMonth: 9 },
+      { region: 'cold', kind: 'harvest', startMonth: 8, endMonth: 10 },
       { region: 'temperate', kind: 'sow', startMonth: 4, endMonth: 5 },
       { region: 'temperate', kind: 'harvest', startMonth: 7, endMonth: 8 },
       { region: 'warm', kind: 'sow', startMonth: 3, endMonth: 5 },
@@ -611,14 +644,14 @@ export const CROP_MASTER: CropMaster[] = [
     defaultUnit: 'kg',
     calendars: [
       // 中間地・暖地は春植えと秋植えの 2 期作（同じ kind に 2 窓）
-      { region: 'cold', kind: 'plant', startMonth: 4, endMonth: 5 },
+      { region: 'cold', kind: 'plant', startMonth: 5, endMonth: 5 },
       { region: 'cold', kind: 'harvest', startMonth: 8, endMonth: 9 },
       { region: 'temperate', kind: 'plant', startMonth: 2, endMonth: 3 },
       { region: 'temperate', kind: 'plant', startMonth: 8, endMonth: 9 },
       { region: 'temperate', kind: 'harvest', startMonth: 5, endMonth: 6 },
       { region: 'temperate', kind: 'harvest', startMonth: 11, endMonth: 12 },
       { region: 'warm', kind: 'plant', startMonth: 2, endMonth: 3 },
-      { region: 'warm', kind: 'plant', startMonth: 9, endMonth: 9 },
+      { region: 'warm', kind: 'plant', startMonth: 8, endMonth: 9 },
       { region: 'warm', kind: 'harvest', startMonth: 5, endMonth: 6 },
       { region: 'warm', kind: 'harvest', startMonth: 11, endMonth: 12 },
     ],
@@ -785,8 +818,8 @@ export const CROP_MASTER: CropMaster[] = [
     defaultUnit: 'piece',
     calendars: [
       // 中間地・暖地は春と秋の 2 期作
-      { region: 'cold', kind: 'plant', startMonth: 5, endMonth: 6 },
-      { region: 'cold', kind: 'harvest', startMonth: 7, endMonth: 8 },
+      { region: 'cold', kind: 'plant', startMonth: 5, endMonth: 8 },
+      { region: 'cold', kind: 'harvest', startMonth: 7, endMonth: 10 },
       { region: 'temperate', kind: 'plant', startMonth: 3, endMonth: 4 },
       { region: 'temperate', kind: 'plant', startMonth: 9, endMonth: 9 },
       { region: 'temperate', kind: 'harvest', startMonth: 5, endMonth: 6 },
