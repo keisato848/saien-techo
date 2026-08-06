@@ -4,9 +4,9 @@
  * だいどこの調理記録タイムラインを、栽培の作業ログのタイムラインに差し替えた。
  * 元の画面は recipes/home-legacy.tsx に退避してある（recipes 一式の削除時に消す）。
  *
- * WBS 1.9 の範囲は「育てているもの」と「さいきんの記録」まで。
- * 「つぎの作業」（R10 / WBS 3.4）と「今月の菜園仕事」（R08 / WBS 3.2）は
- * 作物暦（WBS 3.1）が入ってから上に積む。docs/画面設計.md S01 参照。
+ * 「今月の菜園仕事」（R08 / WBS 3.2）は栽培暦 × 地域帯のカードとして追加済み。
+ * 「つぎの作業」（R10 / WBS 3.4）とカード配置の最終形は WBS 3.5（ホーム統合）で。
+ * 栽培 0 件の空状態にもカードを出すかは 3.5 で判断する。docs/画面設計.md S01 参照。
  */
 import { useFocusEffect, useRouter } from 'expo-router';
 import { CalendarDays, Images, Plus } from 'lucide-react-native';
@@ -16,6 +16,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { EmptyState } from '../../src/components/EmptyState';
 import { Loading } from '../../src/components/Loading';
+import { MonthlyWorkCard } from '../../src/components/MonthlyWorkCard';
 import { PressableScale } from '../../src/components/PressableScale';
 import { Colors, Typography } from '../../src/constants/theme';
 import { CARE_KIND_LABEL } from '../../src/services/care-log.service';
@@ -147,6 +148,9 @@ export default function HomeScreen() {
               </ScrollView>
             </View>
           ) : null}
+
+          {/* 今月の菜園仕事（R08 / WBS 3.2）。栽培暦 × 地域帯 */}
+          <MonthlyWorkCard />
 
           <View style={styles.section}>
             <Text style={styles.sectionLabel}>さいきんの記録</Text>
