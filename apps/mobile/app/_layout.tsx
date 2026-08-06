@@ -9,6 +9,7 @@ import { Colors, isDarkPalette } from '../src/constants/theme';
 import { useDatabase } from '../src/hooks/useDatabase';
 import { markReminderFired, syncScheduledReminders } from '../src/services/reminder.service';
 import { checkAndNotifyLowMaterials } from '../src/services/low-stock.service';
+import { runWeeklyAutoBackup } from '../src/services/backup.service';
 
 export default function RootLayout() {
   const { isReady, error } = useDatabase();
@@ -22,6 +23,17 @@ export default function RootLayout() {
    */
   useEffect(() => {
     if (isReady) checkAndNotifyLowMaterials().catch(() => undefined);
+  }, [isReady]);
+
+  /*
+   * 週に 1 度、静かにバックアップを取る（R13 / WBS 2.8）。
+   *
+   * 「取ってください」と促しても取らないまま端末が壊れる。前回から 7 日
+   * 空いた最初の起動でだけ動き、古い世代は 4 つ残して消す。
+   * 失敗しても黙って見送る — 起動を止めるほどのことではない。
+   */
+  useEffect(() => {
+    if (isReady) runWeeklyAutoBackup().catch(() => undefined);
   }, [isReady]);
 
   /*

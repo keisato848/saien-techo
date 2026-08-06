@@ -453,3 +453,21 @@ export interface SaveMaterialInput {
   lowThreshold?: number | null;
   note?: string;
 }
+
+// ─── 買い物リスト（R12 / WBS 2.7）────────────────────────────────────────
+
+/** manual=手で追加 / low=残りわずかから一括追加 */
+export type GardenShoppingSource = 'manual' | 'low';
+
+export interface GardenShoppingItem {
+  id: string;
+  name: string;
+  /** 「2袋」「5m」など自由入力。買い物メモは数量をきっちり書かないことが多い */
+  amount: string | null;
+  checked: boolean;
+  source: GardenShoppingSource;
+  /** 資材から追加したものだけ。買ったときに在庫へ足し戻す先 */
+  materialId: string | null;
+  /** 資材に紐づく行だけ。一覧で「肥料」などを添えるのに使う */
+  materialCategory: MaterialCategory | null;
+}
