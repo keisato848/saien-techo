@@ -1,19 +1,46 @@
 import * as Notifications from 'expo-notifications';
 import { Stack, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
+import { OnboardingSheet } from '../src/components/OnboardingSheet';
 import { Colors, isDarkPalette } from '../src/constants/theme';
 import { useDatabase } from '../src/hooks/useDatabase';
 import { markReminderFired, syncScheduledReminders } from '../src/services/reminder.service';
 import { checkAndNotifyLowMaterials } from '../src/services/low-stock.service';
 import { runWeeklyAutoBackup } from '../src/services/backup.service';
+import { getRegion, setRegion, type Region } from '../src/services/region.service';
+import { updateCurrentFamilyName } from '../src/services/user.service';
 
 export default function RootLayout() {
   const { isReady, error } = useDatabase();
   const router = useRouter();
+
+  /*
+   * 初回起動の聞き取り（WBS 3.6）。
+   *
+   * 地域帯が未保存 = まだ聞き取りをしていない、を初回の判定に使う。
+   * 専用フラグを持たないのは、判定と実データがずれる余地を作らないため。
+   * null = 判定中（この間はスピナーのまま。ホームを一瞬見せてから被せない）。
+   */
+  const [needsOnboarding, setNeedsOnboarding] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    if (!isReady) return;
+    getRegion()
+      .then((region) => setNeedsOnboarding(region == null))
+      .catch(() => setNeedsOnboarding(false));
+  }, [isReady]);
+
+  const finishOnboarding = async (region: Region, gardenName: string) => {
+    await setRegion(region);
+    if (gardenName.length > 0) {
+      await updateCurrentFamilyName(gardenName).catch(() => undefined);
+    }
+    setNeedsOnboarding(false);
+  };
 
   /*
    * 起動時に資材の残量しきい値をチェックする（R12 / WBS 2.6・1日1回まとめて通知）。
@@ -80,7 +107,7 @@ export default function RootLayout() {
     );
   }
 
-  if (!isReady) {
+  if (!isReady || needsOnboarding == null) {
     return (
       <View style={styles.center}>
         <ActivityIndicator color={Colors.gold} size="large" />
@@ -97,21 +124,29 @@ export default function RootLayout() {
           userInterfaceStyle だけでは Android の文字色は変わらないため、
           パレットの背景の明暗から決める（土案のような暗色では light に戻る）。 */}
       <StatusBar style={isDarkPalette ? 'light' : 'dark'} backgroundColor={Colors.bg} />
-      <Stack
-        screenOptions={{
-          headerShown: false,
-          contentStyle: { backgroundColor: Colors.bg },
-        }}
-      >
-        <Stack.Screen name="(tabs)" />
-        <Stack.Screen name="calendar" options={{ presentation: 'modal' }} />
-        <Stack.Screen name="gallery" options={{ presentation: 'modal' }} />
-      </Stack>
+      <View style={styles.appRoot}>
+        <Stack
+          screenOptions={{
+            headerShown: false,
+            contentStyle: { backgroundColor: Colors.bg },
+          }}
+        >
+          <Stack.Screen name="(tabs)" />
+          <Stack.Screen name="calendar" options={{ presentation: 'modal' }} />
+          <Stack.Screen name="gallery" options={{ presentation: 'modal' }} />
+        </Stack>
+        {/* 初回の聞き取りは全画面のかぶせ。needsOnboarding の判定が終わるまで
+            上の分岐でスピナーを出しているので、ホームが一瞬見えることはない */}
+        {needsOnboarding ? <OnboardingSheet onDone={finishOnboarding} /> : null}
+      </View>
     </SafeAreaProvider>
   );
 }
 
 const styles = StyleSheet.create({
+  appRoot: {
+    flex: 1,
+  },
   center: {
     flex: 1,
     backgroundColor: Colors.bg,
