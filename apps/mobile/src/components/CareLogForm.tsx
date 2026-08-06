@@ -149,5 +149,6 @@ const styles = StyleSheet.create({
   chipActive: { borderColor: Colors.accent, backgroundColor: Colors.accentSoft },
   chipText: { fontSize: Typography.size.sm, color: Colors.inkDim },
   chipTextActive: { color: Colors.accentInk, fontWeight: Typography.weight.medium },
-  noteInput: { minHeight: 90, textAlignVertical: 'top' },
+  // FormField が枠込みの高さとして扱う（4 行ぶん）
+  noteInput: { minHeight: 112, textAlignVertical: 'top' },
 });

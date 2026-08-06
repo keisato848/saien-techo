@@ -12,6 +12,9 @@ interface FormFieldProps extends TextInputProps {
   required?: boolean;
 }
 
+/** styles.input の paddingVertical(10×2) + borderWidth(1×2) */
+const INPUT_CHROME_HEIGHT = 22;
+
 export function FormField({
   label,
   error,
@@ -23,6 +26,21 @@ export function FormField({
 }: FormFieldProps) {
   // Grow multiline fields to fit their content (minHeight in `style` floors it).
   const [contentHeight, setContentHeight] = useState(0);
+
+  /*
+   * 複数行の高さは**ここで確定させる**。
+   *
+   * `minHeight` だけに任せると、Android のネイティブ側は minHeight を
+   * 「文字の入る領域」の下限として扱い、その上に padding を足して描画する。
+   * 一方で RN のレイアウトは `height`(= 文字の高さ) しか見ないため、
+   * 描画のほうが背高くなり、直後に置いた要素と重なる
+   * （資材の編集画面で削除ボタンがメモ欄に食い込んだ）。
+   * 枠まで含めた高さを自分で計算して `height` に入れれば、
+   * レイアウトと描画が必ず一致する。
+   */
+  const floor = (StyleSheet.flatten(style) as { minHeight?: number } | undefined)?.minHeight ?? 0;
+  const grownHeight = contentHeight > 0 ? Math.max(contentHeight + INPUT_CHROME_HEIGHT, floor) : 0;
+
   return (
     <View style={styles.container}>
       <Text style={styles.label}>
@@ -34,7 +52,7 @@ export function FormField({
           styles.input,
           error ? styles.inputError : undefined,
           style,
-          multiline && contentHeight > 0 ? { height: contentHeight } : undefined,
+          multiline && grownHeight > 0 ? { height: grownHeight } : undefined,
         ]}
         multiline={multiline}
         onContentSizeChange={(e) => {

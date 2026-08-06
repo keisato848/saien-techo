@@ -393,3 +393,63 @@ export interface HarvestMonth {
   month: string;
   cells: HarvestPhotoCell[];
 }
+
+// ─── さいえん手帳: リマインダー（R11 / WBS 2.4）────────────────────────────
+
+/** daily=毎日 / interval_days=N日おき / weekly=曜日指定 */
+export type ReminderScheduleKind = 'daily' | 'interval_days' | 'weekly';
+
+export interface ReminderItem {
+  id: string;
+  plantingId: string;
+  /** care_logs.kind と同じ語彙。通知から記録画面へ渡す */
+  kind: CareLogKind;
+  scheduleKind: ReminderScheduleKind;
+  /** interval_days のときだけ使う */
+  intervalDays: number | null;
+  /** weekly のときだけ使う。0=日曜 */
+  weekdays: number[];
+  hour: number;
+  minute: number;
+  enabled: boolean;
+  /** 最後に鳴った時刻。interval_days の起点になる */
+  lastFiredAt: string | null;
+  createdAt: string;
+}
+
+export interface SaveReminderInput {
+  plantingId: string;
+  kind: CareLogKind;
+  scheduleKind: ReminderScheduleKind;
+  intervalDays?: number | null;
+  weekdays?: number[];
+  hour: number;
+  minute: number;
+  enabled?: boolean;
+}
+
+// ─── さいえん手帳: 資材（R12 / WBS 2.6）────────────────────────────────────
+
+/** seed=種・苗 / fertilizer=肥料 / pesticide=薬剤 / soil=土 / tool=道具 / other */
+export type MaterialCategory = 'seed' | 'fertilizer' | 'pesticide' | 'soil' | 'tool' | 'other';
+
+export interface MaterialItem {
+  id: string;
+  name: string;
+  category: MaterialCategory;
+  /** 数えないもの（道具など）は null */
+  quantity: number | null;
+  unit: string | null;
+  /** これを下回ると通知する。数量が無いときは持たない */
+  lowThreshold: number | null;
+  note: string | null;
+}
+
+export interface SaveMaterialInput {
+  name: string;
+  category: MaterialCategory;
+  quantity?: number | null;
+  unit?: string;
+  lowThreshold?: number | null;
+  note?: string;
+}

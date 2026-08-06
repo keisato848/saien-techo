@@ -179,6 +179,13 @@ export default function SettingsScreen() {
           enabled: true,
           onPress: () => router.push('/places'),
         },
+        {
+          id: 'materials',
+          label: '資材の在庫',
+          subtitle: '種・肥料・薬剤の残りを記録し、少なくなったらお知らせ',
+          enabled: true,
+          onPress: () => router.push('/materials'),
+        },
       ],
     },
     {

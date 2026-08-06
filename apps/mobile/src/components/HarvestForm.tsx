@@ -214,5 +214,6 @@ const styles = StyleSheet.create({
   unitText: { fontSize: Typography.size.sm, color: Colors.inkDim },
   unitTextActive: { color: Colors.harvest, fontWeight: Typography.weight.medium },
   hint: { fontSize: Typography.size.xs, color: Colors.inkDim, marginTop: 8 },
-  noteInput: { minHeight: 76, textAlignVertical: 'top' },
+  // FormField が枠込みの高さとして扱う（3 行ぶん）
+  noteInput: { minHeight: 98, textAlignVertical: 'top' },
 });
