@@ -115,9 +115,23 @@ describe('作物マスターの構造', () => {
     }
   });
 
-  it('秋冬の 12 作物が入っている（3.1b 前半。目標は 30 作物）', () => {
-    expect(CROP_MASTER.length).toBeGreaterThanOrEqual(12);
-    expect(CROP_MASTER_VERSION).toBeGreaterThanOrEqual(1);
+  it('30 作物そろっている（WBS 3.1）', () => {
+    expect(CROP_MASTER.length).toBe(30);
+    expect(CROP_MASTER_VERSION).toBeGreaterThanOrEqual(2);
+  });
+
+  it('2 期作の作物がある（同 kind 2 窓が実際に使われている）', () => {
+    const dual = CROP_MASTER.filter((crop) =>
+      REGIONS.some((region) =>
+        (['sow', 'plant', 'harvest'] as const).some(
+          (kind) =>
+            crop.calendars.filter((w) => w.region === region && w.kind === kind).length === 2,
+        ),
+      ),
+    );
+    expect(dual.map((crop) => crop.id)).toEqual(
+      expect.arrayContaining(['crop-jagaimo', 'crop-retasu']),
+    );
   });
 });
 
