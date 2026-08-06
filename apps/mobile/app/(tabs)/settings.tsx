@@ -20,8 +20,6 @@ import {
   getCurrentUser,
   getCurrentUserProfile,
 } from '../../src/services/user.service';
-import { getAdRewardProvider } from '../../src/services/ad-reward.service';
-import { getFreemiumStatus, type FreemiumStatus } from '../../src/services/usage.service';
 import { formatProfileDisplayName } from '../../src/utils/profile';
 
 interface SettingItem {
@@ -45,8 +43,6 @@ export default function SettingsScreen() {
   const router = useRouter();
   const [user, setUser] = useState(getCurrentUser());
   const [family, setFamily] = useState(getCurrentFamily());
-  const [freemium, setFreemium] = useState<FreemiumStatus | null>(null);
-  const [adPrivacyRequired, setAdPrivacyRequired] = useState(false);
   const userDisplayName = formatProfileDisplayName(user.displayName);
 
   useFocusEffect(
@@ -57,53 +53,17 @@ export default function SettingsScreen() {
           setFamily(nextFamily);
         },
       );
-      void getFreemiumStatus()
-        .then(setFreemium)
-        .catch(() => setFreemium(null));
-      // GDPR 対象地域の広告ユーザーだけに UMP 同意の再変更導線を出す（それ以外は false）
-      void getAdRewardProvider()
-        .isPrivacyOptionsRequired()
-        .then(setAdPrivacyRequired)
-        .catch(() => setAdPrivacyRequired(false));
     }, []),
   );
-
-  // Plan row content depends on premium state (avoid nested ternaries).
-  let planLabel = 'プレミアムにする';
-  let planSubtitle = '読み込み中…';
-  let planOnPress = () => router.push('/recipes/paywall');
-  if (freemium) {
-    if (freemium.isPremium) {
-      planLabel = 'プレミアム';
-      planSubtitle = 'プレミアム・使い放題';
-      planOnPress = () =>
-        Alert.alert(
-          'プレミアム',
-          'プレミアムをご利用中です。解約はストアの定期購入設定からいつでも行えます。',
-        );
-    } else if (freemium.isByok) {
-      planLabel = '自分のAIキー';
-      planSubtitle = '自分のキーで使い放題';
-      planOnPress = () => router.push('/(tabs)/ai-key');
-    } else {
-      planSubtitle = `無料・今日あと ${freemium.remaining} 回`;
-    }
-  }
 
   const showComingSoon = () => {
     Alert.alert('準備中', 'この機能は今後のバージョンで追加予定です。');
   };
 
   // 初回利用ガイド（コーチマーク）
-  const planRef = useRef<View>(null);
+  // プラン節（freemium・BYOK・広告）は WBS 2.9b で外した。v1.5 で作り直す。
   const backupRef = useRef<View>(null);
   const coach = useCoachMarks('settings', [
-    {
-      key: 'plan',
-      title: 'AI機能とプラン',
-      text: 'AI機能（写真レシピ・食材の名寄せ・食事写真）には1日の無料枠があります。「自分のAIキーを使う」にGeminiキーを設定すると無制限になります。',
-      ref: planRef,
-    },
     {
       key: 'backup',
       title: 'データを守る',
@@ -118,45 +78,6 @@ export default function SettingsScreen() {
   ]);
 
   const sections: SettingSection[] = [
-    {
-      title: 'プラン',
-      items: [
-        {
-          id: 'plan',
-          label: planLabel,
-          subtitle: planSubtitle,
-          enabled: true,
-          onPress: planOnPress,
-        },
-        {
-          id: 'byok',
-          label: '自分のAIキーを使う',
-          subtitle: freemium?.isByok ? '設定済み（無制限）' : 'Gemini キーで無制限に',
-          enabled: true,
-          onPress: () => router.push('/(tabs)/ai-key'),
-        },
-        ...(adPrivacyRequired
-          ? [
-              {
-                id: 'ad-privacy',
-                label: '広告のプライバシー設定',
-                subtitle: '広告表示に関する同意を変更',
-                enabled: true,
-                onPress: () => {
-                  void getAdRewardProvider()
-                    .showPrivacyOptionsForm()
-                    .catch(() => {
-                      Alert.alert(
-                        'お知らせ',
-                        '設定画面を表示できませんでした。時間をおいてお試しください。',
-                      );
-                    });
-                },
-              },
-            ]
-          : []),
-      ],
-    },
     {
       title: 'アカウント',
       items: [
@@ -263,7 +184,7 @@ export default function SettingsScreen() {
             {section.items.map((item) => (
               <Pressable
                 key={item.id}
-                ref={item.id === 'plan' ? planRef : item.id === 'backup' ? backupRef : undefined}
+                ref={item.id === 'backup' ? backupRef : undefined}
                 collapsable={false}
                 style={[styles.settingRow, !item.enabled && styles.settingRowDisabled]}
                 onPress={item.onPress}

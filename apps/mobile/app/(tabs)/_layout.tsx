@@ -1,4 +1,4 @@
-import { Tabs, useRouter } from 'expo-router';
+import { Tabs } from 'expo-router';
 import { Home, Plus, Settings, ShoppingBasket, Sprout } from 'lucide-react-native';
 import { StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -6,7 +6,6 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors } from '../../src/constants/theme';
 
 export default function TabLayout() {
-  const router = useRouter();
   const insets = useSafeAreaInsets();
 
   return (
@@ -44,14 +43,8 @@ export default function TabLayout() {
             </View>
           ),
         }}
-        // ＋ は画面ではなく「栽培を追加」への近道にする。だいどこの add.tsx は
-        // レシピの作成方法シートで、さいえん手帳には該当する分岐がないため。
-        listeners={{
-          tabPress: (event) => {
-            event.preventDefault();
-            router.push('/plantings/new');
-          },
-        }}
+        // ＋ は「なにを記録するか」を選ぶ画面（WBS 2.9b で さいえん版に作り直し）。
+        // 作業・収穫・栽培追加の 3 択で、栽培 1 件なら直行する。
       />
       {/* 収穫は 3 本柱のひとつ。栽培の中に畳むと「今日の採れたてを撮る」導線が
           2 階層深くなり、R06 の最短 3 タップを満たせない（docs/画面設計.md §3） */}
@@ -70,20 +63,13 @@ export default function TabLayout() {
         }}
       />
       {/* Non-tab screens within the (tabs) group — hidden from tab bar */}
-      {/* recipes 系は WBS 1.5 でタブから外した。画面自体は削除まで残す */}
-      <Tabs.Screen name="recipes" options={{ href: null }} />
       <Tabs.Screen name="places" options={{ href: null }} />
       {/* 資材は設定から入る（R12）。タブに出すと 3 本柱（記録・収穫・アドバイス）がぼやける */}
       <Tabs.Screen name="materials" options={{ href: null }} />
       <Tabs.Screen name="backup" options={{ href: null }} />
       <Tabs.Screen name="licenses" options={{ href: null }} />
+      {/* ai-key は画面だけ温存（判断①・WBS 2.9）。導線なし。v1.5 freemium で作り直す */}
       <Tabs.Screen name="ai-key" options={{ href: null }} />
-      <Tabs.Screen name="shopping" options={{ href: null }} />
-      <Tabs.Screen name="pantry" options={{ href: null }} />
-      <Tabs.Screen name="scan-barcode" options={{ href: null }} />
-      <Tabs.Screen name="receipt" options={{ href: null }} />
-      <Tabs.Screen name="recipes/import-photo" options={{ href: null }} />
-      <Tabs.Screen name="recipes/import-ocr" options={{ href: null }} />
     </Tabs>
   );
 }
