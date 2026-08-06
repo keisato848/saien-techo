@@ -10,6 +10,7 @@ import { useCallback, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { Colors, Typography } from '../constants/theme';
+import { CROP_MASTER_ATTRIBUTION } from '../db/crop-master';
 import { getMonthlyGardenWork, type MonthlyGardenWork } from '../services/garden-work.service';
 import { REGION_LABEL } from '../services/region.service';
 
@@ -59,6 +60,10 @@ export function MonthlyWorkCard() {
           </View>
         ) : null,
       )}
+
+      {/* 出典（判断②）: 専門家のレビューの代わりに公的資料と突き合わせている。
+          何に基づく目安かを小さく明記する。詳細一覧は作物ガイド(3.3)に置く */}
+      <Text style={styles.attribution}>{CROP_MASTER_ATTRIBUTION}</Text>
     </View>
   );
 }
@@ -111,5 +116,10 @@ const styles = StyleSheet.create({
     fontSize: Typography.size.sm,
     color: Colors.ink,
     lineHeight: 20,
+  },
+  attribution: {
+    fontSize: 10,
+    color: Colors.inkDim,
+    marginTop: 2,
   },
 });
