@@ -33,7 +33,8 @@ import {
 
 type DB = ExpoSQLiteDatabase<typeof schema>;
 
-export const CURRENT_SCHEMA_VERSION = 8;
+// v9: garden_shopping_items（WBS 2.7）
+export const CURRENT_SCHEMA_VERSION = 9;
 
 const DEFAULT_USER_ID = 'user-kei';
 const DEFAULT_FAMILY_ID = 'family-001';
@@ -474,6 +475,22 @@ const CREATE_TABLES_SQL = `
   );
 
   CREATE INDEX IF NOT EXISTS idx_materials_family_category ON materials(family_id, category);
+
+  -- R12 買い物リスト。食材の shopping_items とは別（混ざると菜園のメモに牛乳が並ぶ）
+  CREATE TABLE IF NOT EXISTS garden_shopping_items (
+    id TEXT PRIMARY KEY,
+    family_id TEXT NOT NULL REFERENCES families(id),
+    name TEXT NOT NULL,
+    name_normalized TEXT NOT NULL,
+    amount TEXT,
+    checked INTEGER NOT NULL DEFAULT 0,
+    source TEXT NOT NULL DEFAULT 'manual',
+    material_id TEXT REFERENCES materials(id),
+    created_at TEXT NOT NULL,
+    checked_at TEXT
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_garden_shopping_family_checked ON garden_shopping_items(family_id, checked);
 
   -- R03 栽培一覧・検索。recipe_fts と同じ方式（正規化は fts.service.ts を流用）
   CREATE VIRTUAL TABLE IF NOT EXISTS planting_fts USING fts5(

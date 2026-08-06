@@ -7,7 +7,7 @@
  * 数量を持たない資材（道具など）には ± を出さない。
  */
 import { useFocusEffect, useRouter } from 'expo-router';
-import { ChevronLeft, Minus, Plus } from 'lucide-react-native';
+import { ChevronLeft, Minus, Plus, ShoppingCart } from 'lucide-react-native';
 import { useCallback, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -53,6 +53,13 @@ export default function MaterialListScreen() {
           <ChevronLeft size={22} color={Colors.ink} />
         </Pressable>
         <Text style={styles.title}>資材</Text>
+        <Pressable
+          onPress={() => router.push('/materials/shopping')}
+          hitSlop={10}
+          accessibilityLabel="買い物リスト"
+        >
+          <ShoppingCart size={20} color={Colors.ink} />
+        </Pressable>
         <PressableScale
           style={styles.addButton}
           onPress={() => router.push('/materials/new')}

@@ -643,3 +643,32 @@ export const materials = sqliteTable(
     familyCategoryIdx: index('idx_materials_family_category').on(table.familyId, table.category),
   }),
 );
+
+// ─── GardenShoppingItem（買い物リスト）───────────────────────────────────
+// R12。だいどこの shopping_items とは別テーブルにしている。
+// 同じ表に載せると、タブから外しただけで残っている食材の買い物リストと
+// 混ざり、菜園の買い物メモに「牛乳」が並ぶ。
+export const gardenShoppingItems = sqliteTable(
+  'garden_shopping_items',
+  {
+    id: text('id').primaryKey(),
+    familyId: text('family_id')
+      .notNull()
+      .references(() => families.id),
+    name: text('name').notNull(),
+    nameNormalized: text('name_normalized').notNull(),
+    // 「2袋」「5m」など。自由入力（買い物メモは数量をきっちり書かないことが多い）
+    amount: text('amount'),
+    checked: integer('checked').notNull().default(0),
+    // manual=手で追加 / low=残りわずかから追加
+    source: text('source').notNull().default('manual'),
+    // 資材から追加したものだけ。買ったときに在庫へ足し戻す先
+    materialId: text('material_id').references(() => materials.id),
+    createdAt: text('created_at').notNull(),
+    // 「最初にチェックした時刻」= 在庫へ足した目印。外しても消さない
+    checkedAt: text('checked_at'),
+  },
+  (table) => ({
+    familyCheckedIdx: index('idx_garden_shopping_family_checked').on(table.familyId, table.checked),
+  }),
+);

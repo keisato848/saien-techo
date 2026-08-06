@@ -14,10 +14,13 @@ import {
 } from 'lucide-react-native';
 import { useCallback, useState } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Toast } from '../../src/components/Toast';
 import { Colors } from '../../src/constants/theme';
 import {
+  AUTO_BACKUP_INTERVAL_DAYS,
+  AUTO_BACKUP_KEEP,
   createMigrationBackupPackage,
   createLocalBackup,
   listMigrationBackupPackages,
@@ -43,6 +46,7 @@ function formatDate(value: string | null): string {
 
 export default function BackupScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const [backups, setBackups] = useState<BackupFileSummary[]>([]);
   const [migrationBackups, setMigrationBackups] = useState<BackupFileSummary[]>([]);
   const [busy, setBusy] = useState(false);
@@ -204,7 +208,7 @@ export default function BackupScreen() {
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
+      <View style={[styles.header, { paddingTop: insets.top + 14 }]}>
         <Pressable style={styles.backButton} onPress={() => router.back()} hitSlop={12}>
           <ChevronLeft size={20} color={Colors.goldDim} />
         </Pressable>
@@ -222,6 +226,11 @@ export default function BackupScreen() {
             {latest
               ? `${latest.fileName} / ${formatSize(latest.sizeBytes)}`
               : 'この端末内に保存します'}
+          </Text>
+          {/* 自動で取っていることを伝えないと、利用者は「取れていない」と思う */}
+          <Text style={styles.summaryNote}>
+            {AUTO_BACKUP_INTERVAL_DAYS}日ごとに、アプリを開いたときへ自動で作ります （新しいものから
+            {AUTO_BACKUP_KEEP}つ残します）。写真は含みません。
           </Text>
         </View>
 
@@ -255,6 +264,10 @@ export default function BackupScreen() {
             {latestMigration
               ? `${latestMigration.fileName} / ${formatSize(latestMigration.sizeBytes)}`
               : '写真を含む移行ファイルを作成します'}
+          </Text>
+          <Text style={styles.summaryNote}>
+            作業ログ・収穫の写真まで 1 つのファイルにまとめます。
+            機種を変えるときは、こちらを共有して新しい端末で読み込みます。
           </Text>
         </View>
 
@@ -325,7 +338,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
-    paddingTop: 58,
     paddingBottom: 14,
     borderBottomWidth: 1,
     borderBottomColor: Colors.border,
@@ -370,6 +382,13 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '400',
     color: Colors.paperDim,
+  },
+  summaryNote: {
+    fontSize: 12,
+    fontWeight: '400',
+    color: Colors.paperDim,
+    lineHeight: 18,
+    marginTop: 8,
   },
   actionGroup: {
     gap: 12,
