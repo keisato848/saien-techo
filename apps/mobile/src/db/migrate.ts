@@ -6,6 +6,7 @@ import { and, eq, inArray, sql } from 'drizzle-orm';
 import type { ExpoSQLiteDatabase } from 'drizzle-orm/expo-sqlite';
 
 import { normalizeForSearch } from '../services/fts.service';
+import { CROP_MASTER, CROP_MASTER_VERSION } from './crop-master';
 import * as schema from './schema';
 import { isSampleDataEnabled } from './sampleData';
 import {
@@ -26,7 +27,9 @@ import {
 type DB = ExpoSQLiteDatabase<typeof schema>;
 
 // v9: garden_shopping_items（WBS 2.7）
-export const CURRENT_SCHEMA_VERSION = 9;
+// v10: crop_calendars の一意インデックスに start_month を追加（WBS 3.1。
+//      同じ kind でも春秋 2 つの窓を持てるように）
+export const CURRENT_SCHEMA_VERSION = 10;
 
 const DEFAULT_USER_ID = 'user-kei';
 const DEFAULT_FAMILY_ID = 'family-001';
@@ -337,8 +340,8 @@ const CREATE_TABLES_SQL = `
     end_month INTEGER NOT NULL
   );
 
-  CREATE UNIQUE INDEX IF NOT EXISTS idx_crop_calendars_crop_region_kind
-    ON crop_calendars(crop_id, region, kind);
+  CREATE UNIQUE INDEX IF NOT EXISTS idx_crop_calendars_crop_region_kind_start
+    ON crop_calendars(crop_id, region, kind, start_month);
 
   CREATE TABLE IF NOT EXISTS crop_guides (
     crop_id TEXT PRIMARY KEY REFERENCES crops(id),
@@ -505,6 +508,9 @@ const ADD_COLUMN_MIGRATIONS: { table: string; columnDdl: string }[] = [
 /** Run migrations (create tables + additive column changes) */
 export function runMigrations(expoDb: { execSync: (sql: string) => void }): MigrationResult {
   expoDb.execSync(CREATE_TABLES_SQL);
+  // v10: 3 列の旧一意インデックスが残っていると、同じ kind の 2 つ目の窓
+  // （ジャガイモの春植え・秋植えなど）が UNIQUE 違反になるため先に落とす
+  expoDb.execSync('DROP INDEX IF EXISTS idx_crop_calendars_crop_region_kind');
   for (const { table, columnDdl } of ADD_COLUMN_MIGRATIONS) {
     try {
       expoDb.execSync(`ALTER TABLE ${table} ADD COLUMN ${columnDdl}`);
@@ -575,6 +581,91 @@ export async function ensureLocalIdentity(database: DB): Promise<void> {
       joinedAt: now,
     })
     .onConflictDoNothing();
+}
+
+const CROP_MASTER_META_KEY = 'crop_master_version';
+
+/**
+ * 作物マスター（栽培暦・作物ガイド）を投入する（R08/R09 / WBS 3.1）。
+ *
+ * サンプルデータと違い**本番でも常に**走る。アプリ更新でマスターが増えたら、
+ * CROP_MASTER_VERSION の差分で検知して入れ直す。
+ *
+ * 窓とガイドは「マスターに載っている作物の分だけ」削除 → 挿入で入れ替える。
+ * 開発用サンプル（seed.ts の crop-tomato など）には触らない。
+ */
+export async function syncCropMaster(database: DB): Promise<void> {
+  const meta = await database
+    .select({ value: schema.appMeta.value })
+    .from(schema.appMeta)
+    .where(eq(schema.appMeta.key, CROP_MASTER_META_KEY))
+    .limit(1);
+  if (meta[0]?.value === String(CROP_MASTER_VERSION)) return;
+
+  const now = new Date().toISOString();
+  const masterIds = CROP_MASTER.map((crop) => crop.id);
+
+  for (const crop of CROP_MASTER) {
+    await database
+      .insert(schema.crops)
+      .values({
+        id: crop.id,
+        name: crop.name,
+        nameReading: crop.nameReading,
+        family: crop.family,
+        defaultUnit: crop.defaultUnit,
+        createdAt: now,
+        updatedAt: now,
+      })
+      .onConflictDoUpdate({
+        target: schema.crops.id,
+        set: {
+          name: crop.name,
+          nameReading: crop.nameReading,
+          family: crop.family,
+          defaultUnit: crop.defaultUnit,
+          updatedAt: now,
+        },
+      });
+  }
+
+  await database
+    .delete(schema.cropCalendars)
+    .where(inArray(schema.cropCalendars.cropId, masterIds));
+  for (const crop of CROP_MASTER) {
+    for (const window of crop.calendars) {
+      await database.insert(schema.cropCalendars).values({
+        id: `${crop.id}-${window.region}-${window.kind}-${window.startMonth}`,
+        cropId: crop.id,
+        region: window.region,
+        kind: window.kind,
+        startMonth: window.startMonth,
+        endMonth: window.endMonth,
+      });
+    }
+  }
+
+  await database.delete(schema.cropGuides).where(inArray(schema.cropGuides.cropId, masterIds));
+  for (const crop of CROP_MASTER) {
+    await database.insert(schema.cropGuides).values({
+      cropId: crop.id,
+      spacingCm: crop.guide.spacingCm,
+      sunlight: crop.guide.sunlight,
+      wateringNote: crop.guide.wateringNote,
+      fertilizeAfterDays: crop.guide.fertilizeAfterDays,
+      harvestAfterDays: crop.guide.harvestAfterDays,
+      commonPests: JSON.stringify(crop.guide.commonPests),
+      tips: crop.guide.tips,
+    });
+  }
+
+  await database
+    .insert(schema.appMeta)
+    .values({ key: CROP_MASTER_META_KEY, value: String(CROP_MASTER_VERSION), updatedAt: now })
+    .onConflictDoUpdate({
+      target: schema.appMeta.key,
+      set: { value: String(CROP_MASTER_VERSION), updatedAt: now },
+    });
 }
 
 function isSubsetOfSeed(ids: string[], seedIds: Set<string>): boolean {

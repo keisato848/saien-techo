@@ -19,11 +19,13 @@ export function useDatabase() {
           await initDatabase();
 
           const { getDb, getExpoDb } = await import('../db/client');
-          const { ensureLocalIdentity, runMigrations, seedDatabase } =
+          const { ensureLocalIdentity, runMigrations, seedDatabase, syncCropMaster } =
             await import('../db/migrate');
 
           runMigrations(getExpoDb());
           await ensureLocalIdentity(getDb());
+          // 作物マスター（栽培暦）はサンプルと違い本番でも常に同期する（WBS 3.1）
+          await syncCropMaster(getDb());
           await seedDatabase(getDb());
         }
         // Web: no DB, screens use mock data
