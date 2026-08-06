@@ -67,6 +67,7 @@ export default function TabLayout() {
       {/* 資材は設定から入る（R12）。タブに出すと 3 本柱（記録・収穫・アドバイス）がぼやける */}
       <Tabs.Screen name="materials" options={{ href: null }} />
       <Tabs.Screen name="backup" options={{ href: null }} />
+      <Tabs.Screen name="region" options={{ href: null }} />
       <Tabs.Screen name="licenses" options={{ href: null }} />
       {/* ai-key は画面だけ温存（判断①・WBS 2.9）。導線なし。v1.5 freemium で作り直す */}
       <Tabs.Screen name="ai-key" options={{ href: null }} />

@@ -20,6 +20,7 @@ import {
   getCurrentUser,
   getCurrentUserProfile,
 } from '../../src/services/user.service';
+import { getRegion, REGION_LABEL, type Region } from '../../src/services/region.service';
 import { formatProfileDisplayName } from '../../src/utils/profile';
 
 interface SettingItem {
@@ -43,6 +44,7 @@ export default function SettingsScreen() {
   const router = useRouter();
   const [user, setUser] = useState(getCurrentUser());
   const [family, setFamily] = useState(getCurrentFamily());
+  const [region, setRegionState] = useState<Region | null>(null);
   const userDisplayName = formatProfileDisplayName(user.displayName);
 
   useFocusEffect(
@@ -53,6 +55,9 @@ export default function SettingsScreen() {
           setFamily(nextFamily);
         },
       );
+      void getRegion()
+        .then(setRegionState)
+        .catch(() => setRegionState(null));
     }, []),
   );
 
@@ -106,6 +111,15 @@ export default function SettingsScreen() {
           subtitle: '種・肥料・薬剤の残りを記録し、少なくなったらお知らせ',
           enabled: true,
           onPress: () => router.push('/materials'),
+        },
+        {
+          id: 'region',
+          label: 'お住まいの地域',
+          subtitle: region
+            ? `${REGION_LABEL[region]}の栽培暦で表示します`
+            : '未設定（中間地として表示します）',
+          enabled: true,
+          onPress: () => router.push('/region'),
         },
       ],
     },
