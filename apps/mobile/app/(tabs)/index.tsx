@@ -17,6 +17,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { EmptyState } from '../../src/components/EmptyState';
 import { Loading } from '../../src/components/Loading';
 import { MonthlyWorkCard } from '../../src/components/MonthlyWorkCard';
+import { NextActionCard } from '../../src/components/NextActionCard';
 import { PressableScale } from '../../src/components/PressableScale';
 import { Colors, Typography } from '../../src/constants/theme';
 import { CARE_KIND_LABEL } from '../../src/services/care-log.service';
@@ -110,6 +111,9 @@ export default function HomeScreen() {
         />
       ) : (
         <ScrollView contentContainerStyle={styles.body}>
+          {/* つぎの作業（R10 / WBS 3.4）。行動を促すものを最上段に（画面設計 S01） */}
+          <NextActionCard />
+
           {growing.length > 0 ? (
             <View style={styles.section}>
               <Text style={styles.sectionLabel}>育てているもの</Text>
