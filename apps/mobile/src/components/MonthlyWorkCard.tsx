@@ -61,6 +61,15 @@ export function MonthlyWorkCard() {
         ) : null,
       )}
 
+      {/* 育て方の中身はガイドへ（R09）。カードは「何があるか」までにとどめる */}
+      <Pressable
+        onPress={() => router.push('/crops')}
+        hitSlop={6}
+        accessibilityLabel="作物ガイドをみる"
+      >
+        <Text style={styles.guideLink}>作物ガイドをみる →</Text>
+      </Pressable>
+
       {/* 出典（判断②）: 専門家のレビューの代わりに公的資料と突き合わせている。
           何に基づく目安かを小さく明記する。詳細一覧は作物ガイド(3.3)に置く */}
       <Text style={styles.attribution}>{CROP_MASTER_ATTRIBUTION}</Text>
@@ -116,6 +125,11 @@ const styles = StyleSheet.create({
     fontSize: Typography.size.sm,
     color: Colors.ink,
     lineHeight: 20,
+  },
+  guideLink: {
+    fontSize: Typography.size.sm,
+    color: Colors.accentInk,
+    fontWeight: Typography.weight.medium,
   },
   attribution: {
     fontSize: 10,
