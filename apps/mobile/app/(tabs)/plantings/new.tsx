@@ -1,7 +1,10 @@
 /**
  * 栽培の新規登録（R01 / WBS 1.5）
+ *
+ * 作物ガイド（R09 / WBS 3.3）から来たときは、クエリの
+ * cropId / cropName / cropNameReading を初期値に入れて開く。
  */
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useState } from 'react';
 import { View } from 'react-native';
 
@@ -13,6 +16,11 @@ import type { PlantingFormData } from '../../../src/validation/planting.schema';
 
 export default function NewPlantingScreen() {
   const router = useRouter();
+  const params = useLocalSearchParams<{
+    cropId?: string;
+    cropName?: string;
+    cropNameReading?: string;
+  }>();
   const [showToast, setShowToast] = useState(false);
 
   const handleSubmit = useCallback(
@@ -39,6 +47,15 @@ export default function NewPlantingScreen() {
   return (
     <View style={{ flex: 1, backgroundColor: Colors.bg }}>
       <PlantingForm
+        initialValues={
+          params.cropName
+            ? {
+                cropId: params.cropId ?? null,
+                cropName: params.cropName,
+                cropNameReading: params.cropNameReading ?? '',
+              }
+            : undefined
+        }
         onSubmit={handleSubmit}
         onCancel={() => router.back()}
         title="栽培を追加"

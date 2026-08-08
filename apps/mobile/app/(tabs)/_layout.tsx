@@ -66,6 +66,8 @@ export default function TabLayout() {
       <Tabs.Screen name="places" options={{ href: null }} />
       {/* 資材は設定から入る（R12）。タブに出すと 3 本柱（記録・収穫・アドバイス）がぼやける */}
       <Tabs.Screen name="materials" options={{ href: null }} />
+      {/* 作物ガイドは今月カード・栽培登録から入る（R09） */}
+      <Tabs.Screen name="crops" options={{ href: null }} />
       <Tabs.Screen name="backup" options={{ href: null }} />
       <Tabs.Screen name="region" options={{ href: null }} />
       <Tabs.Screen name="licenses" options={{ href: null }} />
