@@ -34,13 +34,13 @@ describe('database migrations', () => {
     expect(statements).toContain(`PRAGMA user_version = ${CURRENT_SCHEMA_VERSION}`);
   });
 
-  it('adds v7 photo columns and survives duplicate-column errors on re-run', () => {
+  it('survives duplicate-column errors on re-run (ADD_COLUMN_MIGRATIONS が空でも動く)', () => {
     const statements: string[] = [];
 
     const result = runMigrations({
       execSync: (statement) => {
         statements.push(statement);
-        // Simulate an already-migrated DB: every ALTER fails as duplicate.
+        // Simulate an already-migrated DB: any ALTER would fail as duplicate.
         if (statement.startsWith('ALTER TABLE')) {
           throw new Error('duplicate column name');
         }
@@ -49,6 +49,25 @@ describe('database migrations', () => {
 
     expect(result.schemaVersion).toBe(CURRENT_SCHEMA_VERSION);
     expect(statements).toContain(`PRAGMA user_version = ${CURRENT_SCHEMA_VERSION}`);
+  });
+
+  it('drops だいどこ由来のテーブル, bracketed by PRAGMA foreign_keys OFF/ON (WBS 2.9e)', () => {
+    const statements: string[] = [];
+
+    runMigrations({
+      execSync: (statement) => statements.push(statement),
+    });
+
+    const offIndex = statements.indexOf('PRAGMA foreign_keys = OFF');
+    const onIndex = statements.indexOf('PRAGMA foreign_keys = ON');
+    const dropRecipesIndex = statements.indexOf('DROP TABLE IF EXISTS recipes');
+
+    expect(offIndex).toBeGreaterThan(-1);
+    expect(onIndex).toBeGreaterThan(offIndex);
+    expect(dropRecipesIndex).toBeGreaterThan(offIndex);
+    expect(dropRecipesIndex).toBeLessThan(onIndex);
+    expect(statements).toContain('DROP TABLE IF EXISTS cooking_logs');
+    expect(statements).toContain('DROP TABLE IF EXISTS recipe_fts');
   });
 });
 

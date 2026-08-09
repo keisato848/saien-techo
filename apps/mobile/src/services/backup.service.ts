@@ -1,25 +1,35 @@
 /**
  * バックアップ・復元 — R13 / WBS 2.8
  *
- * だいどこから移植。**対象テーブルはさいえん手帳のものへ入れ替えてある**
+ * だいどこから移植。対象テーブルはさいえん手帳のものへ入れ替えてある
  * （移植直後はレシピと調理記録しか入っておらず、バックアップを取っても
  * 栽培・作業ログ・収穫・写真が 1 件も残らなかった）。
  *
- * だいどこ由来のテーブル（recipes・cooking_logs ほか）も当面は含める。
- * 画面はタブから外しただけで消してはいないので、落とすと復元で消えてしまう。
- * 削除は WBS 2.x の派生先が確定してから。
+ * だいどこ由来のテーブル（recipes・cooking_logs ほか）は WBS 2.9e で削除した。
+ * schemaVersion 1 で作った旧バックアップ／移行ファイルは
+ * SUPPORTED_BACKUP_SCHEMA_VERSIONS 経由で引き続き読める
+ * （BACKUP_TABLES に無い列は読み飛ばすので、旧テーブルの中身は捨てて残りを復元する）。
  */
 import * as FileSystem from 'expo-file-system/legacy';
 import { strFromU8, strToU8, unzipSync, zipSync } from 'fflate';
 
 import { getDb, getExpoDb, isNativePlatform } from '../db/client';
-import { rebuildFts, rebuildPlantingFts } from '../db/migrate';
+import { rebuildPlantingFts } from '../db/migrate';
 
 const BACKUP_FORMAT = 'saien.local-backup';
-const BACKUP_SCHEMA_VERSION = 1;
+const BACKUP_SCHEMA_VERSION = 2;
+/**
+ * parseLocalBackupPayload が読める schemaVersion。
+ * v1 = だいどこのテーブルも含んでいた形式（WBS 2.9e で DROP する前）。
+ */
+const SUPPORTED_BACKUP_SCHEMA_VERSIONS = [1, 2] as const;
+type BackupSchemaVersion = (typeof SUPPORTED_BACKUP_SCHEMA_VERSIONS)[number];
+
 const BACKUP_DIRECTORY_NAME = 'backups';
 const MIGRATION_BACKUP_FORMAT = 'saien.migration-backup';
-const MIGRATION_BACKUP_SCHEMA_VERSION = 1;
+const MIGRATION_BACKUP_SCHEMA_VERSION = 2;
+const SUPPORTED_MIGRATION_BACKUP_SCHEMA_VERSIONS = [1, 2] as const;
+type MigrationBackupSchemaVersion = (typeof SUPPORTED_MIGRATION_BACKUP_SCHEMA_VERSIONS)[number];
 const MIGRATION_MANIFEST_FILE_NAME = 'manifest.json';
 const MIGRATION_PHOTO_DIRECTORY_NAME = 'backup-photos';
 const BASE64_ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
@@ -46,88 +56,8 @@ const BACKUP_TABLES = [
     columns: ['id', 'family_id', 'user_id', 'role', 'joined_at'],
   },
   {
-    name: 'sources',
-    columns: [
-      'id',
-      'type',
-      'url',
-      'ocr_raw_text',
-      'site_name',
-      'page_title',
-      'thumbnail_url',
-      'captured_at',
-      'created_at',
-    ],
-  },
-  {
-    name: 'recipes',
-    columns: [
-      'id',
-      'family_id',
-      'title',
-      'title_reading',
-      'current_rev_id',
-      'status',
-      'created_by',
-      'created_at',
-      'updated_at',
-    ],
-  },
-  {
-    name: 'recipe_revisions',
-    columns: [
-      'id',
-      'recipe_id',
-      'revision_number',
-      'is_major',
-      'servings',
-      'cook_time_min',
-      'prep_time_min',
-      'description',
-      'author_note',
-      'source_id',
-      'created_by',
-      'created_at',
-    ],
-  },
-  {
-    name: 'ingredients',
-    columns: ['id', 'revision_id', 'sort_order', 'group_label', 'name', 'amount', 'note'],
-  },
-  {
-    name: 'steps',
-    columns: ['id', 'revision_id', 'sort_order', 'body', 'timer_sec', 'photo_id'],
-  },
-  {
     name: 'tags',
     columns: ['id', 'family_id', 'name', 'color'],
-  },
-  {
-    name: 'recipe_tags',
-    columns: ['recipe_id', 'tag_id'],
-  },
-  {
-    name: 'cooking_logs',
-    columns: [
-      'id',
-      'family_id',
-      'recipe_id',
-      'revision_id',
-      'cooked_by',
-      'cooked_at',
-      'servings',
-      'rating',
-      'memo',
-      'created_at',
-    ],
-  },
-  {
-    name: 'cooking_photos',
-    columns: ['id', 'log_id', 'local_path', 'cloud_url', 'sort_order', 'taken_at', 'created_at'],
-  },
-  {
-    name: 'memos',
-    columns: ['id', 'recipe_id', 'author_id', 'body', 'is_private', 'created_at', 'updated_at'],
   },
   {
     name: 'sync_meta',
@@ -136,43 +66,6 @@ const BACKUP_TABLES = [
   {
     name: 'app_meta',
     columns: ['key', 'value', 'updated_at'],
-  },
-  // だいどこの在庫・買い物・名寄せ。移植時から**バックアップ対象に入っていなかった**
-  // （WBS 2.8 のテーブル突き合わせで判明）。画面が残っているうちは一緒に持ち出す
-  {
-    name: 'shopping_items',
-    columns: [
-      'id',
-      'family_id',
-      'name',
-      'name_normalized',
-      'amount',
-      'checked',
-      'source',
-      'recipe_id',
-      'sort_order',
-      'created_at',
-      'checked_at',
-    ],
-  },
-  {
-    name: 'pantry_items',
-    columns: [
-      'id',
-      'family_id',
-      'name',
-      'name_normalized',
-      'quantity',
-      'unit',
-      'low_stock_threshold',
-      'jan_code',
-      'created_at',
-      'updated_at',
-    ],
-  },
-  {
-    name: 'name_aliases',
-    columns: ['id', 'family_id', 'source_normalized', 'canonical', 'updated_at'],
   },
 
   // ─── さいえん手帳（R01〜R12）─────────────────────────────────────────
@@ -329,18 +222,15 @@ export const BACKUP_TABLE_NAMES: readonly string[] = BACKUP_TABLES.map((table) =
 /**
  * わざとバックアップに入れないテーブル。
  *
- * どちらも取り直せるキャッシュで、利用者が書いたものではない。
- * バーコードの目録は端末に溜まると大きくなるため、持ち出しても得がない。
- * **新しいテーブルを黙って外さないための一覧**でもある（テストで突き合わせる）。
+ * だいどこの jan_catalog・ingredient_nutrition（どちらも取り直せるキャッシュ）が
+ * 該当していたが、WBS 2.9e でテーブルごと DROP したため今は空。
+ * **新しいテーブルを黙って外さないための一覧**として残す（テストで突き合わせる）。
  */
-export const BACKUP_EXCLUDED_TABLES: readonly string[] = [
-  'jan_catalog', // バーコードの目録（引き直せる）
-  'ingredient_nutrition', // 栄養価の取得結果（引き直せる）
-];
+export const BACKUP_EXCLUDED_TABLES: readonly string[] = [];
 
 export interface LocalBackupPayload {
   format: typeof BACKUP_FORMAT;
-  schemaVersion: typeof BACKUP_SCHEMA_VERSION;
+  schemaVersion: BackupSchemaVersion;
   exportedAt: string;
   tables: BackupTables;
 }
@@ -369,7 +259,7 @@ export interface MigrationPhotoManifestEntry {
 
 export interface MigrationBackupManifest {
   format: typeof MIGRATION_BACKUP_FORMAT;
-  schemaVersion: typeof MIGRATION_BACKUP_SCHEMA_VERSION;
+  schemaVersion: MigrationBackupSchemaVersion;
   exportedAt: string;
   backup: LocalBackupPayload;
   photos: MigrationPhotoManifestEntry[];
@@ -486,8 +376,18 @@ function parseJsonObject(text: string): Record<string, unknown> {
   return parsed as Record<string, unknown>;
 }
 
+function isSupportedBackupSchemaVersion(value: unknown): value is BackupSchemaVersion {
+  return (SUPPORTED_BACKUP_SCHEMA_VERSIONS as readonly unknown[]).includes(value);
+}
+
+/**
+ * v1（だいどこのテーブルも含む形式）を読んでも、ここは常に**現在の**
+ * BACKUP_TABLES にある名前しか見ない。旧テーブルのキーが JSON に残っていても
+ * 単に無視されるので、「知らないテーブルは読み飛ばして残りを復元する」は
+ * このループだけで満たせる — 明示的な変換は不要
+ */
 function parseLocalBackupPayloadObject(parsed: Record<string, unknown>): LocalBackupPayload {
-  if (parsed.format !== BACKUP_FORMAT || parsed.schemaVersion !== BACKUP_SCHEMA_VERSION) {
+  if (parsed.format !== BACKUP_FORMAT || !isSupportedBackupSchemaVersion(parsed.schemaVersion)) {
     throw new Error('対応していないバックアップ形式です');
   }
   if (typeof parsed.exportedAt !== 'string') {
@@ -510,7 +410,7 @@ function parseLocalBackupPayloadObject(parsed: Record<string, unknown>): LocalBa
 
   return {
     format: BACKUP_FORMAT,
-    schemaVersion: BACKUP_SCHEMA_VERSION,
+    schemaVersion: parsed.schemaVersion,
     exportedAt: parsed.exportedAt,
     tables,
   };
@@ -549,11 +449,17 @@ function parseMigrationPhotoEntry(value: unknown): MigrationPhotoManifestEntry {
   };
 }
 
+function isSupportedMigrationBackupSchemaVersion(
+  value: unknown,
+): value is MigrationBackupSchemaVersion {
+  return (SUPPORTED_MIGRATION_BACKUP_SCHEMA_VERSIONS as readonly unknown[]).includes(value);
+}
+
 export function parseMigrationBackupManifest(text: string): MigrationBackupManifest {
   const parsed = parseJsonObject(text);
   if (
     parsed.format !== MIGRATION_BACKUP_FORMAT ||
-    parsed.schemaVersion !== MIGRATION_BACKUP_SCHEMA_VERSION
+    !isSupportedMigrationBackupSchemaVersion(parsed.schemaVersion)
   ) {
     throw new Error('対応していない移行バックアップ形式です');
   }
@@ -569,7 +475,7 @@ export function parseMigrationBackupManifest(text: string): MigrationBackupManif
 
   return {
     format: MIGRATION_BACKUP_FORMAT,
-    schemaVersion: MIGRATION_BACKUP_SCHEMA_VERSION,
+    schemaVersion: parsed.schemaVersion,
     exportedAt,
     backup: parseLocalBackupPayloadObject(rawBackup as Record<string, unknown>),
     photos: rawPhotos.map(parseMigrationPhotoEntry),
@@ -686,12 +592,13 @@ function rowString(row: BackupRow, column: string): string | null {
  * 写真のファイルパスを持つテーブル。
  *
  * さいえん手帳の写真は `photos`（作業ログ・収穫の共用）に入る。
- * だいどこの `cooking_photos` も残しているのは、画面がまだ消えていないため。
  * `plantings.cover_photo_path` は id ではなく行を主キーで引くので別扱い。
+ * だいどこの `cooking_photos` は WBS 2.9e で削除済み。旧形式の移行ファイルに
+ * その鍵の写真が残っていても photoSourceForKey が見つからず、復元時に読み飛ばす
+ * （restoreMigrationBackupPackage）。
  */
 const PHOTO_SOURCES = [
   { table: 'photos', idColumn: 'id', pathColumn: 'local_path' },
-  { table: 'cooking_photos', idColumn: 'id', pathColumn: 'local_path' },
   { table: 'plantings', idColumn: 'id', pathColumn: 'cover_photo_path' },
 ] as const;
 
@@ -700,18 +607,21 @@ function photoKey(table: string, id: string): string {
   return `${table}:${id}`;
 }
 
+/** 鍵の先頭テーブル名に対応する PHOTO_SOURCES の要素。無ければ undefined */
+function photoSourceForKey(key: string): (typeof PHOTO_SOURCES)[number] | undefined {
+  return PHOTO_SOURCES.find((source) => key.startsWith(`${source.table}:`));
+}
+
 function updatePhotoLocalPath(
   payload: LocalBackupPayload,
   key: string,
   localPath: string | null,
 ): void {
-  for (const source of PHOTO_SOURCES) {
-    const [table, id] = [source.table, key.slice(source.table.length + 1)];
-    if (!key.startsWith(`${table}:`)) continue;
-    const row = payload.tables[table].find((candidate) => candidate[source.idColumn] === id);
-    if (row) row[source.pathColumn] = localPath;
-    return;
-  }
+  const source = photoSourceForKey(key);
+  if (!source) return;
+  const id = key.slice(source.table.length + 1);
+  const row = payload.tables[source.table].find((candidate) => candidate[source.idColumn] === id);
+  if (row) row[source.pathColumn] = localPath;
 }
 
 function clearPhotoLocalPaths(payload: LocalBackupPayload): void {
@@ -826,7 +736,7 @@ export async function createMigrationBackupPackage(): Promise<MigrationBackupOpe
   const zipEntries: Record<string, Uint8Array> = {};
   const photos: MigrationPhotoManifestEntry[] = [];
 
-  // 写真は「作業ログ・収穫（photos）」「栽培のカバー」「だいどこの調理写真」の 3 か所
+  // 写真は「作業ログ・収穫（photos）」「栽培のカバー」の 2 か所
   for (const source of PHOTO_SOURCES) {
     for (const row of payload.tables[source.table]) {
       const rowId = rowString(row, source.idColumn);
@@ -912,7 +822,6 @@ export function replaceDatabase(payload: LocalBackupPayload): void {
  */
 async function rebuildSearchIndexes(): Promise<void> {
   const db = getDb();
-  await rebuildFts(db);
   await rebuildPlantingFts(db);
 }
 
@@ -953,6 +862,11 @@ export async function restoreMigrationBackupPackage(
 
   try {
     for (const photo of manifest.photos) {
+      if (!photoSourceForKey(photo.id)) {
+        // 復元先にもう存在しないテーブルの写真（例: WBS 2.9e で消えた cooking_photos）。
+        // 書き出しても参照する行が無くゴミファイルが残るだけなので missing 扱いにする
+        continue;
+      }
       const photoEntry = entries[photo.archivePath];
       if (!photoEntry) {
         updatePhotoLocalPath(payload, photo.id, null);

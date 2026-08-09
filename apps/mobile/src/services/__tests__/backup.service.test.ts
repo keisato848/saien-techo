@@ -41,9 +41,53 @@ const emptyTables = Object.fromEntries(BACKUP_TABLE_NAMES.map((name) => [name, [
 function payloadJson(overrides: Record<string, unknown> = {}): string {
   return JSON.stringify({
     format: 'saien.local-backup',
-    schemaVersion: 1,
+    schemaVersion: 2,
     exportedAt: '2026-08-06T00:00:00.000Z',
     tables: emptyTables,
+    ...overrides,
+  });
+}
+
+/**
+ * WBS 2.9e より前、だいどこのテーブル（recipes・cooking_logs ほか）も
+ * 一緒に入っていた実際の出力に近い形。schemaVersion 1 のまま。
+ * 「知らないテーブルは読み飛ばして残りを復元できる」を確かめるためのもの
+ */
+function legacyPayloadJson(overrides: Record<string, unknown> = {}): string {
+  return JSON.stringify({
+    format: 'saien.local-backup',
+    schemaVersion: 1,
+    exportedAt: '2026-08-06T00:00:00.000Z',
+    tables: {
+      ...emptyTables,
+      recipes: [
+        {
+          id: 'recipe-1',
+          family_id: 'family-001',
+          title: '肉じゃが',
+          title_reading: null,
+          current_rev_id: null,
+          status: 'active',
+          created_by: 'user-kei',
+          created_at: '2026-01-01T00:00:00.000Z',
+          updated_at: '2026-01-01T00:00:00.000Z',
+        },
+      ],
+      cooking_logs: [
+        {
+          id: 'log-1',
+          family_id: 'family-001',
+          recipe_id: 'recipe-1',
+          revision_id: null,
+          cooked_by: 'user-kei',
+          cooked_at: '2026-01-02T00:00:00.000Z',
+          servings: null,
+          rating: null,
+          memo: null,
+          created_at: '2026-01-02T00:00:00.000Z',
+        },
+      ],
+    },
     ...overrides,
   });
 }
@@ -70,7 +114,7 @@ describe('parseLocalBackupPayload', () => {
     const payload = parseLocalBackupPayload(payloadJson());
 
     expect(payload.format).toBe('saien.local-backup');
-    expect(payload.schemaVersion).toBe(1);
+    expect(payload.schemaVersion).toBe(2);
   });
 
   it('知らない形式は受け取らない', () => {
@@ -90,13 +134,25 @@ describe('parseLocalBackupPayload', () => {
       parseLocalBackupPayload(payloadJson({ tables: { ...emptyTables, plantings: undefined } })),
     ).toThrow(/plantings/);
   });
+
+  it('旧形式（v1・だいどこのテーブル入り）も読める。知らないテーブルは読み飛ばす', () => {
+    const payload = parseLocalBackupPayload(legacyPayloadJson());
+
+    expect(payload.schemaVersion).toBe(1);
+    // 今の BACKUP_TABLES に無いテーブルは、読み込み結果に残らない
+    expect((payload.tables as Record<string, unknown>).recipes).toBeUndefined();
+    expect((payload.tables as Record<string, unknown>).cooking_logs).toBeUndefined();
+    // 今も使うテーブルは変わらず読める
+    expect(payload.tables.users).toEqual([]);
+    expect(payload.tables.plantings).toEqual([]);
+  });
 });
 
 describe('移行ファイル', () => {
   function manifestJson(archivePath: string): string {
     return JSON.stringify({
       format: 'saien.migration-backup',
-      schemaVersion: 1,
+      schemaVersion: 2,
       exportedAt: '2026-08-06T00:00:00.000Z',
       backup: JSON.parse(payloadJson()),
       photos: [
@@ -128,8 +184,42 @@ describe('移行ファイル', () => {
       /^backup-photos\/photos_photo-1-/,
     );
     expect(createMigrationPhotoArchivePath('photos:x', 'file:///a.jpg')).not.toBe(
-      createMigrationPhotoArchivePath('cooking_photos:x', 'file:///a.jpg'),
+      createMigrationPhotoArchivePath('plantings:x', 'file:///a.jpg'),
     );
+  });
+
+  it('旧形式（v1）の移行ファイルも読める（cooking_photos 鍵を含んでいても壊れない）', () => {
+    const legacyManifest = JSON.stringify({
+      format: 'saien.migration-backup',
+      schemaVersion: 1,
+      exportedAt: '2026-08-06T00:00:00.000Z',
+      backup: JSON.parse(legacyPayloadJson()),
+      photos: [
+        {
+          id: 'photos:photo-1',
+          archivePath: 'backup-photos/photo-1.jpg',
+          fileName: 'photo-1.jpg',
+          originalLocalPath: 'file:///old/photo-1.jpg',
+        },
+        {
+          // WBS 2.9e で消えた だいどこの調理写真テーブル。パース自体は通り、
+          // 復元時（restoreMigrationBackupPackage）に読み飛ばされる
+          id: 'cooking_photos:old-1',
+          archivePath: 'backup-photos/old-1.jpg',
+          fileName: 'old-1.jpg',
+          originalLocalPath: 'file:///old/old-1.jpg',
+        },
+      ],
+    });
+
+    const manifest = parseMigrationBackupManifest(legacyManifest);
+
+    expect(manifest.schemaVersion).toBe(1);
+    expect(manifest.backup.schemaVersion).toBe(1);
+    expect(manifest.photos.map((photo) => photo.id)).toEqual([
+      'photos:photo-1',
+      'cooking_photos:old-1',
+    ]);
   });
 });
 
@@ -373,6 +463,61 @@ describeIfSqlite('取って戻す（実 SQLite）', () => {
 
     expect(restored.tables.plantings).toHaveLength(1);
     expect(restored.tables.materials[0].name).toBe('化成肥料');
+  });
+
+  it('旧形式（v1・だいどこのテーブル入り）のバックアップからも戻せる', () => {
+    const payload = createBackupPayloadFromDatabase();
+    // WBS 2.9e より前は、こういうだいどこのテーブルも一緒に入っていた。
+    // 実際の旧バックアップファイルに近い形にするため、そのまま JSON へ混ぜる
+    const legacyJson = JSON.stringify({
+      format: 'saien.local-backup',
+      schemaVersion: 1,
+      exportedAt: payload.exportedAt,
+      tables: {
+        ...payload.tables,
+        recipes: [
+          {
+            id: 'recipe-1',
+            family_id: 'family-001',
+            title: '肉じゃが',
+            title_reading: null,
+            current_rev_id: null,
+            status: 'active',
+            created_by: 'user-kei',
+            created_at: NOW,
+            updated_at: NOW,
+          },
+        ],
+      },
+    });
+
+    mockHandles.expoDb.execSync('PRAGMA foreign_keys = OFF');
+    for (const table of [
+      'garden_shopping_items',
+      'materials',
+      'reminders',
+      'photos',
+      'harvests',
+      'care_logs',
+      'plantings',
+      'places',
+    ]) {
+      mockHandles.expoDb.execSync(`DELETE FROM ${table}`);
+    }
+    mockHandles.expoDb.execSync('PRAGMA foreign_keys = ON');
+    expect(countOf('plantings')).toBe(0);
+
+    const restored = parseLocalBackupPayload(legacyJson);
+    expect(restored.schemaVersion).toBe(1);
+
+    replaceDatabase(restored);
+
+    expect(countOf('places')).toBe(1);
+    expect(countOf('plantings')).toBe(1);
+    expect(countOf('care_logs')).toBe(1);
+    expect(countOf('harvests')).toBe(1);
+    expect(countOf('materials')).toBe(1);
+    expect(countOf('garden_shopping_items')).toBe(1);
   });
 });
 

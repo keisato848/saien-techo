@@ -29,7 +29,8 @@ type DB = ExpoSQLiteDatabase<typeof schema>;
 // v9: garden_shopping_items（WBS 2.7）
 // v10: crop_calendars の一意インデックスに start_month を追加（WBS 3.1。
 //      同じ kind でも春秋 2 つの窓を持てるように）
-export const CURRENT_SCHEMA_VERSION = 10;
+// v11: だいどこ由来テーブルを DROP（WBS 2.9e。処分表は docs/WBS.md §2.9）
+export const CURRENT_SCHEMA_VERSION = 11;
 
 const DEFAULT_USER_ID = 'user-kei';
 const DEFAULT_FAMILY_ID = 'family-001';
@@ -101,74 +102,8 @@ const CREATE_TABLES_SQL = `
   CREATE UNIQUE INDEX IF NOT EXISTS idx_family_members_family_user ON family_members(family_id, user_id);
   CREATE INDEX IF NOT EXISTS idx_family_members_family ON family_members(family_id);
 
-  CREATE TABLE IF NOT EXISTS sources (
-    id TEXT PRIMARY KEY,
-    type TEXT NOT NULL,
-    url TEXT,
-    ocr_raw_text TEXT,
-    site_name TEXT,
-    page_title TEXT,
-    thumbnail_url TEXT,
-    captured_at TEXT,
-    created_at TEXT NOT NULL
-  );
-
-  CREATE TABLE IF NOT EXISTS recipes (
-    id TEXT PRIMARY KEY,
-    family_id TEXT NOT NULL REFERENCES families(id),
-    title TEXT NOT NULL,
-    title_reading TEXT,
-    current_rev_id TEXT,
-    status TEXT NOT NULL DEFAULT 'active',
-    cover_photo_path TEXT,
-    created_by TEXT NOT NULL REFERENCES users(id),
-    created_at TEXT NOT NULL,
-    updated_at TEXT NOT NULL
-  );
-
-  CREATE INDEX IF NOT EXISTS idx_recipes_family_status ON recipes(family_id, status);
-  CREATE INDEX IF NOT EXISTS idx_recipes_family_updated ON recipes(family_id, updated_at);
-
-  CREATE TABLE IF NOT EXISTS recipe_revisions (
-    id TEXT PRIMARY KEY,
-    recipe_id TEXT NOT NULL REFERENCES recipes(id),
-    revision_number INTEGER NOT NULL,
-    is_major INTEGER NOT NULL DEFAULT 1,
-    servings INTEGER,
-    cook_time_min INTEGER,
-    prep_time_min INTEGER,
-    description TEXT,
-    author_note TEXT,
-    source_id TEXT REFERENCES sources(id),
-    created_by TEXT NOT NULL REFERENCES users(id),
-    created_at TEXT NOT NULL
-  );
-
-  CREATE INDEX IF NOT EXISTS idx_revisions_recipe_num ON recipe_revisions(recipe_id, revision_number);
-
-  CREATE TABLE IF NOT EXISTS ingredients (
-    id TEXT PRIMARY KEY,
-    revision_id TEXT NOT NULL REFERENCES recipe_revisions(id),
-    sort_order INTEGER NOT NULL,
-    group_label TEXT,
-    name TEXT NOT NULL,
-    amount TEXT,
-    note TEXT
-  );
-
-  CREATE INDEX IF NOT EXISTS idx_ingredients_revision ON ingredients(revision_id);
-
-  CREATE TABLE IF NOT EXISTS steps (
-    id TEXT PRIMARY KEY,
-    revision_id TEXT NOT NULL REFERENCES recipe_revisions(id),
-    sort_order INTEGER NOT NULL,
-    body TEXT NOT NULL,
-    timer_sec INTEGER,
-    photo_id TEXT,
-    photo_path TEXT
-  );
-
-  CREATE INDEX IF NOT EXISTS idx_steps_revision ON steps(revision_id);
+  -- users / families / family_members はさいえん手帳でも恒久的に使う
+  -- （R19 のグループ共有まで、だいどこの families 構造をそのまま流用）
 
   CREATE TABLE IF NOT EXISTS tags (
     id TEXT PRIMARY KEY,
@@ -178,55 +113,6 @@ const CREATE_TABLES_SQL = `
   );
 
   CREATE UNIQUE INDEX IF NOT EXISTS idx_tags_family_name ON tags(family_id, name);
-
-  CREATE TABLE IF NOT EXISTS recipe_tags (
-    recipe_id TEXT NOT NULL REFERENCES recipes(id),
-    tag_id TEXT NOT NULL REFERENCES tags(id),
-    PRIMARY KEY (recipe_id, tag_id)
-  );
-
-  CREATE INDEX IF NOT EXISTS idx_recipe_tags_recipe ON recipe_tags(recipe_id);
-  CREATE INDEX IF NOT EXISTS idx_recipe_tags_tag ON recipe_tags(tag_id);
-
-  CREATE TABLE IF NOT EXISTS cooking_logs (
-    id TEXT PRIMARY KEY,
-    family_id TEXT NOT NULL REFERENCES families(id),
-    recipe_id TEXT REFERENCES recipes(id),
-    revision_id TEXT REFERENCES recipe_revisions(id),
-    cooked_by TEXT NOT NULL REFERENCES users(id),
-    cooked_at TEXT NOT NULL,
-    servings INTEGER,
-    rating INTEGER,
-    memo TEXT,
-    created_at TEXT NOT NULL
-  );
-
-  CREATE INDEX IF NOT EXISTS idx_cooking_logs_family_date ON cooking_logs(family_id, cooked_at);
-  CREATE INDEX IF NOT EXISTS idx_cooking_logs_recipe_date ON cooking_logs(recipe_id, cooked_at);
-
-  CREATE TABLE IF NOT EXISTS cooking_photos (
-    id TEXT PRIMARY KEY,
-    log_id TEXT NOT NULL REFERENCES cooking_logs(id),
-    local_path TEXT NOT NULL,
-    cloud_url TEXT,
-    sort_order INTEGER NOT NULL,
-    taken_at TEXT,
-    created_at TEXT NOT NULL
-  );
-
-  CREATE INDEX IF NOT EXISTS idx_cooking_photos_log ON cooking_photos(log_id);
-
-  CREATE TABLE IF NOT EXISTS memos (
-    id TEXT PRIMARY KEY,
-    recipe_id TEXT NOT NULL REFERENCES recipes(id),
-    author_id TEXT NOT NULL REFERENCES users(id),
-    body TEXT NOT NULL,
-    is_private INTEGER NOT NULL DEFAULT 0,
-    created_at TEXT NOT NULL,
-    updated_at TEXT NOT NULL
-  );
-
-  CREATE INDEX IF NOT EXISTS idx_memos_recipe ON memos(recipe_id);
 
   CREATE TABLE IF NOT EXISTS sync_meta (
     entity_type TEXT NOT NULL,
@@ -243,82 +129,10 @@ const CREATE_TABLES_SQL = `
     updated_at TEXT NOT NULL
   );
 
-  CREATE TABLE IF NOT EXISTS ingredient_nutrition (
-    id TEXT PRIMARY KEY,
-    ingredient_id TEXT NOT NULL UNIQUE REFERENCES ingredients(id),
-    calories_kcal REAL,
-    protein_g REAL,
-    fat_g REAL,
-    carbs_g REAL,
-    salt_g REAL,
-    data_source TEXT NOT NULL DEFAULT 'manual',
-    updated_at TEXT NOT NULL
-  );
-
-  CREATE VIRTUAL TABLE IF NOT EXISTS recipe_fts USING fts5(
-    recipe_id UNINDEXED,
-    title,
-    title_reading,
-    ingredient_names,
-    tokenize='unicode61'
-  );
-
-  CREATE TABLE IF NOT EXISTS shopping_items (
-    id TEXT PRIMARY KEY,
-    family_id TEXT NOT NULL REFERENCES families(id),
-    name TEXT NOT NULL,
-    name_normalized TEXT NOT NULL,
-    amount TEXT,
-    checked INTEGER NOT NULL DEFAULT 0,
-    source TEXT NOT NULL DEFAULT 'manual',
-    recipe_id TEXT REFERENCES recipes(id),
-    sort_order INTEGER NOT NULL DEFAULT 0,
-    created_at TEXT NOT NULL,
-    checked_at TEXT
-  );
-
-  CREATE INDEX IF NOT EXISTS idx_shopping_items_family_checked ON shopping_items(family_id, checked);
-
-  CREATE TABLE IF NOT EXISTS pantry_items (
-    id TEXT PRIMARY KEY,
-    family_id TEXT NOT NULL REFERENCES families(id),
-    name TEXT NOT NULL,
-    name_normalized TEXT NOT NULL,
-    quantity REAL,
-    unit TEXT,
-    low_stock_threshold REAL,
-    jan_code TEXT,
-    created_at TEXT NOT NULL,
-    updated_at TEXT NOT NULL
-  );
-
-  CREATE INDEX IF NOT EXISTS idx_pantry_items_family_name ON pantry_items(family_id, name_normalized);
-
-  CREATE TABLE IF NOT EXISTS jan_catalog (
-    id TEXT PRIMARY KEY,
-    family_id TEXT NOT NULL REFERENCES families(id),
-    jan_code TEXT NOT NULL,
-    name TEXT NOT NULL,
-    unit TEXT,
-    updated_at TEXT NOT NULL
-  );
-
-  CREATE UNIQUE INDEX IF NOT EXISTS idx_jan_catalog_family_jan ON jan_catalog(family_id, jan_code);
-
-  CREATE TABLE IF NOT EXISTS name_aliases (
-    id TEXT PRIMARY KEY,
-    family_id TEXT NOT NULL REFERENCES families(id),
-    source_normalized TEXT NOT NULL,
-    canonical TEXT NOT NULL,
-    updated_at TEXT NOT NULL
-  );
-
-  CREATE UNIQUE INDEX IF NOT EXISTS idx_name_aliases_family_source ON name_aliases(family_id, source_normalized);
-
   -- ══════════════════════════════════════════════════════════════════════
   -- さいえん手帳（v8 / WBS 1.3）
-  -- だいどこのテーブルとは併存する。recipes 系の DROP は WBS 1.5 完了後。
-  -- 詳細は docs/データ設計.md
+  -- だいどこの recipes 系テーブルは WBS 2.9e で DROP 済み（本ファイル下部の
+  -- DAIDOKO_TABLES_TO_DROP）。詳細は docs/データ設計.md
   -- ══════════════════════════════════════════════════════════════════════
 
   CREATE TABLE IF NOT EXISTS crops (
@@ -500,10 +314,35 @@ const CREATE_TABLES_SQL = `
 
 // Columns added after a table first shipped (SQLite has no ADD COLUMN IF NOT
 // EXISTS — the duplicate-column error on re-run is expected and swallowed).
-const ADD_COLUMN_MIGRATIONS: { table: string; columnDdl: string }[] = [
-  { table: 'recipes', columnDdl: 'cover_photo_path TEXT' }, // v7
-  { table: 'steps', columnDdl: 'photo_path TEXT' }, // v7
-];
+// v7 で追加した recipes.cover_photo_path / steps.photo_path は、両テーブルごと
+// WBS 2.9e で DROP した。今は空だが、将来の列追加のためにしくみは残す。
+const ADD_COLUMN_MIGRATIONS: { table: string; columnDdl: string }[] = [];
+
+/**
+ * だいどこ専用だったテーブル（WBS 2.9e で DROP）。
+ *
+ * 新規インストールでは CREATE_TABLES_SQL がそもそも作らないので無害。
+ * 既存の開発端末だけ、ここで実際に消える。子 → 親の順に並べているが、
+ * 外部キー違反を確実に避けるため一時的に PRAGMA foreign_keys = OFF で実行する
+ * （backup.service.ts の replaceDatabase と同じ考え方）。
+ */
+const DAIDOKO_TABLES_TO_DROP = [
+  'ingredient_nutrition',
+  'recipe_tags',
+  'cooking_photos',
+  'cooking_logs',
+  'memos',
+  'steps',
+  'ingredients',
+  'recipe_revisions',
+  'recipes',
+  'sources',
+  'shopping_items',
+  'pantry_items',
+  'jan_catalog',
+  'name_aliases',
+  'recipe_fts',
+] as const;
 
 /** Run migrations (create tables + additive column changes) */
 export function runMigrations(expoDb: { execSync: (sql: string) => void }): MigrationResult {
@@ -511,6 +350,14 @@ export function runMigrations(expoDb: { execSync: (sql: string) => void }): Migr
   // v10: 3 列の旧一意インデックスが残っていると、同じ kind の 2 つ目の窓
   // （ジャガイモの春植え・秋植えなど）が UNIQUE 違反になるため先に落とす
   expoDb.execSync('DROP INDEX IF EXISTS idx_crop_calendars_crop_region_kind');
+
+  // v11: だいどこ由来テーブルを DROP（WBS 2.9e）
+  expoDb.execSync('PRAGMA foreign_keys = OFF');
+  for (const table of DAIDOKO_TABLES_TO_DROP) {
+    expoDb.execSync(`DROP TABLE IF EXISTS ${table}`);
+  }
+  expoDb.execSync('PRAGMA foreign_keys = ON');
+
   for (const { table, columnDdl } of ADD_COLUMN_MIGRATIONS) {
     try {
       expoDb.execSync(`ALTER TABLE ${table} ADD COLUMN ${columnDdl}`);
@@ -824,33 +671,6 @@ export async function rebuildPlantingFts(database: DB): Promise<void> {
                   ${normalizeForSearch(planting.cropNameReading ?? '')},
                   ${normalizeForSearch(planting.variety ?? '')},
                   ${normalizeForSearch(tagNames)})`,
-    );
-  }
-}
-
-/** Rebuild FTS5 index from current recipe data */
-export async function rebuildFts(database: DB): Promise<void> {
-  // Clear existing FTS data
-  await database.run(sql`DELETE FROM recipe_fts`);
-
-  // Get all recipes
-  const allRecipes = await database.select().from(schema.recipes);
-
-  for (const recipe of allRecipes) {
-    if (!recipe.currentRevId) continue;
-
-    // Get ingredients for this recipe's current revision
-    const recipeIngredients = await database
-      .select({ name: schema.ingredients.name })
-      .from(schema.ingredients)
-      .where(eq(schema.ingredients.revisionId, recipe.currentRevId));
-
-    const ingredientNames = recipeIngredients.map((i) => i.name).join(' ');
-
-    // Insert into FTS
-    await database.run(
-      sql`INSERT INTO recipe_fts (recipe_id, title, title_reading, ingredient_names)
-          VALUES (${recipe.id}, ${recipe.title}, ${recipe.titleReading ?? ''}, ${ingredientNames})`,
     );
   }
 }

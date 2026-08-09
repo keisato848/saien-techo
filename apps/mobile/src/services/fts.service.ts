@@ -1,8 +1,8 @@
 /**
  * FTS5 全文検索 — 栽培の検索（R03）
  *
- * かつてはレシピ検索（recipe_fts）も同居していたが、WBS 2.9c で栽培専用にした。
- * recipe_fts テーブル自体は 2.9e（テーブル削除）まで残る。
+ * かつてはレシピ検索（recipe_fts）も同居していたが、WBS 2.9c で栽培専用にし、
+ * recipe_fts テーブル自体も WBS 2.9e で DROP した。
  */
 import { getExpoDb, isNativePlatform } from '../db/client';
 
