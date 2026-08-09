@@ -32,6 +32,11 @@ import { Toast } from '../../../src/components/Toast';
 import { Colors, Typography } from '../../../src/constants/theme';
 import { formatDateLabel } from '../../../src/components/DateField';
 import { getReminders } from '../../../src/services/reminder.service';
+import {
+  describeNextAction,
+  getNextActionsForPlanting,
+  type NextAction,
+} from '../../../src/services/next-action.service';
 import { describeSchedule } from '../../../src/utils/reminderSchedule';
 import {
   CARE_KIND_LABEL,
@@ -74,6 +79,7 @@ export default function PlantingDetailScreen() {
   const [harvests, setHarvests] = useState<HarvestItem[]>([]);
   const [totals, setTotals] = useState<HarvestTotal[]>([]);
   const [reminders, setReminders] = useState<ReminderItem[]>([]);
+  const [nextActions, setNextActions] = useState<NextAction[]>([]);
   const [loading, setLoading] = useState(true);
   const [endSheetOpen, setEndSheetOpen] = useState(false);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
@@ -85,6 +91,7 @@ export default function PlantingDetailScreen() {
     setHarvests(await getHarvests(id));
     setTotals(await getHarvestTotals(id));
     setReminders(await getReminders(id));
+    setNextActions(await getNextActionsForPlanting(id).catch(() => []));
     setLoading(false);
   }, [id]);
 
@@ -178,6 +185,29 @@ export default function PlantingDetailScreen() {
               {formatDateLabel(planting.endedAt as string)}に終了（
               {planting.endedReason ? ENDED_REASON_LABEL[planting.endedReason] : '—'}）
             </Text>
+          </View>
+        ) : null}
+
+        {/* つぎの作業（R10）。記録画面へ 1 タップ。「あとで」はホーム側から */}
+        {!ended && nextActions.length > 0 ? (
+          <View style={styles.adviceCard}>
+            {nextActions.map((action) => (
+              <Pressable
+                key={action.kind}
+                style={styles.adviceRow}
+                onPress={() =>
+                  router.push(
+                    action.kind === 'harvest'
+                      ? `/plantings/${id}/harvests/new`
+                      : `/plantings/${id}/care-logs/new?kind=fertilize`,
+                  )
+                }
+                accessibilityLabel={`${action.kind === 'harvest' ? '収穫' : '追肥'}を記録する`}
+              >
+                <BellRing size={15} color={Colors.accentInk} />
+                <Text style={styles.adviceText}>{describeNextAction(action)}</Text>
+              </Pressable>
+            ))}
           </View>
         ) : null}
 
@@ -470,6 +500,22 @@ const styles = StyleSheet.create({
     fontVariant: ['tabular-nums'],
   },
   elapsedUnit: { fontSize: Typography.size.xs, color: Colors.inkDim },
+  // body が paddingHorizontal:16 + gap:16 を持つのでカード側の margin は不要
+  adviceCard: {
+    padding: 12,
+    borderRadius: 12,
+    backgroundColor: Colors.accentSoft,
+    borderWidth: 1,
+    borderColor: Colors.accentLine,
+    gap: 8,
+  },
+  adviceRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  adviceText: {
+    flex: 1,
+    fontSize: Typography.size.sm,
+    color: Colors.accentInk,
+    lineHeight: 19,
+  },
   endedBanner: {
     padding: 12,
     borderRadius: 10,
