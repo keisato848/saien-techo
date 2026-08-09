@@ -8,6 +8,8 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
+import { runMigrations } from '../migrate';
+
 // node:sqlite は Node 22.5+ の実験的 API。CI（Node 20/24）と開発機で
 // 利用可否が変わりうるため、無い環境ではスキップする。
 let DatabaseSync: (new (path: string) => SqliteDb) | null = null;
@@ -67,15 +69,58 @@ describeIfSqlite('migration SQL against real SQLite', () => {
     }
   });
 
-  it('keeps the だいどこ tables (併存方針 — 削除は WBS 1.5 完了後)', () => {
+  it('no longer creates the だいどこ tables (WBS 2.9e で DROP 済み)', () => {
     const db = freshDb();
     const tables = db
       .prepare("SELECT name FROM sqlite_master WHERE type='table'")
       .all()
       .map((row) => row.name as string);
 
-    expect(tables).toContain('recipes');
-    expect(tables).toContain('cooking_logs');
+    for (const table of [
+      'recipes',
+      'recipe_revisions',
+      'ingredients',
+      'steps',
+      'sources',
+      'recipe_tags',
+      'cooking_logs',
+      'cooking_photos',
+      'memos',
+      'ingredient_nutrition',
+      'shopping_items',
+      'pantry_items',
+      'jan_catalog',
+      'name_aliases',
+    ]) {
+      expect(tables).not.toContain(table);
+    }
+    // tags は栽培のタグ付けに流用するため、だいどこ由来だが残る
+    expect(tables).toContain('tags');
+  });
+
+  it('既存端末の DROP（取る）: pre-2.9e に残っただいどこテーブルを消し、栽培側は残す', () => {
+    const db = freshDb();
+    // WBS 2.9e より前からアップグレードした端末を模す。
+    // 今の CREATE_TABLES_SQL はこの 2 テーブルをもう作らないので、手で残しておく
+    db.exec(`
+      CREATE TABLE recipes (id TEXT PRIMARY KEY, title TEXT NOT NULL);
+      CREATE TABLE cooking_logs (id TEXT PRIMARY KEY, recipe_id TEXT REFERENCES recipes(id));
+    `);
+    db.exec("INSERT INTO recipes (id, title) VALUES ('r1', '肉じゃが')");
+    db.exec("INSERT INTO cooking_logs (id, recipe_id) VALUES ('c1', 'r1')");
+
+    runMigrations({ execSync: (sql: string) => db.exec(sql) });
+
+    const tables = db
+      .prepare("SELECT name FROM sqlite_master WHERE type='table'")
+      .all()
+      .map((row) => row.name as string);
+
+    expect(tables).not.toContain('recipes');
+    expect(tables).not.toContain('cooking_logs');
+    for (const table of [...SAIEN_TABLES, 'tags', 'users', 'families', 'sync_meta', 'app_meta']) {
+      expect(tables).toContain(table);
+    }
   });
 
   it('supports Japanese prefix search on planting_fts', () => {
