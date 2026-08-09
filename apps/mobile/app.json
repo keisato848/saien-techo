@@ -53,13 +53,6 @@
         }
       ],
       [
-        "expo-camera",
-        {
-          "cameraPermission": "バーコード（JAN）を読み取るためにカメラを使用します。"
-        }
-      ],
-      "./plugins/withSaienOcr",
-      [
         "react-native-google-mobile-ads",
         {
           "androidAppId": "ca-app-pub-3940256099942544~3347511713",
