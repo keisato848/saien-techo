@@ -34,12 +34,14 @@ jest.mock('../notification.service', () => ({
 
 import { endPlanting } from '../planting.service';
 import { createPlanting } from '../planting.service';
+import { createCareLog } from '../care-log.service';
 import {
   createReminder,
   deleteReminder,
   getActiveReminders,
   getReminder,
   getReminders,
+  getTodayReminders,
   markReminderFired,
   setReminderEnabled,
   syncScheduledReminders,
@@ -397,6 +399,154 @@ describeIfSqlite('reminder.service (real SQLite)', () => {
 
       expect(await getReminder(id)).toBeNull();
       expect(await getReminders(plantingId)).toHaveLength(0);
+    });
+  });
+
+  // ホームの「今日のリマインダー」（R11 / WBS 3.5）
+  describe('getTodayReminders', () => {
+    /** 2026-08-10 は月曜 */
+    const MONDAY_NOON = new Date(2026, 7, 10, 12, 0);
+
+    it('今日鳴る予定を作物名つきで返す', async () => {
+      await createReminder({
+        plantingId,
+        kind: 'water',
+        scheduleKind: 'daily',
+        hour: 7,
+        minute: 0,
+      });
+
+      const today = await getTodayReminders(MONDAY_NOON);
+
+      expect(today).toHaveLength(1);
+      expect(today[0]).toMatchObject({ cropName: 'トマト', kind: 'water', done: false });
+      expect(today[0].at).toEqual(new Date(2026, 7, 10, 7, 0));
+    });
+
+    it('時刻を過ぎていても消えない（やったか確かめたいので）', async () => {
+      await createReminder({
+        plantingId,
+        kind: 'water',
+        scheduleKind: 'daily',
+        hour: 7,
+        minute: 0,
+      });
+
+      const evening = await getTodayReminders(new Date(2026, 7, 10, 22, 0));
+      expect(evening).toHaveLength(1);
+    });
+
+    it('今日鳴らない曜日は返さない', async () => {
+      await createReminder({
+        plantingId,
+        kind: 'water',
+        scheduleKind: 'weekly',
+        weekdays: [2], // 火曜だけ
+        hour: 7,
+        minute: 0,
+      });
+
+      expect(await getTodayReminders(MONDAY_NOON)).toEqual([]);
+    });
+
+    it('無効にしたものは返さない', async () => {
+      const id = await createReminder({
+        plantingId,
+        kind: 'water',
+        scheduleKind: 'daily',
+        hour: 7,
+        minute: 0,
+      });
+      await setReminderEnabled(id, false);
+
+      expect(await getTodayReminders(MONDAY_NOON)).toEqual([]);
+    });
+
+    it('終了した栽培のものは返さない（採り終えた株に水やりを促さない）', async () => {
+      await createReminder({
+        plantingId,
+        kind: 'water',
+        scheduleKind: 'daily',
+        hour: 7,
+        minute: 0,
+      });
+      await endPlanting(plantingId, 'harvested');
+
+      expect(await getTodayReminders(MONDAY_NOON)).toEqual([]);
+    });
+
+    // 済みの判定はリマインダーではなく「その日の記録の有無」で行う
+    it('同じ日に同じ種別の記録があれば done', async () => {
+      await createReminder({
+        plantingId,
+        kind: 'water',
+        scheduleKind: 'daily',
+        hour: 7,
+        minute: 0,
+      });
+      await createCareLog({
+        plantingId,
+        kind: 'water',
+        loggedAt: new Date(2026, 7, 10, 7, 30).toISOString(),
+        photoUris: [],
+      });
+
+      expect((await getTodayReminders(MONDAY_NOON))[0].done).toBe(true);
+    });
+
+    it('種別が違う記録では done にならない', async () => {
+      await createReminder({
+        plantingId,
+        kind: 'water',
+        scheduleKind: 'daily',
+        hour: 7,
+        minute: 0,
+      });
+      await createCareLog({
+        plantingId,
+        kind: 'fertilize',
+        loggedAt: new Date(2026, 7, 10, 7, 30).toISOString(),
+        photoUris: [],
+      });
+
+      expect((await getTodayReminders(MONDAY_NOON))[0].done).toBe(false);
+    });
+
+    it('前日の記録では done にならない（毎日の予定が済み扱いで埋もれない）', async () => {
+      await createReminder({
+        plantingId,
+        kind: 'water',
+        scheduleKind: 'daily',
+        hour: 7,
+        minute: 0,
+      });
+      await createCareLog({
+        plantingId,
+        kind: 'water',
+        loggedAt: new Date(2026, 7, 9, 7, 30).toISOString(),
+        photoUris: [],
+      });
+
+      expect((await getTodayReminders(MONDAY_NOON))[0].done).toBe(false);
+    });
+
+    it('時刻順に並べる', async () => {
+      for (const hour of [18, 6, 12]) {
+        await createReminder({
+          plantingId,
+          kind: 'water',
+          scheduleKind: 'daily',
+          hour,
+          minute: 0,
+        });
+      }
+
+      const today = await getTodayReminders(MONDAY_NOON);
+      expect(today.map((r) => r.at.getHours())).toEqual([6, 12, 18]);
+    });
+
+    it('予定が無ければ空（カードごと出さない）', async () => {
+      expect(await getTodayReminders(MONDAY_NOON)).toEqual([]);
     });
   });
 });

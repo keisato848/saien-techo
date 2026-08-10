@@ -1,5 +1,10 @@
 import type { ReminderItem } from '../../services/types';
-import { describeSchedule, nextOccurrence } from '../reminderSchedule';
+import {
+  describeSchedule,
+  isSameLocalDay,
+  nextOccurrence,
+  occurrenceOn,
+} from '../reminderSchedule';
 
 function reminder(overrides: Partial<ReminderItem> = {}): ReminderItem {
   return {
@@ -217,5 +222,67 @@ describe('describeSchedule', () => {
     expect(describeSchedule(reminder({ scheduleKind: 'interval_days', intervalDays: null }))).toBe(
       '— 7:00',
     );
+  });
+});
+
+describe('isSameLocalDay', () => {
+  it('同じ日なら true（時刻は問わない）', () => {
+    expect(isSameLocalDay(at(2026, 8, 10, 0, 0), at(2026, 8, 10, 23, 59))).toBe(true);
+  });
+
+  it('日をまたぐと false', () => {
+    expect(isSameLocalDay(at(2026, 8, 10, 23, 59), at(2026, 8, 11, 0, 0))).toBe(false);
+  });
+});
+
+describe('occurrenceOn', () => {
+  it('無効なら null', () => {
+    expect(occurrenceOn(reminder({ enabled: false }), at(2026, 8, 10, 12))).toBeNull();
+  });
+
+  describe('毎日', () => {
+    // ホームは日中いつ開かれるか分からない。朝でも夜でも同じ答えになること
+    it('時刻前に見ても今日の予定を返す', () => {
+      expect(occurrenceOn(reminder(), at(2026, 8, 10, 6, 30))).toEqual(at(2026, 8, 10, 7, 0));
+    });
+
+    it('時刻を過ぎて見ても今日の予定を返す（消さない）', () => {
+      expect(occurrenceOn(reminder(), at(2026, 8, 10, 18, 0))).toEqual(at(2026, 8, 10, 7, 0));
+    });
+
+    it('0:00 ちょうどの予定も拾う', () => {
+      const midnight = reminder({ hour: 0, minute: 0 });
+      expect(occurrenceOn(midnight, at(2026, 8, 10, 9, 0))).toEqual(at(2026, 8, 10, 0, 0));
+    });
+  });
+
+  describe('曜日', () => {
+    const monday = reminder({ scheduleKind: 'weekly', weekdays: [1] });
+
+    it('その曜日なら返す', () => {
+      // 2026-08-10 は月曜
+      expect(at(2026, 8, 10).getDay()).toBe(1);
+      expect(occurrenceOn(monday, at(2026, 8, 10, 20, 0))).toEqual(at(2026, 8, 10, 7, 0));
+    });
+
+    it('違う曜日なら null（明日の予定を今日に出さない）', () => {
+      expect(occurrenceOn(monday, at(2026, 8, 11, 6, 0))).toBeNull();
+    });
+  });
+
+  describe('N日おき', () => {
+    const every3 = reminder({
+      scheduleKind: 'interval_days',
+      intervalDays: 3,
+      lastFiredAt: at(2026, 8, 7, 7, 0).toISOString(),
+    });
+
+    it('周期に当たる日なら返す', () => {
+      expect(occurrenceOn(every3, at(2026, 8, 10, 12, 0))).toEqual(at(2026, 8, 10, 7, 0));
+    });
+
+    it('当たらない日は null', () => {
+      expect(occurrenceOn(every3, at(2026, 8, 11, 12, 0))).toBeNull();
+    });
   });
 });

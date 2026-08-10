@@ -21,12 +21,12 @@
  * 許容する。**「必ずこの時刻に鳴る」とは言えない**ため、UI でも「おおよその時刻」
  * として見せる。
  */
-import { and, asc, eq, isNull } from 'drizzle-orm';
+import { and, asc, eq, inArray, isNull } from 'drizzle-orm';
 
 import { getDb, isNativePlatform } from '../db/client';
 import * as schema from '../db/schema';
 import { generateId } from '../utils/id';
-import { nextOccurrence } from '../utils/reminderSchedule';
+import { isSameLocalDay, nextOccurrence, occurrenceOn } from '../utils/reminderSchedule';
 import { cancelReminderNotifications, scheduleReminderNotification } from './notification.service';
 import type { CareLogKind, ReminderItem, ReminderScheduleKind, SaveReminderInput } from './types';
 
@@ -128,6 +128,71 @@ export async function getActiveReminders(): Promise<ReminderItem[]> {
     .where(and(eq(schema.reminders.enabled, 1), isNull(schema.plantings.endedAt)));
 
   return rows.map(toItem);
+}
+
+/** ホームの「今日のリマインダー」1 行分（R11 / WBS 3.5） */
+export interface TodayReminder {
+  id: string;
+  plantingId: string;
+  cropName: string;
+  kind: CareLogKind;
+  /** 鳴る（鳴った）時刻。端末のタイムゾーン */
+  at: Date;
+  /** 今日この栽培に同じ種別の記録が既にあるか */
+  done: boolean;
+}
+
+/**
+ * 今日鳴る予定のリマインダーを時刻順で（R11 / WBS 3.5）。
+ *
+ * **時刻を過ぎたものも返す。** 朝 7 時の水やりを 18 時に確かめたいことの方が
+ * 多く、過ぎたら消える一覧では「やったか分からない」が残る。
+ * 代わりに、同じ日に同じ種別の作業ログがあれば done を立てて済みとして見せる
+ * （リマインダー自体は「鳴らした」しか知らないので、実際にやったかは記録で見る）。
+ */
+export async function getTodayReminders(now: Date = new Date()): Promise<TodayReminder[]> {
+  if (!isNativePlatform) return [];
+
+  const db = getDb();
+  const rows = await db
+    .select({ ...SELECT_COLUMNS, cropName: schema.plantings.cropName })
+    .from(schema.reminders)
+    .innerJoin(schema.plantings, eq(schema.reminders.plantingId, schema.plantings.id))
+    .where(and(eq(schema.reminders.enabled, 1), isNull(schema.plantings.endedAt)));
+
+  const today: { row: (typeof rows)[number]; at: Date }[] = [];
+  for (const row of rows) {
+    const at = occurrenceOn(toItem(row), now);
+    if (at) today.push({ row, at });
+  }
+  if (today.length === 0) return [];
+
+  // 今日の作業ログをまとめて引き、栽培×種別で突き合わせる
+  const logs = await db
+    .select({
+      plantingId: schema.careLogs.plantingId,
+      kind: schema.careLogs.kind,
+      loggedAt: schema.careLogs.loggedAt,
+    })
+    .from(schema.careLogs)
+    .where(inArray(schema.careLogs.plantingId, [...new Set(today.map((t) => t.row.plantingId))]));
+
+  const doneKeys = new Set(
+    logs
+      .filter((log) => isSameLocalDay(new Date(log.loggedAt), now))
+      .map((log) => `${log.plantingId}:${log.kind}`),
+  );
+
+  return today
+    .map(({ row, at }) => ({
+      id: row.id,
+      plantingId: row.plantingId,
+      cropName: row.cropName,
+      kind: row.kind as CareLogKind,
+      at,
+      done: doneKeys.has(`${row.plantingId}:${row.kind}`),
+    }))
+    .sort((a, b) => a.at.getTime() - b.at.getTime());
 }
 
 export async function createReminder(input: SaveReminderInput): Promise<string> {
