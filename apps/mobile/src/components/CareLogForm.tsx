@@ -11,7 +11,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors, Typography } from '../constants/theme';
 import { CARE_KIND_LABEL, CARE_KINDS } from '../services/care-log.service';
 import type { CareLogKind } from '../services/types';
-import { DateField } from './DateField';
+import { CARE_LOG_DATE_QUICK_PICKS, DateField } from './DateField';
 import { FormField } from './FormField';
 import { PhotoGridField } from './PhotoGridField';
 import { PressableScale } from './PressableScale';
@@ -92,7 +92,16 @@ export function CareLogForm({
           </View>
         </View>
 
-        <DateField label="日付" required value={loggedAt} onChange={setLoggedAt} />
+        {/* 付け忘れた作業や、ギャラリーにある過去の写真を後から入れられるように。
+            クイック記録（詳細画面の 5 ボタン）は常に「今」で保存するので、
+            さかのぼるならここが入り口になる */}
+        <DateField
+          label="日付"
+          required
+          value={loggedAt}
+          onChange={setLoggedAt}
+          quickPicks={CARE_LOG_DATE_QUICK_PICKS}
+        />
 
         <View style={styles.group}>
           <Text style={styles.groupLabel}>写真</Text>

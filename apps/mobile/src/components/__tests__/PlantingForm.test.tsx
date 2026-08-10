@@ -20,7 +20,10 @@ jest.mock('../../services/place.service', () => ({
 }));
 
 const mockTags = jest.fn(() => Promise.resolve<string[]>([]));
+// elapsedDaysFrom は実物を使う。日数の数え方をモックで持つと、画面と
+// サービスで違う日数になっても気づけない（PR #90 の 33日目/34日 のずれ）
 jest.mock('../../services/planting.service', () => ({
+  ...jest.requireActual('../../services/planting.service'),
   getPlantingTagNames: () => mockTags(),
 }));
 
@@ -97,6 +100,38 @@ describe('PlantingForm', () => {
 
     await waitFor(() => expect(screen.getByText('未来の日付は登録できません')).toBeTruthy());
     expect(onSubmit).not.toHaveBeenCalled();
+  });
+
+  // すでに育てている株を後から登録する導線（さかのぼり登録）。
+  // 既定の「今日」のまま保存されると経過日数がずれ、R10 の「次の作業」
+  // （追肥・収穫の目安日数との突き合わせ）まで狂う
+  it('さかのぼりのクイック選択で植え付け日を過去にできる', async () => {
+    const { onSubmit } = setup();
+
+    fireEvent.changeText(screen.getByPlaceholderText('トマト'), 'トマト');
+    fireEvent.press(screen.getByText('1か月前'));
+    fireEvent.press(screen.getByText('保存'));
+
+    await waitFor(() => expect(onSubmit).toHaveBeenCalled());
+    const saved = new Date(onSubmit.mock.calls[0][0].plantedOn);
+    const daysAgo = Math.round((Date.now() - saved.getTime()) / 86_400_000);
+    expect(daysAgo).toBe(30);
+  });
+
+  it('さかのぼると経過日数が出る（チップの文言と一致する）', async () => {
+    setup();
+
+    fireEvent.press(screen.getByText('1週間前'));
+
+    // 「1週間前」を押したら 7 日目。ここがずれると一覧・提案文ともずれる
+    await waitFor(() => expect(screen.getByText(/今日で 7 日目/)).toBeTruthy());
+  });
+
+  it('すでに育てているものも登録できると分かる文言を出す', async () => {
+    setup();
+    await waitFor(() =>
+      expect(screen.getByText(/すでに育てているものは、植えた日にさかのぼれます/)).toBeTruthy(),
+    );
   });
 
   it('編集時は値が埋まっている', async () => {

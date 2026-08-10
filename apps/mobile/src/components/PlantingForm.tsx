@@ -15,7 +15,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Colors, Typography } from '../constants/theme';
 import { getPlaceList } from '../services/place.service';
-import { getPlantingTagNames } from '../services/planting.service';
+import { elapsedDaysFrom, getPlantingTagNames } from '../services/planting.service';
 import type { PlaceItem } from '../services/types';
 import {
   PLANTED_AS_LABEL,
@@ -23,7 +23,7 @@ import {
   plantingFormSchema,
   type PlantingFormData,
 } from '../validation/planting.schema';
-import { DateField } from './DateField';
+import { DateField, PLANTING_DATE_QUICK_PICKS } from './DateField';
 import { FormField } from './FormField';
 import { PhotoPickerField } from './PhotoPickerField';
 import { PressableScale } from './PressableScale';
@@ -88,6 +88,11 @@ export function PlantingForm({
   const selectedTags = watch('tags');
   const selectedPlaceId = watch('placeId');
   const plantedAs = watch('plantedAs');
+  const plantedOn = watch('plantedOn');
+
+  // 日数は planting.service に一本化する。ここで独自に数えると、
+  // 同じ株が登録画面と一覧・提案文で違う日数になる（PR #90 の 33日目/34日）
+  const elapsedDays = elapsedDaysFrom(plantedOn, null);
 
   const submit = handleSubmit(async (data) => {
     if (saving) return;
@@ -153,6 +158,15 @@ export function PlantingForm({
               value={value}
               onChange={onChange}
               error={errors.plantedOn?.message}
+              // すでに育てている株を後から登録できるように。既定の「今日」のまま
+              // 保存されると経過日数がずれ、「次の作業」（R10）の追肥・収穫の
+              // 目安まで狂うので、さかのぼる手段を最初から見えるところに置く
+              quickPicks={PLANTING_DATE_QUICK_PICKS}
+              hint={
+                elapsedDays > 0
+                  ? `今日で ${elapsedDays} 日目。すでに育てているものは、植えた日にさかのぼれます`
+                  : 'すでに育てているものは、植えた日にさかのぼれます'
+              }
             />
           )}
         />
