@@ -9,6 +9,10 @@
  * 遷移で再マウントされず、CareLogForm の useState が前回の値を持ち越す。
  * key が無いと「水やりの行を開く → 戻る → 剪定の行を開く」で水やりのまま開き、
  * 利用者は気づかずに違う作業を記録してしまう（実機で再現）。
+ *
+ * **残っている穴（既知・未対応）**: 同じ種別で続けて 2 回開くと key が変わらず、
+ * 前回の日付・メモ・写真が残る。記録前に画面で見えるうえ既存データは壊れないので
+ * 放置している。事情は reminders/new.tsx のコメント参照。
  */
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback } from 'react';
