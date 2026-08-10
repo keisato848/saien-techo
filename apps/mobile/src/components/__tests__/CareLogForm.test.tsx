@@ -70,6 +70,19 @@ describe('CareLogForm', () => {
     expect(screen.getByText('2 / 6')).toBeTruthy();
   });
 
+  // クイック記録（詳細画面の 5 ボタン）は常に「今」で保存する。
+  // 付け忘れた作業や、ギャラリーの古い写真を入れるのはこのフォームの担当
+  it('さかのぼりのクイック選択で日付を過去にできる', async () => {
+    const { onSubmit } = setup();
+
+    fireEvent.press(screen.getByText('3日前'));
+    fireEvent.press(screen.getByText('保存'));
+
+    await waitFor(() => expect(onSubmit).toHaveBeenCalled());
+    const saved = new Date(onSubmit.mock.calls[0][0].loggedAt);
+    expect(Math.round((Date.now() - saved.getTime()) / 86_400_000)).toBe(3);
+  });
+
   it('footer に渡した要素を出す（削除ボタンの置き場）', () => {
     render(
       <CareLogForm

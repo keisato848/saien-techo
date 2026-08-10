@@ -36,6 +36,11 @@ const TIMELINE_LIMIT = 30;
 /**
  * 日付見出し。菜園では「何日前にやったか」が知りたい情報なので、
  * 直近 1 週間は相対表記にする。
+ *
+ * 7 日目を含めるのは、記録フォームの「1週間前」チップ（DateField の
+ * quickPicks）がちょうど 7 日前を作るため。ここを 7 未満にすると、
+ * 「1週間前」で入れた記録の見出しだけ「8月3日」と絶対表記になり、
+ * 押した言葉と見出しが対応しなくなる。
  */
 export function formatDayLabel(date: string, now = new Date()): string {
   const [year, month, day] = date.split('-').map(Number);
@@ -46,7 +51,7 @@ export function formatDayLabel(date: string, now = new Date()): string {
 
   if (diffDays === 0) return '今日';
   if (diffDays === 1) return 'きのう';
-  if (diffDays > 1 && diffDays < 7) return `${diffDays}日前`;
+  if (diffDays > 1 && diffDays <= 7) return `${diffDays}日前`;
   return `${month}月${day}日`;
 }
 

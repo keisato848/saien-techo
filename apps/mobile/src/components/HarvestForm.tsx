@@ -18,7 +18,7 @@ import { HARVEST_UNIT_LABEL, HARVEST_UNITS } from '../services/harvest.service';
 import { capturePhoto } from '../services/photo-capture.service';
 import { persistGardenPhotos } from '../services/photo-storage.service';
 import type { HarvestUnit } from '../services/types';
-import { DateField } from './DateField';
+import { CARE_LOG_DATE_QUICK_PICKS, DateField } from './DateField';
 import { FormField } from './FormField';
 import { PhotoGridField } from './PhotoGridField';
 import { PressableScale } from './PressableScale';
@@ -112,7 +112,15 @@ export function HarvestForm({
           <PhotoGridField value={photoUris} onChange={setPhotoUris} />
         </View>
 
-        <DateField label="収穫日" required value={harvestedAt} onChange={setHarvestedAt} />
+        {/* 採った日にさかのぼれるように。アルバム（R07）は収穫日で月ごとに
+            並ぶので、ここがずれると写真が違う月に入る */}
+        <DateField
+          label="収穫日"
+          required
+          value={harvestedAt}
+          onChange={setHarvestedAt}
+          quickPicks={CARE_LOG_DATE_QUICK_PICKS}
+        />
 
         <View style={styles.group}>
           <Text style={styles.groupLabel}>
