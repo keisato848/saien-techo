@@ -10,7 +10,7 @@
  */
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Trash2 } from 'lucide-react-native';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Alert, StyleSheet, Text } from 'react-native';
 
 import { CareLogForm, type CareLogFormValues } from '../../../../../src/components/CareLogForm';
@@ -28,12 +28,6 @@ export default function EditCareLogScreen() {
   const router = useRouter();
   const [initialValues, setInitialValues] = useState<CareLogFormValues | null>(null);
 
-  // 読み直しの引き金は logId だけにする。router を依存に入れると、
-  // その identity が変わるたびに下の setInitialValues(null) が走って
-  // 読み込み中に戻ってしまう（値を読むだけなので ref で十分）
-  const routerRef = useRef(router);
-  routerRef.current = router;
-
   useEffect(() => {
     let cancelled = false;
     // 前のログの内容を一瞬でも出さない（出すと useState がそれで固まる）
@@ -43,7 +37,7 @@ export default function EditCareLogScreen() {
       const log = await getCareLog(logId);
       if (cancelled) return;
       if (!log) {
-        routerRef.current.back();
+        router.back();
         return;
       }
       setInitialValues({
@@ -57,7 +51,7 @@ export default function EditCareLogScreen() {
     return () => {
       cancelled = true;
     };
-  }, [logId]);
+  }, [logId, router]);
 
   const handleSubmit = useCallback(
     async (values: CareLogFormValues) => {
