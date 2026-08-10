@@ -1,9 +1,15 @@
 /**
  * リマインダーの編集・削除（R11 / WBS 2.5）
+ *
+ * **reminderId が変わったら initialValues を null に戻してから読み直す。**
+ * 作業ログの編集画面と同じ理由（そちらのコメント参照）。この画面は 2 回目以降の
+ * 遷移で再マウントされず、ReminderForm も useState で初期値を受けるため、
+ * 「お知らせ A を開く → 戻る → お知らせ B を開く」で B の画面に A の設定が出る。
+ * 保存すると**B が A の内容で上書きされる**。
  */
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Trash2 } from 'lucide-react-native';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Alert, StyleSheet, Text } from 'react-native';
 
 import { Loading } from '../../../../../src/components/Loading';
@@ -21,11 +27,21 @@ export default function EditReminderScreen() {
   const router = useRouter();
   const [initialValues, setInitialValues] = useState<ReminderFormValues | null>(null);
 
+  // 読み直しの引き金は reminderId だけにする（router を依存に入れると、
+  // その identity が変わるたびに読み込み中へ戻ってしまう）
+  const routerRef = useRef(router);
+  routerRef.current = router;
+
   useEffect(() => {
+    let cancelled = false;
+    // 前のお知らせの設定を一瞬でも出さない（出すと useState がそれで固まる）
+    setInitialValues(null);
+
     void (async () => {
       const reminder = await getReminder(reminderId);
+      if (cancelled) return;
       if (!reminder) {
-        router.back();
+        routerRef.current.back();
         return;
       }
       setInitialValues({
@@ -37,7 +53,11 @@ export default function EditReminderScreen() {
         minute: reminder.minute,
       });
     })();
-  }, [reminderId, router]);
+
+    return () => {
+      cancelled = true;
+    };
+  }, [reminderId]);
 
   const handleSubmit = useCallback(
     async (values: ReminderFormValues) => {
