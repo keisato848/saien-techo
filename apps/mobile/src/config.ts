@@ -27,5 +27,10 @@ export const FREE_DAILY_LIMIT_CONFIG =
 // リワード広告ユニット ID。未設定なら SDK の公式テスト ID（TestIds.REWARDED）を使う。
 export const ADMOB_REWARDED_UNIT_ID = process.env['EXPO_PUBLIC_ADMOB_REWARDED_UNIT_ID'] ?? '';
 
+// 起動広告（アプリを開いたときに出す全画面広告）のユニット ID。R? / WBS 3.7。
+// 未設定なら SDK の公式テスト ID（TestIds.APP_OPEN）を使うので、
+// 実 ID を入れる前でもテスト広告で導線を確認できる。
+export const ADMOB_APP_OPEN_UNIT_ID = process.env['EXPO_PUBLIC_ADMOB_APP_OPEN_UNIT_ID'] ?? '';
+
 // BYOK（持ち込みキー）で端末から直接呼ぶ Gemini モデル。サーバー側の既定と揃える。
 export const GEMINI_MODEL = process.env['EXPO_PUBLIC_GEMINI_MODEL'] ?? 'gemini-2.5-flash';
