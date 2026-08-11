@@ -2,10 +2,18 @@
  * App-wide configuration
  * SERVER_BASE_URL: Hono API server endpoint
  */
+import { Platform } from 'react-native';
+
+const isWeb = Platform.OS === 'web';
+
 // EXPO_PUBLIC_SERVER_URL を設定している場合はそちらを優先
-// 未設定時のデフォルト: localhost（さいえん手帳の本番サーバーは未デプロイ。
-// AI 機能実装（WBS 4.1）時に Railway へデプロイして差し替える）
-export const SERVER_BASE_URL = process.env['EXPO_PUBLIC_SERVER_URL'] ?? 'http://localhost:3000';
+// 未設定時のデフォルト:
+//   Web (開発)  → localhost:3000
+//   Native      → だいどこの Railway 本番と共用（WBS 決定⑨ — 固定費を増やさない。
+//                 さいえん手帳が使うのは /api/v1/garden 配下のみ）
+export const SERVER_BASE_URL =
+  process.env['EXPO_PUBLIC_SERVER_URL'] ??
+  (isWeb ? 'http://localhost:3000' : 'https://daidoko-production.up.railway.app'); // daidoko-ref-ok
 
 export const API_V1 = `${SERVER_BASE_URL}/api/v1`;
 
