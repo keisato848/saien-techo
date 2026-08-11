@@ -34,13 +34,21 @@ const AdsConsent = {
   reset: jest.fn(),
 };
 
+// バナーはコンポーネント。テストでは何も描画しない
+const BannerAd = () => null;
+
 module.exports = {
   __esModule: true,
   default: mobileAds,
   AdEventType: { CLOSED: 'closed', ERROR: 'error' },
   RewardedAdEventType: { LOADED: 'rewarded_loaded', EARNED_REWARD: 'rewarded_earned_reward' },
-  TestIds: { REWARDED: 'ca-app-pub-3940256099942544/5224354917' },
+  TestIds: {
+    REWARDED: 'ca-app-pub-3940256099942544/5224354917',
+    BANNER: 'ca-app-pub-3940256099942544/6300978111',
+  },
   RewardedAd,
+  BannerAd,
+  BannerAdSize: { ANCHORED_ADAPTIVE_BANNER: 'anchored_adaptive_banner' },
   AdsConsent,
   AdsConsentPrivacyOptionsRequirementStatus: {
     NOT_REQUIRED: 'NOT_REQUIRED',

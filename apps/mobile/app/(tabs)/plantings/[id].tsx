@@ -16,6 +16,7 @@ import {
   RotateCcw,
   Scissors,
   ShieldCheck,
+  Sparkles,
   Sprout,
   Trash2,
 } from 'lucide-react-native';
@@ -272,6 +273,20 @@ export default function PlantingDetailScreen() {
             </PressableScale>
           </View>
         ) : null}
+
+        {/* AI 相談（R14/R15）。終了した栽培でも「何が悪かったか」を聞けるよう
+            quickCard の外に置く。相談は保存されない — 記録は作業ログの役目 */}
+        <PressableScale
+          style={styles.consultCard}
+          onPress={() => router.push(`/plantings/${planting.id}/consult`)}
+          accessibilityLabel="AI に相談する"
+        >
+          <Sparkles size={17} color={Colors.accentInk} />
+          <View style={styles.consultBody}>
+            <Text style={styles.consultTitle}>AI に相談</Text>
+            <Text style={styles.consultHint}>写真から品種の推定・病害虫や生育の診断</Text>
+          </View>
+        </PressableScale>
 
         <View style={styles.logSection}>
           <Text style={styles.sectionLabel}>作業ログ</Text>
@@ -618,6 +633,23 @@ const styles = StyleSheet.create({
   },
   detailedButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 },
   detailedText: { fontSize: Typography.size.sm, color: Colors.accent },
+  consultCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    borderRadius: 12,
+    backgroundColor: Colors.accentSoft,
+    borderWidth: 1,
+    borderColor: Colors.accentLine,
+    padding: 14,
+  },
+  consultBody: { flex: 1, gap: 2 },
+  consultTitle: {
+    fontSize: Typography.size.base,
+    color: Colors.accentInk,
+    fontWeight: Typography.weight.medium,
+  },
+  consultHint: { fontSize: Typography.size.xs, color: Colors.inkDim },
   logSection: { gap: 10 },
   emptyLog: { fontSize: Typography.size.sm, color: Colors.inkDim },
   logRow: {
