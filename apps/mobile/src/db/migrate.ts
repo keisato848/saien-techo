@@ -9,6 +9,7 @@ import { normalizeForSearch } from '../services/fts.service';
 import { CROP_MASTER, CROP_MASTER_VERSION } from './crop-master';
 import * as schema from './schema';
 import { isSampleDataEnabled } from './sampleData';
+import { seedSamplePhotos } from './seed-photos';
 import {
   seedCareLogs,
   seedCropCalendars,
@@ -41,7 +42,7 @@ const DEFAULT_INVITE_CODE = 'DK0001';
 
 // サンプルデータの中身を変えたら必ず上げる。据え置くと、既にシード済みの端末は
 // appMeta のマーカーが一致して seedDatabase() が即 return し、新しい行が入らない。
-const SAMPLE_DATA_VERSION = '5';
+const SAMPLE_DATA_VERSION = '6';
 const SAMPLE_DATA_META_KEY = 'sample_data_version';
 
 export interface SeedSnapshot {
@@ -641,6 +642,9 @@ export async function seedDatabase(database: DB): Promise<void> {
     .insert(schema.materials)
     .values([...seedMaterials])
     .onConflictDoNothing();
+
+  // 掲載スクリーンショット用の写真（WBS 3.8）。失敗しても投げない
+  await seedSamplePhotos(database);
 
   // Populate FTS index
   await rebuildPlantingFts(database);
