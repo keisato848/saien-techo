@@ -16,7 +16,7 @@
  *
  * 使い方:
  *   node scripts/release/capture-store-screenshots.mjs [--serial <serial>] [--shots 01,02]
- *     [--out <dir>] [--recipe <id>] [--keep-status-bar]
+ *     [--out <dir>] [--planting <id>] [--keep-status-bar]
  *
  * manual 指定のショット（AI 実行結果など自動遷移できない画面）はスキップし、
  * 既存ファイルを維持する。
@@ -32,29 +32,31 @@ const DEFAULT_OUT = path.join(ROOT, 'docs/store/google-play/phone-screenshots');
 const { packageName: PACKAGE, scheme: SCHEME } = appIdentity();
 
 const args = parseArgs(process.argv.slice(2));
-const RECIPE_ID = args.recipe ?? 'recipe-1';
+/** サンプルデータの栽培 ID（src/db/seed.ts）。--planting で差し替えられる */
+const PLANTING_ID = args.planting ?? 'planting-tomato-01';
 
 /**
  * ショット定義。route は Expo Router のパス（saientecho://<route> で開く）。
- * manual: true は自動化不可（既存ファイル維持）。順序 = Play 表示順（README.md と一致させる）。
+ * manual: true は自動化不可（既存ファイル維持）。順序 = Play 表示順。
+ *
+ * **並びは「何のアプリか」→「どう使うか」→「何が返ってくるか」の順。**
+ * 1 枚目で伝わらないと 2 枚目は見てもらえないので、ホームを先頭に置く。
+ * Play のスマホ用スクショは最大 8 枚。
+ *
+ * だいどこ（レシピ蔵書庫・料理中モード・家族グループ）から WBS 3.8 で差し替えた。
  */
 const SHOTS = [
-  { file: '01-home-timeline.png', route: '', label: 'ホーム（調理タイムライン）' },
-  { file: '02-recipe-library.png', route: 'recipes', label: 'レシピ蔵書庫' },
-  { file: '03-recipe-detail.png', route: `recipes/${RECIPE_ID}`, label: 'レシピ詳細' },
-  { file: '04-cooking-mode.png', route: `recipes/${RECIPE_ID}/cook`, label: '料理中モード' },
-  { file: '06-family-group.png', route: 'family', label: '家族グループ' },
+  { file: '01-home.png', route: '', label: 'ホーム（今日の菜園）' },
+  { file: '02-plantings.png', route: 'plantings', label: '栽培一覧' },
   {
-    file: '07-photo-to-recipe.png',
-    route: 'recipes/import-photo',
-    label: '写真からレシピ（導線）',
+    file: '03-planting-detail.png',
+    route: `plantings/${PLANTING_ID}`,
+    label: '栽培詳細（やった！を記録）',
   },
-  { file: '08-photo-recipe-result.png', manual: true, label: 'AI 結果画面（手動撮影・既存維持）' },
-  {
-    file: '10-recipe-detail-photo.png',
-    manual: true,
-    label: '写真つき詳細（実データ依存・既存維持）',
-  },
+  { file: '04-harvests.png', route: 'harvests', label: '収穫アルバム' },
+  { file: '05-crop-guide.png', route: 'crops', label: '作物ガイド' },
+  { file: '06-calendar.png', route: 'calendar', label: 'カレンダー' },
+  { file: '07-materials.png', route: 'materials', label: '資材の在庫' },
 ];
 
 const adbPath = resolveAdb();
@@ -244,7 +246,7 @@ function parseArgs(argv) {
     const t = argv[i];
     if (t === '--serial') parsed.serial = argv[++i];
     else if (t === '--out') parsed.out = argv[++i];
-    else if (t === '--recipe') parsed.recipe = argv[++i];
+    else if (t === '--planting') parsed.planting = argv[++i];
     else if (t === '--shots') parsed.shots = argv[++i].split(',').map((s) => s.trim());
     else if (t === '--wait') parsed.waitMs = Number(argv[++i]);
     else if (t === '--keep-status-bar') parsed.keepStatusBar = true;

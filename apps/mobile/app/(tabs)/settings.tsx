@@ -13,6 +13,7 @@ import { CoachMarkOverlay } from '../../src/components/CoachMarkOverlay';
 import { HelpButton } from '../../src/components/HelpButton';
 import { Colors } from '../../src/constants/theme';
 import { useCoachMarks } from '../../src/hooks/useCoachMarks';
+import { getAppOpenAdProvider } from '../../src/services/app-open-ad.service';
 import { resetCoachMarks } from '../../src/services/coach-marks.service';
 import {
   getCurrentFamily,
@@ -45,6 +46,14 @@ export default function SettingsScreen() {
   const [user, setUser] = useState(getCurrentUser());
   const [family, setFamily] = useState(getCurrentFamily());
   const [region, setRegionState] = useState<Region | null>(null);
+  /*
+   * 広告のプライバシー設定を出すか（§8.2 / WBS 3.7）。
+   *
+   * UMP が「この地域では同意のやり直し導線が要る」と判定したときだけ出す。
+   * 日本など対象外では false になるので行ごと消える — 使えない行を並べて
+   * 「押しても何も起きない」を作らない。
+   */
+  const [adPrivacyRequired, setAdPrivacyRequired] = useState(false);
   const userDisplayName = formatProfileDisplayName(user.displayName);
 
   useFocusEffect(
@@ -58,6 +67,10 @@ export default function SettingsScreen() {
       void getRegion()
         .then(setRegionState)
         .catch(() => setRegionState(null));
+      void getAppOpenAdProvider()
+        .isPrivacyOptionsRequired()
+        .then(setAdPrivacyRequired)
+        .catch(() => setAdPrivacyRequired(false));
     }, []),
   );
 
@@ -170,6 +183,24 @@ export default function SettingsScreen() {
           enabled: true,
           onPress: () => router.push('/(tabs)/licenses'),
         },
+        // 同意のやり直しが要る地域でだけ出す（§8.2 / WBS 3.7）
+        ...(adPrivacyRequired
+          ? [
+              {
+                id: 'ad-privacy',
+                label: '広告のプライバシー設定',
+                subtitle: '広告の表示に関する同意を変更します',
+                enabled: true,
+                onPress: () => {
+                  void getAppOpenAdProvider()
+                    .showPrivacyOptionsForm()
+                    .catch(() => {
+                      Alert.alert('広告のプライバシー設定', '設定画面を開けませんでした。');
+                    });
+                },
+              } satisfies SettingItem,
+            ]
+          : []),
       ],
     },
   ];

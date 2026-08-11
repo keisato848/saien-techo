@@ -11,6 +11,7 @@ import { useDatabase } from '../src/hooks/useDatabase';
 import { markReminderFired, syncScheduledReminders } from '../src/services/reminder.service';
 import { checkAndNotifyLowMaterials } from '../src/services/low-stock.service';
 import { runWeeklyAutoBackup } from '../src/services/backup.service';
+import { maybeShowAppOpenAd } from '../src/services/app-open-ad.service';
 import { getRegion, setRegion, type Region } from '../src/services/region.service';
 import { updateCurrentFamilyName } from '../src/services/user.service';
 
@@ -62,6 +63,21 @@ export default function RootLayout() {
   useEffect(() => {
     if (isReady) runWeeklyAutoBackup().catch(() => undefined);
   }, [isReady]);
+
+  /*
+   * 起動広告（§8.2 / WBS 3.7）。
+   *
+   * **オンボーディングの判定が終わるまで待つ。** 初回起動の聞き取りに広告を
+   * 被せると、何のアプリか分からないまま広告を見せることになる。
+   * needsOnboarding が null（判定中）の間は動かさない。
+   *
+   * 頻度は app-open-ad.service が持つ（前回から 60 分・1日 3 回・入れて 24 時間は出さない）。
+   * 失敗しても黙って見送る — 広告のために起動が止まるのが最悪の失敗。
+   */
+  useEffect(() => {
+    if (!isReady || needsOnboarding === null) return;
+    void maybeShowAppOpenAd({ onboarding: needsOnboarding });
+  }, [isReady, needsOnboarding]);
 
   /*
    * リマインダーの予約を起動のたびに積み直す（R11 / WBS 2.4）。
