@@ -83,6 +83,32 @@ export function nextOccurrence(reminder: ReminderItem, from: Date = new Date()):
   }
 }
 
+/** 同じ日か（端末のタイムゾーンで判定する。UTC で見ると深夜がずれる） */
+export function isSameLocalDay(a: Date, b: Date): boolean {
+  return (
+    a.getFullYear() === b.getFullYear() &&
+    a.getMonth() === b.getMonth() &&
+    a.getDate() === b.getDate()
+  );
+}
+
+/**
+ * その日のうちに鳴る予定なら、その時刻。鳴らない日は null。
+ * ホームの「今日のリマインダー」（R11 / WBS 3.5）が使う。
+ *
+ * すでに時刻を過ぎていても返す。「今日 7 時に水やり」の予定は、
+ * 18 時に開いたときこそ「やったか？」を確かめたい情報のため。
+ * 済んだかどうかは記録の有無で別に判定する（reminder.service）。
+ */
+export function occurrenceOn(reminder: ReminderItem, day: Date): Date | null {
+  const dayStart = new Date(day);
+  dayStart.setHours(0, 0, 0, 0);
+  // nextOccurrence は from より「後」を返すので、当日 0:00 ちょうどの予定も
+  // 拾えるように 1ms 戻した位置から探す
+  const next = nextOccurrence(reminder, new Date(dayStart.getTime() - 1));
+  return next && isSameLocalDay(next, dayStart) ? next : null;
+}
+
 /** 設定内容を 1 行で。UI と通知本文の両方で使う */
 export function describeSchedule(reminder: ReminderItem): string {
   const time = `${reminder.hour}:${String(reminder.minute).padStart(2, '0')}`;

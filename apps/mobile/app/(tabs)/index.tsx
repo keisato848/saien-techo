@@ -1,12 +1,26 @@
 /**
- * S01: ホーム — 今日の菜園（R05 / WBS 1.9）
+ * S01: ホーム — 今日の菜園（R05 / WBS 1.9、統合は WBS 3.5）
  *
  * だいどこの調理記録タイムラインを、栽培の作業ログのタイムラインに差し替えた。
- * 元の画面は recipes/home-legacy.tsx に退避してある（recipes 一式の削除時に消す）。
  *
- * 「今月の菜園仕事」（R08 / WBS 3.2）は栽培暦 × 地域帯のカードとして追加済み。
- * 「つぎの作業」（R10 / WBS 3.4）とカード配置の最終形は WBS 3.5（ホーム統合）で。
- * 栽培 0 件の空状態にもカードを出すかは 3.5 で判断する。docs/画面設計.md S01 参照。
+ * ## カードの並び（WBS 3.5 で確定）
+ *
+ * 1. 今日のリマインダー（R11）— 自分で決めた予定。事実
+ * 2. つぎの作業（R10）— アプリからの提案。ホームで唯一のアクセント面
+ * 3. 育てているもの — 自分の畑への入口
+ * 4. 今月の菜園仕事（R08）— 季節の情報
+ * 5. さいきんの記録（R05）— 履歴
+ *
+ * 「予定 → 提案 → 自分の畑 → 季節 → 履歴」。1・2 はどちらも行動を促すが、
+ * 自分で設定した予定の方が確度が高いので上に置く。
+ * 1〜2・4 は中身が無ければカードごと消えるので、多くの日は 2 枚程度に収まる。
+ *
+ * ## 栽培 0 件のとき（WBS 3.5 で判断）
+ *
+ * 「ようこそ」だけでなく**「今月の菜園仕事」も出す**。まだ何も植えていない人に
+ * とって「今月なにを植えられるか」は最も役に立つ情報で、すでに実装がある。
+ * ここを空にすると、登録するまで何も分からない行き止まりになる。
+ * docs/画面設計.md S01 参照。
  */
 import { useFocusEffect, useRouter } from 'expo-router';
 import { CalendarDays, Images, Plus } from 'lucide-react-native';
@@ -19,6 +33,7 @@ import { Loading } from '../../src/components/Loading';
 import { MonthlyWorkCard } from '../../src/components/MonthlyWorkCard';
 import { NextActionCard } from '../../src/components/NextActionCard';
 import { PressableScale } from '../../src/components/PressableScale';
+import { TodayReminderCard } from '../../src/components/TodayReminderCard';
 import { Colors, Typography } from '../../src/constants/theme';
 import { CARE_KIND_LABEL } from '../../src/services/care-log.service';
 import { HARVEST_UNIT_LABEL } from '../../src/services/harvest.service';
@@ -107,16 +122,22 @@ export default function HomeScreen() {
       </View>
 
       {!hasAnything ? (
-        <EmptyState
-          icon="🌱"
-          title="さいえん手帳へようこそ"
-          message="育てているものを登録すると、経過日数と作業の記録がここに並びます。"
-          actionLabel="栽培を追加"
-          onAction={() => router.push('/plantings/new')}
-        />
+        // 何も無い人にも「今月の菜園仕事」は出す。まだ植えていない人にとって
+        // 「今月なにを植えられるか」が一番の手がかりになるため（WBS 3.5）
+        <ScrollView contentContainerStyle={styles.body}>
+          <EmptyState
+            icon="🌱"
+            title="さいえん手帳へようこそ"
+            message="育てているものを登録すると、経過日数と作業の記録がここに並びます。"
+            actionLabel="栽培を追加"
+            onAction={() => router.push('/plantings/new')}
+          />
+          <MonthlyWorkCard />
+        </ScrollView>
       ) : (
         <ScrollView contentContainerStyle={styles.body}>
-          {/* つぎの作業（R10 / WBS 3.4）。行動を促すものを最上段に（画面設計 S01） */}
+          {/* 予定（自分で決めたもの）→ 提案（アプリが出すもの）の順（画面設計 S01） */}
+          <TodayReminderCard />
           <NextActionCard />
 
           {growing.length > 0 ? (

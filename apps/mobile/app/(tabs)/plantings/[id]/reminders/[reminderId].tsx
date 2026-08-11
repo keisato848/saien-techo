@@ -9,7 +9,7 @@
  */
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Trash2 } from 'lucide-react-native';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Alert, StyleSheet, Text } from 'react-native';
 
 import { Loading } from '../../../../../src/components/Loading';
@@ -27,11 +27,6 @@ export default function EditReminderScreen() {
   const router = useRouter();
   const [initialValues, setInitialValues] = useState<ReminderFormValues | null>(null);
 
-  // 読み直しの引き金は reminderId だけにする（router を依存に入れると、
-  // その identity が変わるたびに読み込み中へ戻ってしまう）
-  const routerRef = useRef(router);
-  routerRef.current = router;
-
   useEffect(() => {
     let cancelled = false;
     // 前のお知らせの設定を一瞬でも出さない（出すと useState がそれで固まる）
@@ -41,7 +36,7 @@ export default function EditReminderScreen() {
       const reminder = await getReminder(reminderId);
       if (cancelled) return;
       if (!reminder) {
-        routerRef.current.back();
+        router.back();
         return;
       }
       setInitialValues({
@@ -57,7 +52,7 @@ export default function EditReminderScreen() {
     return () => {
       cancelled = true;
     };
-  }, [reminderId]);
+  }, [reminderId, router]);
 
   const handleSubmit = useCallback(
     async (values: ReminderFormValues) => {
