@@ -11,7 +11,8 @@
  *
  * web 版は AdBanner.web.tsx（常に null）。SDK を web バンドルに入れない。
  */
-import { useEffect, useState } from 'react';
+import { useFocusEffect } from 'expo-router';
+import { useCallback, useState } from 'react';
 import { View } from 'react-native';
 import { AdsConsent, BannerAd, BannerAdSize, TestIds } from 'react-native-google-mobile-ads';
 
@@ -23,21 +24,26 @@ export function AdBanner() {
   const [canRequestAds, setCanRequestAds] = useState(false);
   const [failed, setFailed] = useState(false);
 
-  useEffect(() => {
-    if (!ADMOB_ENABLED) return;
-    let cancelled = false;
-    // 同意フローは起動広告（app-open-ad.service）が解決済み。ここは結果を見るだけ
-    AdsConsent.getConsentInfo()
-      .then((info) => {
-        if (!cancelled) setCanRequestAds(info.canRequestAds);
-      })
-      .catch(() => {
-        // 同意状態が読めないなら出さない（安全側）
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+  // 同意の取得自体は起動広告（app-open-ad.service）がやる。ここは結果を見るだけだが、
+  // **マウント時の 1 回きりにしない** — 初回起動はギリギリまで同意が未解決で、
+  // 1 回きりだと「インストール直後にガイドを開くと二度と出ない」になる（実機で再現）。
+  // expo-router は画面をアンマウントしないので、フォーカスのたびに見直す。
+  useFocusEffect(
+    useCallback(() => {
+      if (!ADMOB_ENABLED || canRequestAds) return;
+      let cancelled = false;
+      AdsConsent.getConsentInfo()
+        .then((info) => {
+          if (!cancelled) setCanRequestAds(info.canRequestAds);
+        })
+        .catch(() => {
+          // 同意状態が読めないなら出さない（安全側）
+        });
+      return () => {
+        cancelled = true;
+      };
+    }, [canRequestAds]),
+  );
 
   if (!ADMOB_ENABLED || !canRequestAds || failed) return null;
 

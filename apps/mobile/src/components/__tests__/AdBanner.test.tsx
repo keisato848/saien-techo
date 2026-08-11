@@ -7,6 +7,13 @@
 import { render, waitFor } from '@testing-library/react-native';
 import { AdsConsent } from 'react-native-google-mobile-ads';
 
+jest.mock('expo-router', () => ({
+  useFocusEffect: (effect: () => void) => {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    require('react').useEffect(effect, [effect]);
+  },
+}));
+
 let mockAdmobEnabled = false;
 jest.mock('../../config', () => ({
   get ADMOB_ENABLED() {
