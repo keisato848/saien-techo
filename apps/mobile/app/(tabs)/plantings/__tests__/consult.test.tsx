@@ -28,9 +28,16 @@ jest.mock('../../../../src/services/planting.service', () => ({
 
 const mockGetFreemiumStatus = jest.fn();
 const mockRecordCloudInference = jest.fn(() => Promise.resolve());
+const mockGrantAdBonus = jest.fn(() => Promise.resolve(1));
 jest.mock('../../../../src/services/usage.service', () => ({
   getFreemiumStatus: (...args: unknown[]) => mockGetFreemiumStatus(...args),
   recordCloudInference: (...args: unknown[]) => mockRecordCloudInference(...args),
+  grantAdBonus: (...args: unknown[]) => mockGrantAdBonus(...args),
+}));
+
+const mockShowRewardedAd = jest.fn();
+jest.mock('../../../../src/services/ad-reward.service', () => ({
+  getAdRewardProvider: () => ({ showRewardedAd: mockShowRewardedAd }),
 }));
 
 const mockConsultGarden = jest.fn();
@@ -77,6 +84,8 @@ beforeEach(() => {
   mockGetPlantingDetail.mockReset().mockResolvedValue(PLANTING);
   mockGetFreemiumStatus.mockReset().mockResolvedValue(STATUS_OK);
   mockRecordCloudInference.mockReset().mockResolvedValue(undefined);
+  mockGrantAdBonus.mockReset().mockResolvedValue(1);
+  mockShowRewardedAd.mockReset();
   mockConsultGarden.mockReset();
   mockCapturePhoto.mockReset();
 });
@@ -171,6 +180,58 @@ describe('AI 相談画面', () => {
 
     await screen.findByText('本日の利用上限に達しました。');
     expect(mockRecordCloudInference).not.toHaveBeenCalled();
+  });
+
+  it('枠切れ + 広告ありなら動画ボタンが出て、視聴完了でボーナスを付与する', async () => {
+    mockGetFreemiumStatus
+      .mockResolvedValueOnce({
+        ...STATUS_OK,
+        used: 1,
+        remaining: 0,
+        canInfer: false,
+        canWatchAdForMore: true,
+      })
+      // 視聴完了後の再取得では +1 されている
+      .mockResolvedValue({ ...STATUS_OK, used: 1, limit: 2, remaining: 1, adBonusGranted: 1 });
+    mockShowRewardedAd.mockResolvedValue({ rewarded: true });
+
+    render(<GardenConsultScreen />);
+    fireEvent.press(await screen.findByLabelText('動画を見てもう1回相談する'));
+
+    await waitFor(() => expect(mockGrantAdBonus).toHaveBeenCalledTimes(1));
+    // 付与後は枠が復活し、残り回数の表示に戻る
+    await screen.findByText('今日はあと 1 回相談できます');
+  });
+
+  it('動画を途中で閉じたらボーナスを付与しない', async () => {
+    mockGetFreemiumStatus.mockResolvedValue({
+      ...STATUS_OK,
+      used: 1,
+      remaining: 0,
+      canInfer: false,
+      canWatchAdForMore: true,
+    });
+    mockShowRewardedAd.mockResolvedValue({ rewarded: false });
+
+    render(<GardenConsultScreen />);
+    fireEvent.press(await screen.findByLabelText('動画を見てもう1回相談する'));
+
+    await waitFor(() => expect(mockShowRewardedAd).toHaveBeenCalled());
+    expect(mockGrantAdBonus).not.toHaveBeenCalled();
+  });
+
+  it('広告が出せないときは動画ボタン自体を出さない', async () => {
+    mockGetFreemiumStatus.mockResolvedValue({
+      ...STATUS_OK,
+      used: 1,
+      remaining: 0,
+      canInfer: false,
+      canWatchAdForMore: false,
+    });
+
+    render(<GardenConsultScreen />);
+    await screen.findByText(/また明日お試しください/);
+    expect(screen.queryByLabelText('動画を見てもう1回相談する')).toBeNull();
   });
 
   it('結果から作業ログの記録へ進める', async () => {

@@ -11,6 +11,7 @@ import { useCallback, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { AdBanner } from '../../../src/components/AdBanner';
 import { Loading } from '../../../src/components/Loading';
 import { PressableScale } from '../../../src/components/PressableScale';
 import { Colors, Typography } from '../../../src/constants/theme';
@@ -64,6 +65,9 @@ export default function CropGuideListScreen() {
           ))}
         </ScrollView>
       )}
+
+      {/* バナーはこの閲覧型画面の下部だけ（§8.2）。広告なしビルドでは何も出ない */}
+      <AdBanner />
     </View>
   );
 }

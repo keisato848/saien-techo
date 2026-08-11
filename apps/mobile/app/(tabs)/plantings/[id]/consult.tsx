@@ -13,7 +13,7 @@
  * - 免責（Q5）は結果の有無に関係なく常に画面下部に出す。
  */
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
-import { Camera, ChevronLeft, ImageIcon, Sparkles, X } from 'lucide-react-native';
+import { Camera, ChevronLeft, ImageIcon, PlayCircle, Sparkles, X } from 'lucide-react-native';
 import { useCallback, useState } from 'react';
 import {
   ActivityIndicator,
@@ -42,10 +42,12 @@ import {
   capturePhoto,
   type PhotoCaptureSource,
 } from '../../../../src/services/photo-capture.service';
+import { getAdRewardProvider } from '../../../../src/services/ad-reward.service';
 import { getPlantingDetail } from '../../../../src/services/planting.service';
 import type { PlantingDetail } from '../../../../src/services/types';
 import {
   getFreemiumStatus,
+  grantAdBonus,
   recordCloudInference,
   type FreemiumStatus,
 } from '../../../../src/services/usage.service';
@@ -60,6 +62,7 @@ export default function GardenConsultScreen() {
   const [imageUri, setImageUri] = useState<string | null>(null);
   const [question, setQuestion] = useState('');
   const [consulting, setConsulting] = useState(false);
+  const [watchingAd, setWatchingAd] = useState(false);
   const [result, setResult] = useState<GardenConsultResult | null>(null);
   const [errorText, setErrorText] = useState<string | null>(null);
 
@@ -114,6 +117,27 @@ export default function GardenConsultScreen() {
       setConsulting(false);
     }
   }, [imageUri, consulting, planting?.cropName, question]);
+
+  /**
+   * 枠切れの利用者が動画リワードで +1 回を得る（R14 の広告ボーナス・1 日 3 回まで）。
+   * 付与は**視聴完了（rewarded=true）のときだけ**。途中で閉じたら何も変えない。
+   */
+  const handleWatchAd = useCallback(async () => {
+    if (watchingAd) return;
+    setWatchingAd(true);
+    setErrorText(null);
+    try {
+      const outcome = await getAdRewardProvider().showRewardedAd();
+      if (outcome.rewarded) {
+        await grantAdBonus();
+        setStatus(await getFreemiumStatus());
+      }
+    } catch {
+      setErrorText('広告を読み込めませんでした。時間をおいてお試しください。');
+    } finally {
+      setWatchingAd(false);
+    }
+  }, [watchingAd]);
 
   const quotaExhausted = status !== null && !status.canInfer;
 
@@ -185,12 +209,31 @@ export default function GardenConsultScreen() {
           style={styles.questionInput}
         />
 
-        {/* 無料枠。使い切りは submit を殺してメッセージだけ出す */}
+        {/* 無料枠。使い切りは submit を殺し、広告が出せるなら +1 回の導線を添える */}
         {quotaExhausted ? (
           <View style={styles.quotaCard}>
             <Text style={styles.quotaText}>
-              本日の相談回数を使い切りました。また明日お試しください。
+              {status?.canWatchAdForMore
+                ? '本日の無料回数を使い切りました。短い動画を見ると、今日もう 1 回相談できます。'
+                : '本日の相談回数を使い切りました。また明日お試しください。'}
             </Text>
+            {status?.canWatchAdForMore ? (
+              <PressableScale
+                style={styles.watchAdButton}
+                onPress={() => void handleWatchAd()}
+                disabled={watchingAd}
+                accessibilityLabel="動画を見てもう1回相談する"
+              >
+                {watchingAd ? (
+                  <ActivityIndicator color={Colors.accentInk} size="small" />
+                ) : (
+                  <PlayCircle size={16} color={Colors.accentInk} />
+                )}
+                <Text style={styles.watchAdText}>
+                  {watchingAd ? '広告を読み込み中…' : '動画を見てもう 1 回相談する'}
+                </Text>
+              </PressableScale>
+            ) : null}
           </View>
         ) : status && Number.isFinite(status.remaining) ? (
           <Text style={styles.quotaLine}>今日はあと {status.remaining} 回相談できます</Text>
@@ -363,8 +406,25 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.surface,
     padding: 12,
     marginBottom: 10,
+    gap: 10,
   },
   quotaText: { fontSize: Typography.size.sm, color: Colors.inkDim, lineHeight: 20 },
+  watchAdButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    borderRadius: 9,
+    borderWidth: 1,
+    borderColor: Colors.accentLine,
+    backgroundColor: Colors.accentSoft,
+    paddingVertical: 10,
+  },
+  watchAdText: {
+    fontSize: Typography.size.sm,
+    color: Colors.accentInk,
+    fontWeight: Typography.weight.medium,
+  },
   consultButton: {
     flexDirection: 'row',
     alignItems: 'center',

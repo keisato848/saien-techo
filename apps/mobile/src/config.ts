@@ -40,6 +40,10 @@ export const ADMOB_REWARDED_UNIT_ID = process.env['EXPO_PUBLIC_ADMOB_REWARDED_UN
 // 実 ID を入れる前でもテスト広告で導線を確認できる。
 export const ADMOB_APP_OPEN_UNIT_ID = process.env['EXPO_PUBLIC_ADMOB_APP_OPEN_UNIT_ID'] ?? '';
 
+// バナー広告のユニット ID。置くのは**作物ガイド（閲覧型画面）だけ** — 記録導線に
+// 広告を挟まない方針（§8.2）。未設定なら TestIds.BANNER。
+export const ADMOB_BANNER_UNIT_ID = process.env['EXPO_PUBLIC_ADMOB_BANNER_UNIT_ID'] ?? '';
+
 // **検証用**: 起動広告の頻度制限（猶予 24 時間・60 分間隔・1 日 3 回）を無視する。
 // 入れたばかりの端末では猶予に入って広告が出ないため、実機確認で表示そのものを
 // 見たいときにだけ使う（EXPO_PUBLIC_ENABLE_SAMPLE_DATA と同じ立て付け）。

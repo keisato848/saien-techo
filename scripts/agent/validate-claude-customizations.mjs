@@ -452,7 +452,13 @@ const FOREIGN_IDENTIFIERS = [
   { pattern: /daidoko:\/\//, label: 'だいどこのディープリンクスキーム' }, // daidoko-ref-ok
   { pattern: /--service\s+daidoko\b/, label: 'だいどこの Railway サービス名' }, // daidoko-ref-ok
   { pattern: /daidoko-production/, label: 'だいどこの Railway 本番ドメイン' }, // daidoko-ref-ok
-  { pattern: /ca-app-pub-2633806931583277/, label: 'だいどこの AdMob ID' }, // daidoko-ref-ok
+  // AdMob のパブリッシャー ID（ca-app-pub-2633806931583277）は**アカウント共用**で、
+  // さいえん手帳の実 ID も同じ接頭辞を持つ（2026-08-11 発行）。パブリッシャー全体を
+  // 弾くと自分の ID まで誤検知するので、だいどこの個別アプリ/ユニット ID だけを見る。
+  {
+    pattern: /ca-app-pub-2633806931583277[~/](2829239666|2276751496|2735127473)/, // daidoko-ref-ok
+    label: 'だいどこの AdMob アプリ/ユニット ID',
+  },
   { pattern: /DAIDOKO_UPLOAD_/, label: 'だいどこの署名環境変数' }, // daidoko-ref-ok
   { pattern: /keisato848\/daidoko\b/, label: 'だいどこのリポジトリ' }, // daidoko-ref-ok
   { pattern: /daidoko\.db/, label: 'だいどこの DB ファイル名' }, // daidoko-ref-ok
