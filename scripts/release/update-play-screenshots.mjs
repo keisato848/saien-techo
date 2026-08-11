@@ -22,14 +22,13 @@ const DRY_RUN = process.argv.includes('--dry-run');
 
 /** アップロード順（= Play の表示順）。README.md の表と同期すること。 */
 const ORDER = [
-  '01-home-timeline.png',
-  '02-recipe-library.png',
-  '03-recipe-detail.png',
-  '04-cooking-mode.png',
-  '06-family-group.png',
-  '07-photo-to-recipe.png',
-  '08-photo-recipe-result.png',
-  '10-recipe-detail-photo.png',
+  '01-home.png',
+  '02-plantings.png',
+  '03-planting-detail.png',
+  '04-harvests.png',
+  '05-crop-guide.png',
+  '06-calendar.png',
+  '07-materials.png',
 ];
 
 // ─── 検証（存在・PNG・寸法・8枚以内） ────────────────────────────────────────
