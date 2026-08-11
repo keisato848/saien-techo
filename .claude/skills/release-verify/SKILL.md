@@ -59,3 +59,50 @@ Expo config plugin のネイティブ注入は**アンカー文字列の不一�
 ## 5. リリースノート（提出前に起草）
 
 Play の「このリリースの新機能」ja-JP を起草してユーザー承認を得る（500字以内・ユーザー向けの言葉で）。
+
+## 6. 個人情報が配布物・ストアから出ないか（DoD 3 / CLAUDE.md §4b）
+
+**判定基準**: 開発者・利用者の個人情報が、①アプリ資源（APK/AAB に同梱される画像・
+データ）と②ストア掲載物（スクショ・掲載文・グラフィック）のどちらからも取り出せないこと。
+
+### 6-1. アプリ資源 — 「開発用だから入らない」は誤り
+
+`require('../assets/...')` は **Metro がビルド時に静的解決**する。`isSampleDataEnabled` の
+ような**実行時**フラグは同梱を止めない（止まるのは表示だけ）。
+
+```powershell
+# 提出する AAB に何の画像が入っているか、実物で確認する
+Add-Type -AssemblyName System.IO.Compression.FileSystem
+$zip = [System.IO.Compression.ZipFile]::OpenRead("<app-release.aab>")
+$zip.Entries | Where-Object { $_.FullName -match '\.(jpg|jpeg|png|mp4|m4a)$' -and $_.FullName -match 'assets' } |
+  ForEach-Object { "{0}  ({1} bytes)" -f $_.FullName, $_.Length }
+$zip.Dispose()
+```
+
+出てきた写真・音声は、**利用者が展開すれば中身もメタデータも読める**前提で扱う。
+
+```bash
+# EXIF が残っていないか（0 でなければ止める）
+python -c "
+from PIL import Image, ExifTags
+im = Image.open('<file.jpg>')
+ex = im.getexif()
+print('EXIF:', len(ex), 'GPS:', len(ex.get_ifd(ExifTags.IFD.GPSInfo) or {}))
+"
+# EXIF 以外の領域に残ることもあるので生バイト列も走査する
+grep -a -o -E "GPS|Pixel|Google|Exif|HDR\+" <file.jpg> | sort -u
+```
+
+実績（2026-08-12）: サンプル写真 4 枚が `EXPO_PUBLIC_ENABLE_SAMPLE_DATA` **無効**の
+リリース AAB の `base/res/drawable-mdpi-v4/` に入っていた。提供時の EXIF には
+GPS 座標・標高・撮影方向・Pixel 9a・撮影時刻が含まれていた（除去済みで提出）。
+除去手順は `sanitize-user-media` Skill。
+
+### 6-2. ストア掲載物
+
+- **スクリーンショット**: `screencap` 由来の PNG は EXIF を持たないが、**写り込み**を見る
+  （実データのサンプルに実名・住所・電話番号・メールが出ていないか）
+- **掲載文・リリースノート**: 開発者の氏名・住所・私用メールが混ざっていないか
+- **デベロッパー情報**: 無料 + 課金なしなら Play に出るのはメールのみ。
+  **有料/アプリ内課金を入れた時点で氏名+住所が公開対象**になる
+  （EU DSA のトレーダー扱い。docs/広告・収益化方針.md — v1.5 の 4.3 着手時の判断ポイント）

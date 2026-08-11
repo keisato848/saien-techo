@@ -62,6 +62,17 @@ Expo SDK 54 / Expo Router v6 / expo-sqlite + Drizzle ORM / Zustand / TanStack Qu
 1. **画面テスト** — 分岐・サービスへ渡す引数・遷移先を `@testing-library/react-native` で
 2. **実機確認** — エミュレータで該当導線を通し、スクリーンショットを PR に残す
 
+**3. 個人情報の非公開確認** — 資産(画像・音声・サンプルデータ・固定文言)を追加/差し替えた
+タスク、およびストア掲載物を触ったタスクでは、**それが配布物に含まれても個人情報が
+出ないこと**を機械的に確認する(手順は `release-verify` Skill §6)。
+
+> **`assets/` に置いたものは配布される。** サンプルデータ用の画像も同じ。
+> `require()` は Metro が**ビルド時に静的解決**するので、`EXPO_PUBLIC_ENABLE_SAMPLE_DATA`
+> のような**実行時**フラグでは同梱を止められない。実績: サンプル写真 4 枚が
+> `EXPO_PUBLIC_ENABLE_SAMPLE_DATA` 無効のビルドでも AAB の
+> `base/res/drawable-mdpi-v4/` に入っていた(2026-08-12 確認)。
+> 提供写真の EXIF には既定で **GPS 座標・標高・撮影方向・端末名**が入る。
+
 **画面テストは実機確認の代わりにならない。** 実機でしか出ない不具合の実績:
 `PressableScale` の flex 潰れ / `borderRadius` が効かず四角になる /
 ボトムシートがジェスチャーバーに飲まれる / 横スクロール帯が縦にも伸びる。
