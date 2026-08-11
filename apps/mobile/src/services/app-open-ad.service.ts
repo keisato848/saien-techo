@@ -9,7 +9,7 @@
  */
 import { Platform } from 'react-native';
 
-import { ADMOB_ENABLED } from '../config';
+import { ADMOB_ENABLED, ADMOB_IGNORE_FREQUENCY } from '../config';
 import {
   type AppOpenAdDecision,
   type AppOpenAdState,
@@ -136,7 +136,11 @@ export async function maybeShowAppOpenAd(
         enabled: isAppOpenAdConfigured(),
         canRequestAds,
         onboarding: options.onboarding,
-        state,
+        // 検証ビルドでは頻度の記録を空にして、猶予・間隔・上限だけを素通りさせる。
+        // 同意とオンボーディングの判定は上のとおり効いたまま
+        state: ADMOB_IGNORE_FREQUENCY
+          ? { ...state, firstLaunchAt: null, lastShownAt: null }
+          : state,
       },
       now,
     );
