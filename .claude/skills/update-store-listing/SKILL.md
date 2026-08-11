@@ -57,15 +57,18 @@ description: Google Play ストア掲載（ja-JP のアプリ名・説明文・�
 
 ## フィーチャーグラフィック（1024x500）
 
-1. 意匠は `scripts/generate-play-promos.mjs`（`buildFeatureGraphicSvg()` のテキスト・
-   `renderFeatureGraphic()` の参照スクショパスを編集。アイコンは `apps/mobile/assets/icon.png`
-   を都度リサイズする単一ソース — `docs/store/google-play/icons/icon-play-512.png` は副産物なので直接編集しない）
+1. 意匠は **`scripts/release/generate-feature-graphic.mjs`**（若葉パレット・
+   ブランドマーク `apps/mobile/assets/brand/mark.svg` が単一ソース）
 2. **公開のブランド資産なのでユーザーに画像を提示して承認を得る**
-3. 生成: `node scripts/generate-play-promos.mjs`（フィーチャーグラフィック＋販促スクショ6枚を再生成）
+3. 生成: `node scripts/release/generate-feature-graphic.mjs`
 4. Play へ反映: `node scripts/release/update-play-feature-graphic.mjs --dry-run` →
    `node scripts/release/update-play-feature-graphic.mjs`
    - **アイコンと同様 Play の審査を経てから公開される**（Console に「審査中の変更」表示）
 5. `docs/store/google-play/graphics/*.png` 等の変更を PR でマージ
+
+> `scripts/generate-play-promos.mjs` は**だいどこのまま**（暗色×金の意匠・レシピ画面前提の
+> 販促スライド 6 枚）。フィーチャーグラフィックだけ上記へ切り出したので、
+> 販促スライドが要るときに残りを差し替える。
 
 ## プロモーション動画（YouTube 埋め込み）
 
