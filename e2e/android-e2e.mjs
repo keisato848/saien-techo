@@ -1,13 +1,16 @@
 #!/usr/bin/env node
 /**
- * だいどこ — Android 実機 E2E テスト
+ * さいえん手帳 — Android 実機 E2E テスト（菜園の一巡・WBS T2）
  *
  * 必要環境:
- *   - ADB 接続済みの Pixel 9a (or 任意の Android 端末)
+ *   - ADB 接続済みの Android 端末（実績: AQUOS SH-RM19s / Pixel 9a）
  *   - さいえん手帳(app.json の applicationId)がインストール済み
- *   - 端末がロック解除されている
+ *   - **端末のロックが解除されていて、実行中もロックされないこと**
+ *     1 回に数分かかるので画面タイムアウトに負ける。開発者向けオプションの
+ *     「充電中は画面を ON」か `adb shell svc power stayon true`（戻すときは false）
  *
  * 実行: node e2e/android-e2e.mjs
+ *       TARGET_DEVICE=<serial> node e2e/android-e2e.mjs   # 端末を指定する場合
  *
  * 各テストは独立したフロー:
  *   1. force-stop でクリーン起動
@@ -99,7 +102,23 @@ function collapseSystemUi() {
   adb(['shell', 'cmd', 'statusbar', 'collapse'], { silent: true });
 }
 
+/**
+ * ロック画面か。**通知シェードの判定より先に見る。**
+ *
+ * ロック画面にも通知スタックが載るので、シェードの目印
+ * （notification_stack_scroller）だけで判定すると**ロック画面をシェードと誤認**する。
+ * 実測: AQUOS SH-RM19s がスリープ+ロックの状態で、10 本すべてが
+ * 「notification shade was open」で失敗し、原因が分からなかった（2026-08-12）。
+ */
+function xmlLooksLikeLockscreen(xml) {
+  return (
+    xml.includes('package="com.android.systemui"') &&
+    (xml.includes('keyguard') || xml.includes('lockscreen') || xml.includes('lock_icon'))
+  );
+}
+
 function xmlLooksLikeNotificationShade(xml) {
+  if (xmlLooksLikeLockscreen(xml)) return false; // ロック画面はシェードではない
   return (
     xml.includes('package="com.android.systemui"') &&
     (xml.includes('notification_panel') ||
@@ -108,8 +127,34 @@ function xmlLooksLikeNotificationShade(xml) {
   );
 }
 
+/**
+ * 実行中のロックは**リトライで回復しない**ので、専用の例外で全体を止める。
+ * 個々のテストの FAIL として握り潰すと、原因が 10 本ぶんのノイズに埋もれる。
+ */
+class LockedDeviceError extends Error {}
+
+/** 端末がロック中か（dumpsys の真実。UI dump のヒューリスティックより確実） */
+function isDeviceLocked() {
+  const out = adb(['shell', 'dumpsys', 'window'], { silent: true });
+  return /mDreamingLockscreen=true/.test(out);
+}
+
+/** 画面を起こす。ロックは解除しない（PIN を跨ぐ操作はしない） */
+function wakeScreen() {
+  adb(['shell', 'input', 'keyevent', 'KEYCODE_WAKEUP'], { silent: true });
+  sleepSync(800);
+}
+
 function tap(x, y) {
   adb(['shell', 'input', 'tap', String(x), String(y)]);
+}
+
+/** 画面を下へ送る。詳細画面の「栽培を終了」は折り返しの下にある */
+function scrollDown(times = 1) {
+  for (let i = 0; i < times; i += 1) {
+    adb(['shell', 'input', 'swipe', '540', '1800', '540', '700', '300']);
+    sleepSync(900);
+  }
 }
 
 function inputText(text) {
@@ -148,6 +193,30 @@ async function dismissSystemAnrIfShown() {
   return true;
 }
 
+/**
+ * OS の権限ダイアログを断る。
+ *
+ * 収穫フォームは開いた瞬間にカメラを起動する（R06「最短 3 タップ」の設計・autoCapture）。
+ * 初回は権限ダイアログが出て操作を塞ぐ。**許可しない**を選べば capturePhoto が失敗し、
+ * HarvestForm は「取り消し・失敗ともフォームに留まる」ので、写真なしで記録を続けられる。
+ */
+async function denyPermissionDialogIfShown() {
+  let xml = '';
+  try {
+    xml = uiDump('permission-check');
+  } catch {
+    return false;
+  }
+  if (!xml.includes('com.android.permissioncontroller') && !xml.includes('許可しますか')) {
+    return false;
+  }
+  const deny = findByText(xml, '許可しない') || findByText(xml, "Don't allow");
+  if (!deny) return false;
+  tap(deny.cx, deny.cy);
+  await sleep(1500);
+  return true;
+}
+
 function screenshot(name) {
   collapseSystemUi();
   const remote = '/sdcard/_e2e.png';
@@ -178,6 +247,22 @@ function uiDump(name = 'dump') {
 
     const xml = readFileSync(local, 'utf8');
     if (xml.trim().length > 0) {
+      if (xmlLooksLikeLockscreen(xml)) {
+        // preflight は通ったのに途中でロックされた = **画面タイムアウト**。
+        // KEYCODE_WAKEUP は画面を点けるだけでロックは解けないので、リトライしても無駄。
+        // 実測: これで 10 本 × 8 リトライを空振りさせた（2026-08-12・AQUOS SH-RM19s）
+        wakeScreen();
+        if (isDeviceLocked()) {
+          throw new LockedDeviceError(
+            '実行中に画面がロックされました（画面タイムアウト）。\n' +
+              '      1 回の実行に数分かかるので、開発者向けオプションの\n' +
+              '      「充電中は画面を ON」を有効にするか、`adb shell svc power stayon true` を\n' +
+              '      実行してから再試行してください（戻すときは stayon false）。',
+          );
+        }
+        lastError = `read attempt ${attempt}: ロック画面を検出したが解除された。再取得する`;
+        return null;
+      }
       if (xmlLooksLikeNotificationShade(xml)) {
         lastError = `read attempt ${attempt}: notification shade was open`;
         collapseSystemUi();
@@ -218,6 +303,35 @@ function uiDump(name = 'dump') {
 // ─── UI 要素探索 ──────────────────────────────────────────────────────────
 function findByText(xml, text) {
   return findNodeByAttr(xml, 'text', text);
+}
+
+/**
+ * text 属性に**含まれる**ノードを探す（findByText は完全一致）。
+ *
+ * 一覧の行は「作物名　品種」を全角スペースで連結した 1 つの text になるため、
+ * 品種だけでは完全一致しない（2026-08-12 実測: text="キュウリ　E2E504601"）。
+ */
+function findByTextContaining(xml, needle) {
+  const nodeRe = /<node\b[^>]*\/?>/g;
+  let match;
+  while ((match = nodeRe.exec(xml)) !== null) {
+    const node = match[0];
+    const text = /\btext="([^"]*)"/.exec(node);
+    if (!text || !decodeXml(text[1]).includes(needle)) continue;
+    const bounds = /bounds="\[(\d+),(\d+)\]\[(\d+),(\d+)\]"/.exec(node);
+    if (!bounds) continue;
+    return {
+      bounds: [+bounds[1], +bounds[2], +bounds[3], +bounds[4]],
+      cx: Math.floor((+bounds[1] + +bounds[3]) / 2),
+      cy: Math.floor((+bounds[2] + +bounds[4]) / 2),
+    };
+  }
+  return null;
+}
+
+/** text 属性に含まれる文字列があるか（hasText は完全一致） */
+function hasTextContaining(xml, needle) {
+  return findByTextContaining(xml, needle) !== null;
 }
 
 function findByContentDesc(xml, desc) {
@@ -326,16 +440,29 @@ function findTopRightClickable(xml) {
 }
 
 function findFirstEditText(xml) {
-  const match =
-    /<node\b[^>]*\bclass="android\.widget\.EditText"[^>]*\bbounds="\[(\d+),(\d+)\]\[(\d+),(\d+)\]"/.exec(
-      xml,
-    );
-  if (!match) return null;
-  return {
-    bounds: [+match[1], +match[2], +match[3], +match[4]],
-    cx: Math.floor((+match[1] + +match[3]) / 2),
-    cy: Math.floor((+match[2] + +match[4]) / 2),
-  };
+  return findAllEditTexts(xml)[0] ?? null;
+}
+
+/**
+ * すべての入力欄を**出現順**で返す。
+ *
+ * React Native の TextInput はプレースホルダを `text` に載せるだけで `hint` 属性を持たない。
+ * そのため `findByHint('品種')` は当たらず、順番で掴むしかない
+ * （栽培フォーム: 0=作物名 / 1=品種 / 2=タグ追加。2026-08-12 実測）。
+ * **画面の並びが変わると壊れる**ので、使う側は個数を検査してから使うこと。
+ */
+function findAllEditTexts(xml) {
+  const pattern =
+    /<node\b[^>]*\bclass="android\.widget\.EditText"[^>]*\bbounds="\[(\d+),(\d+)\]\[(\d+),(\d+)\]"/g;
+  const found = [];
+  for (const match of xml.matchAll(pattern)) {
+    found.push({
+      bounds: [+match[1], +match[2], +match[3], +match[4]],
+      cx: Math.floor((+match[1] + +match[3]) / 2),
+      cy: Math.floor((+match[2] + +match[4]) / 2),
+    });
+  }
+  return found;
 }
 
 function hasText(xml, text) {
@@ -409,6 +536,8 @@ async function test(name, fn) {
     record(name, result === false ? 'FAIL' : 'PASS', typeof result === 'string' ? result : '');
   } catch (err) {
     record(name, 'FAIL', err.message);
+    // ロックは環境の問題。以降も必ず落ちるので握り潰さず全体を止める
+    if (err instanceof LockedDeviceError) throw err;
   }
 }
 
@@ -435,547 +564,406 @@ function preflightCheck() {
     console.error(`[NG] ${PKG} not installed.`);
     process.exit(1);
   }
-  console.log(`[OK] ${DEVICE_SERIAL}      device + ${PKG} verified.`);
+
+  // ロック中だと全テストが UI dump 失敗で落ちる。**ここで早く止める。**
+  // 実測: 気づかずに 10 本 × 8 リトライで 1 分半を捨てた（2026-08-12）
+  wakeScreen();
+  if (isDeviceLocked()) {
+    console.error(`[NG] ${DEVICE_SERIAL} はロック画面です。`);
+    console.error('     端末のロックを解除してから再実行してください。');
+    console.error('     （PIN/パターンを跨ぐ操作はこのハーネスでは行いません）');
+    process.exit(1);
+  }
+
+  console.log(`[OK] ${DEVICE_SERIAL}      device + ${PKG} + 画面ロック解除済み`);
 }
 
 // ─── 各テスト ─────────────────────────────────────────────────────────────
+/**
+ * 菜園の一巡（WBS T2）。
+ *
+ * だいどこの 13 シナリオ（レシピ詳細・料理中モード・URL 取り込み・OCR・家族）は
+ * さいえん手帳では 1 本も通らないので全部捨てた。仕組み（uiautomator dump →
+ * テキスト検索 → タップ）はそのまま流用している。
+ *
+ * 流れ: 起動 → 栽培を登録 → 作業を 1 タップ記録 → 収穫を記録 →
+ *       アルバムに出る → カレンダーに出る → 栽培を終了
+ *
+ * **CI では走らせない。** 端末が要るうえ 1 回数分かかる。リリース前と、
+ * 通知・バックアップのようにネイティブ依存の機能を触ったときに手で回す。
+ */
+
+/** このランで作る栽培の品種名。実行ごとに変えて既存データと衝突させない */
+const RUN_TAG = String(Date.now()).slice(-6);
+const TEST_VARIETY = `E2E${RUN_TAG}`;
 
 async function testAppLaunch() {
   await launchApp();
   screenshot('01-launch');
   const xml = uiDump('launch');
-  // ホームタブが選択されているはず（DAIDOKO ブランド表示）
-  if (!hasText(xml, 'DAIDOKO')) throw new Error('DAIDOKO brand text not found');
-  if (!hasText(xml, 'ホーム')) throw new Error('Home tab not found');
-  return 'home screen rendered';
+  if (!hasText(xml, 'さいえん手帳') && !hasAnyText(xml, ['ホーム', '栽培']))
+    throw new Error('ホーム画面が描画されていない');
+  return 'ホーム描画';
 }
 
 async function testTabNavigation() {
-  for (const label of ['レシピ', '設定', '追加', 'ホーム']) {
+  // 5 タブ（ホーム / 栽培 / 追加 / 収穫 / 設定）
+  for (const label of ['栽培', '収穫', '設定', 'ホーム']) {
     await tapTab(label);
     screenshot(`02-tab-${label}`);
   }
-  return 'all 4 tabs switchable';
+  return '4 タブを往復';
 }
 
-function recipeCandidates(...fallbackTitles) {
-  return [...new Set([lastCreatedRecipeName, ...fallbackTitles].filter(Boolean))];
-}
-
-async function findRecipeInCurrentList(candidates, dumpPrefix) {
-  let xml = uiDump(`${dumpPrefix}-0`);
-  for (let attempt = 0; attempt <= 5; attempt++) {
-    for (const title of candidates) {
-      const node = findByText(xml, title);
-      if (node) return { title, node, xml };
-    }
-    if (attempt === 5) break;
-    adb(['shell', 'input', 'swipe', '540', '1800', '540', '500', '300']);
-    await sleep(1200);
-    xml = uiDump(`${dumpPrefix}-${attempt + 1}`);
-  }
-  throw new Error(`recipe card not found: ${candidates.join(' / ')}`);
-}
-
-async function findTextWithScroll(text, dumpPrefix, maxScrolls = 4) {
-  let xml = uiDump(`${dumpPrefix}-0`);
-  for (let attempt = 0; attempt <= maxScrolls; attempt++) {
-    const node = findByText(xml, text);
-    if (node) return { node, xml };
-    if (attempt === maxScrolls) break;
-    adb(['shell', 'input', 'swipe', '540', '1800', '540', '500', '300']);
-    await sleep(1200);
-    xml = uiDump(`${dumpPrefix}-${attempt + 1}`);
-  }
-  throw new Error(`text not found after scroll: ${text}`);
-}
-
-async function testCreatedRecipeVisible() {
-  if (!lastCreatedRecipeName) throw new Error('created recipe name not available');
+/**
+ * 栽培を登録する。品種に RUN_TAG を入れて、後続テストが自分の作ったものを特定できるようにする。
+ *
+ * **作物ガイドの「この作物を育てはじめる」から入る。** 理由が 2 つある:
+ *   1. `adb shell input text` は **ASCII しか送れない**。作物名（必須・日本語）を
+ *      直接打てないので、ガイド側から cropName を渡してもらう
+ *      （2026-08-12 に「トマト」が入らず「作物名は必須です」で弾かれた）
+ *   2. R09 → R01 の実利用導線そのものを検証できる
+ *
+ * **BACK でキーボードを閉じない。** このフォームでは BACK がフォームごと閉じる（実測）。
+ * 「登録」はヘッダー（y≒140）にあってキーボードに隠れないので、そのまま押せる。
+ *
+ * 入力欄はプレースホルダが `text` に出るだけで `hint` 属性を持たないため
+ * `findByHint` は当たらない。**出現順の EditText**（0=作物名 / 1=品種）で掴む。
+ */
+async function testCreatePlanting() {
   await launchApp();
-  await tapTab('レシピ');
-  await sleep(1000);
-  const { title } = await findRecipeInCurrentList(recipeCandidates(), 'recipe-list-created');
-  screenshot('03-recipe-list');
-  return `created recipe visible: ${title}`;
-}
 
-async function testRecipeDetail() {
-  await launchApp();
-  await tapTab('レシピ');
-  await sleep(1000);
-  const { title, node: recipe } = await findRecipeInCurrentList(
-    recipeCandidates('肉じゃが'),
-    'recipe-list-tap',
-  );
-  tap(recipe.cx, recipe.cy);
+  // 作物ガイド → 先頭の作物 → 「この作物を育てはじめる」
+  adb([
+    'shell',
+    'am',
+    'start',
+    '-a',
+    'android.intent.action.VIEW',
+    '-d',
+    'saientecho://crops',
+    PKG,
+  ]);
   await sleep(2500);
-  screenshot('04-recipe-detail');
-  const detail = uiDump('recipe-detail');
-  if (!hasText(detail, '材料')) throw new Error('材料 tab not present');
-  if (!hasText(detail, '手順')) throw new Error('手順 tab not present');
-  if (!hasText(detail, '調理開始')) throw new Error('調理開始 button not present');
-  return `detail screen has 材料/手順/調理開始: ${title}`;
-}
 
-async function testCookingMode() {
-  await launchApp();
-  await tapTab('レシピ');
-  await sleep(1000);
-  const { title, node: recipe } = await findRecipeInCurrentList(
-    recipeCandidates('豚汁', '肉じゃが'),
-    'cook-step1',
-  );
-  tap(recipe.cx, recipe.cy);
+  let xml = uiDump('crops-for-create');
+  const crop = findByText(xml, 'トマト') || findByText(xml, 'キュウリ') || findByText(xml, 'ナス');
+  if (!crop) throw new Error('作物ガイドに作物が出ていない');
+  tap(crop.cx, crop.cy);
   await sleep(2000);
-  let xml = uiDump('cook-step2');
-  const cta = findByText(xml, '調理開始');
-  if (!cta) throw new Error('調理開始 button not found');
-  tap(cta.cx, cta.cy);
-  await sleep(2500);
-  screenshot('05-cooking-mode');
-  xml = uiDump('cook-step3');
-  // ステップカウンター "1 / N" が含まれているか
-  if (!/\d+\s*\/\s*\d+/.test(xml)) throw new Error('step counter not found');
-  const finish = findByText(xml, '✓ 完成！記録する');
-  if (!finish) throw new Error('finish and log button not found');
-  tap(finish.cx, finish.cy);
-  await sleep(1800);
-  screenshot('05-cooking-log-photo-ui');
-  const logXml = uiDump('cooking-log-photo-ui');
-  if (!hasText(logXml, 'カメラで撮影')) throw new Error('camera photo action not found');
-  if (!hasText(logXml, 'ギャラリーから選ぶ')) throw new Error('gallery photo action not found');
-  if (hasText(logXml, '今後追加予定')) throw new Error('photo action is still marked as future');
-  return `cooking mode + photo log UI verified: ${title}`;
-}
 
-// IME 開閉後に再ダンプして現在のフィールド座標で操作するヘルパー
-let _dumpSeq = 0;
-async function tapAndType(hint, text, { isDigit = false, closeKeyboard = true } = {}) {
-  const xml = uiDump(`field-${++_dumpSeq}`);
-  const field = findByHint(xml, hint);
-  if (!field) throw new Error(`field with hint="${hint}" not found`);
-  tap(field.cx, field.cy);
-  await sleep(1500);
-  if (isDigit) {
-    // 数字は KEYCODE_* で送る（IME 経由を避けて全角化を防ぐ）
-    for (const ch of text) {
-      key(`KEYCODE_${ch}`);
-      await sleep(150);
-    }
-  } else {
-    inputText(text);
-  }
-  await sleep(1500); // IME 反映待ち
-  if (closeKeyboard) await dismissKeyboard();
-  const afterXml = uiDump(`field-${_dumpSeq}-after`);
-  return getTextByHint(afterXml, hint);
-}
+  xml = uiDump('crop-detail');
+  screenshot('03-crop-detail');
+  const start =
+    findByContentDesc(xml, 'この作物を育てはじめる') || findByText(xml, 'この作物を育てはじめる');
+  if (!start) throw new Error('「この作物を育てはじめる」が見つからない');
+  tap(start.cx, start.cy);
+  await sleep(2000);
 
-async function testManualRecipeCreate() {
-  await launchApp();
-  await tapTab('追加');
-  await sleep(1500);
-  let xml = uiDump('add-method');
-  const manual = findByText(xml, '手動で入力');
-  if (!manual) throw new Error('手動で入力 not found');
-  tap(manual.cx, manual.cy);
-  await sleep(3500);
-  screenshot('06-form-empty');
+  xml = uiDump('planting-form');
+  screenshot('04-planting-form');
 
-  const generatedRecipeName = Date.now().toString().slice(-9);
+  const fields = findAllEditTexts(xml);
+  if (fields.length < 2)
+    throw new Error(`入力欄が足りない（EditText ${fields.length} 個。作物名と品種が要る）`);
 
-  // タイトル
-  const inputRecipeName = await tapAndType('例: 肉じゃが', generatedRecipeName, { isDigit: true });
-  const recipeNameCandidates = [
-    inputRecipeName,
-    generatedRecipeName,
-    toFullWidthDigits(generatedRecipeName),
-  ].filter(Boolean);
+  // 品種にこのランの印を入れる（ASCII なので input text で送れる）
+  tap(fields[1].cx, fields[1].cy);
+  await sleep(600);
+  inputText(TEST_VARIETY);
+  await sleep(400);
 
-  // 材料名 — IME 再ダンプで現在の座標を取る
-  await tapAndType('材料名', '101', { isDigit: true });
-
-  // 分量 (数字のみ)
-  await tapAndType('分量', '3', { isDigit: true });
-
-  // 手順 — フォーム下部。タップ前にスクロールして表示させる必要
-  let stepXml = uiDump('form-pre-step');
-  let stepField = findByHint(stepXml, '手順を入力...');
-  if (!stepField) {
-    // 大きくスクロール
-    adb(['shell', 'input', 'swipe', '540', '1800', '540', '400', '400']);
-    await sleep(1500);
-    stepXml = uiDump('form-after-scroll');
-    stepField = findByHint(stepXml, '手順を入力...');
-  }
-  if (!stepField) {
-    // それでも見つからない場合: もう一度スクロール
-    adb(['shell', 'input', 'swipe', '540', '1800', '540', '400', '400']);
-    await sleep(1500);
-    stepXml = uiDump('form-after-scroll2');
-    stepField = findByHint(stepXml, '手順を入力...');
-  }
-  if (!stepField) throw new Error('手順 field not found after scroll');
-  tap(stepField.cx, stepField.cy);
-  await sleep(1500);
-  for (const ch of '12345') {
-    key(`KEYCODE_${ch}`);
-    await sleep(150);
-  }
-  await sleep(1500);
-  await dismissKeyboard();
-
-  screenshot('07-form-filled');
-
-  // 保存
-  const saveXml = uiDump('form-save');
-  const save = findByContentDesc(saveXml, '保存');
-  if (!save) throw new Error('保存 button not found');
+  screenshot('05-planting-form-filled');
+  xml = uiDump('planting-form-filled');
+  const save = findByText(xml, '登録') || findByText(xml, '保存');
+  if (!save) throw new Error('「登録」が見つからない（フォームが閉じている可能性）');
   tap(save.cx, save.cy);
-  await sleep(4000);
-  screenshot('08-after-save');
-
-  // レシピ一覧に名前が出現するか
-  await tapTab('レシピ');
-  await sleep(2500);
-  let listXml = uiDump('list-after-save');
-  for (let attempt = 1; attempt <= 5 && !hasAnyText(listXml, recipeNameCandidates); attempt++) {
-    adb(['shell', 'input', 'swipe', '540', '1800', '540', '500', '300']);
-    await sleep(1200);
-    listXml = uiDump(`list-after-save-scroll-${attempt}`);
-  }
-  const savedRecipeName = recipeNameCandidates.find((candidate) => hasText(listXml, candidate));
-  if (!savedRecipeName) {
-    throw new Error(`saved recipe "${recipeNameCandidates.join(' / ')}" not found in list`);
-  }
-  lastCreatedRecipeName = savedRecipeName;
-  return `saved & visible: ${savedRecipeName}`;
-}
-
-async function testDeleteCreatedRecipe() {
-  if (!lastCreatedRecipeName) {
-    throw new Error('created recipe name not available');
-  }
-
-  await launchApp();
-  await tapTab('レシピ');
-  await sleep(1500);
-
-  let listXml = uiDump('delete-list-before-open');
-  let recipe = findByText(listXml, lastCreatedRecipeName);
-  for (let attempt = 1; attempt <= 5 && !recipe; attempt++) {
-    adb(['shell', 'input', 'swipe', '540', '1800', '540', '500', '300']);
-    await sleep(1200);
-    listXml = uiDump(`delete-list-scroll-${attempt}`);
-    recipe = findByText(listXml, lastCreatedRecipeName);
-  }
-  if (!recipe) throw new Error(`recipe to delete not found: ${lastCreatedRecipeName}`);
-
-  tap(recipe.cx, recipe.cy);
-  await sleep(2500);
-  screenshot('09-delete-detail');
-
-  const detailXml = uiDump('delete-detail');
-  const menuButton = findTopRightClickable(detailXml);
-  if (!menuButton) throw new Error('detail menu button not found');
-  tap(menuButton.cx, menuButton.cy);
-  await sleep(1200);
-
-  const menuXml = uiDump('delete-menu');
-  const deleteMenuItem = findByText(menuXml, '削除');
-  if (!deleteMenuItem) throw new Error('delete menu item not found');
-  tap(deleteMenuItem.cx, deleteMenuItem.cy);
-  await sleep(1200);
-
-  const alertXml = uiDump('delete-confirm');
-  if (!alertXml.includes('レシピを削除')) {
-    throw new Error('delete confirmation dialog not shown');
-  }
-  const deleteButtons = findAllByText(alertXml, '削除');
-  const confirmDeleteButton = deleteButtons[deleteButtons.length - 1];
-  if (!confirmDeleteButton) throw new Error('delete confirm button not found');
-  tap(confirmDeleteButton.cx, confirmDeleteButton.cy);
-  await sleep(2500);
-  screenshot('10-delete-after-confirm');
-
-  const afterDeleteXml = uiDump('delete-list-after-confirm');
-  if (!hasText(afterDeleteXml, 'レシピを探す')) {
-    throw new Error('did not return to recipe list after delete');
-  }
-
-  let scanXml = afterDeleteXml;
-  let deletedRecipeStillVisible = hasText(scanXml, lastCreatedRecipeName);
-  for (let attempt = 1; attempt <= 5 && !deletedRecipeStillVisible; attempt++) {
-    adb(['shell', 'input', 'swipe', '540', '1800', '540', '500', '300']);
-    await sleep(1200);
-    scanXml = uiDump(`delete-list-after-confirm-scroll-${attempt}`);
-    deletedRecipeStillVisible = hasText(scanXml, lastCreatedRecipeName);
-  }
-  if (deletedRecipeStillVisible) {
-    throw new Error(`deleted recipe still appears in list: ${lastCreatedRecipeName}`);
-  }
-
-  return `deleted & removed: ${lastCreatedRecipeName}`;
-}
-
-async function testUrlImport() {
-  await launchApp();
-  await tapTab('追加');
-  await sleep(1200);
-  const xml = uiDump('url-method');
-  const urlBtn = findByText(xml, 'URLから取り込み');
-  if (!urlBtn) throw new Error('URL取り込み button not found');
-  tap(urlBtn.cx, urlBtn.cy);
-  await sleep(3000);
-  screenshot('09-url-screen');
-
-  const urlXml = uiDump('url-input');
-  // URL 入力欄を hint で探す（複数候補）
-  let urlInput =
-    findByHint(urlXml, 'https://example.com/recipe/...') ||
-    findByHint(urlXml, 'https://example.com/recipe/…');
-  if (!urlInput) {
-    // 別パターン: EditText で hint に http を含むもの
-    const m =
-      /<node\b[^>]*?(?:hint="[^"]*http[^"]*"|text="[^"]*http[^"]*")[^>]*\bbounds="\[(\d+),(\d+)\]\[(\d+),(\d+)\]"/.exec(
-        urlXml,
-      );
-    if (!m) {
-      // EditText 全般から検索
-      const editMatch =
-        /<node\b[^>]*\bclass="android\.widget\.EditText"[^>]*\bbounds="\[(\d+),(\d+)\]\[(\d+),(\d+)\]"/.exec(
-          urlXml,
-        );
-      if (!editMatch) throw new Error('URL input field not found');
-      urlInput = {
-        bounds: [+editMatch[1], +editMatch[2], +editMatch[3], +editMatch[4]],
-        cx: Math.floor((+editMatch[1] + +editMatch[3]) / 2),
-        cy: Math.floor((+editMatch[2] + +editMatch[4]) / 2),
-      };
-    } else {
-      urlInput = {
-        bounds: [+m[1], +m[2], +m[3], +m[4]],
-        cx: Math.floor((+m[1] + +m[3]) / 2),
-        cy: Math.floor((+m[2] + +m[4]) / 2),
-      };
-    }
-  }
-  tap(urlInput.cx, urlInput.cy);
-  await sleep(1200);
-
-  // 存在しない URL を入力して UNSUPPORTED_SITE エラー検証
-  inputText('https://example.com');
-  await sleep(1500);
-  await dismissSystemAnrIfShown();
-
-  // 「取り込む」ボタン
-  const goXml = uiDump('url-go');
-  const goBtn = findByText(goXml, '取り込む');
-  if (!goBtn) throw new Error('取り込む button not found');
-  // 1回目で IME 閉じる、2回目で実行
-  tap(goBtn.cx, goBtn.cy);
-  await sleep(800);
-  tap(goBtn.cx, goBtn.cy);
-  await sleep(20000); // サーバー応答 + UI 更新待ち（実機なので余裕を持つ）
-  await dismissSystemAnrIfShown();
-  screenshot('10-url-result');
-
-  let resultXml = uiDump('url-result');
-  if (resultXml.includes("isn't responding") || resultXml.includes('応答していません')) {
-    await dismissSystemAnrIfShown();
-    resultXml = uiDump('url-result-after-anr');
-  }
-  // example.com は JSON-LD なし → UNSUPPORTED_SITE エラー表示が期待値
-  // または、もし URL が成功するなら "レシピを確認・編集" が表示される
-  if (
-    resultXml.includes('対応していません') ||
-    resultXml.includes('UNSUPPORTED') ||
-    resultXml.includes('レシピを確認') ||
-    resultXml.includes('取り込めません') ||
-    resultXml.includes('URLはhttp') ||
-    resultXml.includes('取り込み') // 結果画面のヘッダー残存でも OK
-  ) {
-    return 'URL import responded';
-  }
-  throw new Error('URL import result did not show expected response');
-}
-
-async function testTextImportPromptCopy() {
-  await launchApp();
-  await tapTab('追加');
-  await sleep(1200);
-  let xml = uiDump('text-method');
-  const textBtn = findByText(xml, 'テキストから作成');
-  if (!textBtn) throw new Error('テキストから作成 button not found');
-  tap(textBtn.cx, textBtn.cy);
   await sleep(2500);
 
-  xml = uiDump('text-import-screen');
-  const copyBtn = findByText(xml, 'AI用指示をコピー') || findByContentDesc(xml, 'AI用指示をコピー');
-  if (!copyBtn) throw new Error('AI用指示をコピー button not found');
-  tap(copyBtn.cx, copyBtn.cy);
-  await sleep(1000);
-  screenshot('11-text-prompt-copied');
-
-  xml = uiDump('text-import-after-copy');
-  const input = findFirstEditText(xml);
-  if (!input) throw new Error('freeform text input not found');
-  tap(input.cx, input.cy);
-  await sleep(1000);
-  key('KEYCODE_PASTE');
-  await sleep(1500);
-  await dismissKeyboard();
-
-  const pastedXml = uiDump('text-import-pasted-prompt');
-  if (!pastedXml.includes('変換したいレシピ情報') && !pastedXml.includes('JSON、表')) {
-    throw new Error('copied AI prompt was not pasted into the text input');
-  }
-  return 'AI prompt copied and pasted';
+  // **登録すると一覧ではなく「作った栽培の詳細」へ飛ぶ**（2026-08-12 実測）。
+  // 「やった！を記録」が出ていることを詳細画面の証拠にする。
+  // 品種の文字列だけを見ると、登録に失敗して開いたままのフォームでも通ってしまう
+  // （実際に誤 PASS した）ので、フォーム特有の文言が消えたことも見る。
+  screenshot('06-planting-created');
+  xml = uiDump('planting-created-detail');
+  if (hasText(xml, 'キャンセル') && hasText(xml, '登録'))
+    throw new Error('フォームが閉じていない（バリデーションで弾かれた可能性）');
+  if (!hasTextContaining(xml, TEST_VARIETY)) throw new Error(`詳細画面に ${TEST_VARIETY} が出ない`);
+  if (!hasText(xml, 'やった！を記録'))
+    throw new Error('詳細画面に遷移していない（「やった！を記録」が無い）');
+  return `${TEST_VARIETY} を登録（作物ガイド経由）`;
 }
 
-async function testOcrEntry() {
-  await launchApp();
-  await tapTab('追加');
-  await sleep(1200);
-  const xml = uiDump('ocr-method');
-  const ocrBtn =
-    findByContentDesc(xml, '文字入り画像から作成, レシピ本や手書きメモの文字を読み取り') ||
-    findByText(xml, '文字入り画像から作成');
-  if (!ocrBtn) throw new Error('文字入り画像から作成 button not found');
-  tap(ocrBtn.cx, ocrBtn.cy);
+/** 作った栽培の詳細を開く（後続テストの入り口） */
+async function openTestPlanting() {
+  // **タブ経由にしない。** 直前のテストが作物ガイド等を開いていると
+  // tapTab では戻れず、一覧のつもりで別画面を掴む（2026-08-12 に実測）。
+  // ハーネスの原則どおりディープリンクが最も堅牢
+  adb([
+    'shell',
+    'am',
+    'start',
+    '-a',
+    'android.intent.action.VIEW',
+    '-d',
+    'saientecho://plantings',
+    PKG,
+  ]);
   await sleep(2000);
-  screenshot('12-ocr-entry');
-  const entryXml = uiDump('ocr-entry');
-  if (
-    !entryXml.includes('OCR') &&
-    !entryXml.includes('カメラで撮影') &&
-    !entryXml.includes('ギャラリーから選ぶ')
-  ) {
-    throw new Error('OCR entry screen not as expected');
-  }
-  return 'OCR entry displayed';
+  const xml = uiDump('plantings-open');
+  // 行の text は「作物名　品種」の連結なので部分一致で掴む
+  const row = findByTextContaining(xml, TEST_VARIETY);
+  if (!row) throw new Error(`一覧に ${TEST_VARIETY} が無い`);
+  tap(row.cx, row.cy);
+  await sleep(1800);
 }
 
-async function testSettingsAndFamily() {
-  await launchApp();
-  await tapTab('設定');
-  await sleep(1500);
-  screenshot('12-settings');
-  let xml = uiDump('settings');
-  const sections = ['アカウント', '家族', 'データ', 'アプリ'];
-  const found = sections.filter((s) => hasText(xml, s));
-  if (found.length < 3) throw new Error(`only ${found.length}/4 settings sections`);
+/** クイック記録（R04 の「1〜2 タップ」）。詳細画面の 5 ボタンから水やりを押す */
+async function testQuickCareLog() {
+  await openTestPlanting();
+  screenshot('07-planting-detail');
 
-  const { node: backupLink } = await findTextWithScroll(
-    'バックアップ・復元',
-    'settings-backup-link',
-  );
-  tap(backupLink.cx, backupLink.cy);
-  await sleep(1500);
-  screenshot('13-backup');
-  const backupXml = uiDump('backup');
-  if (!hasText(backupXml, 'バックアップを作成')) throw new Error('backup create action not shown');
-  if (!hasText(backupXml, '最新バックアップから復元'))
-    throw new Error('backup restore action not shown');
-  const { node: createMigrationButton } = await findTextWithScroll(
-    '移行ファイルを作成',
-    'backup-migration-create',
-  );
-  await findTextWithScroll('移行ファイルから復元', 'backup-migration-restore');
-  tap(createMigrationButton.cx, createMigrationButton.cy);
-  await sleep(5000);
-  screenshot('13-backup-migration-created');
-  const migrationCreatedXml = uiDump('backup-migration-created');
-  if (!migrationCreatedXml.includes('daidoko-transfer-')) {
-    throw new Error('migration backup package name not shown after create');
-  }
-  key('KEYCODE_BACK');
+  let xml = uiDump('detail-before-log');
+  const water = findByContentDesc(xml, '水やりを記録') || findByText(xml, '水やり');
+  if (!water) throw new Error('クイック記録の「水やり」が見つからない');
+  tap(water.cx, water.cy);
+  await sleep(2000);
+
+  screenshot('08-care-logged');
+  xml = uiDump('detail-after-log');
+  // 作業ログ欄に出るか、完了トーストが出ていれば成功
+  if (!hasAnyText(xml, ['水やり', '記録しました'])) throw new Error('作業ログに反映されていない');
+  return '水やりを 1 タップ記録';
+}
+
+/**
+ * 完了トーストが**消えずに残る**ことを見る（#92 の回帰）。
+ *
+ * ユニットテストでは jest の Animated モックが中断を再現しないため検出できない。
+ * 実機でしか確認できないので、ここに置く。
+ */
+async function testToastStaysVisible() {
+  await openTestPlanting();
+
+  const xml = uiDump('toast-before');
+  const prune = findByContentDesc(xml, '剪定を記録') || findByText(xml, '剪定');
+  if (!prune) throw new Error('クイック記録の「剪定」が見つからない');
+  tap(prune.cx, prune.cy);
+
+  // **待たずにすぐ撃つ。** uiautomator dump 自体が 1〜3 秒かかるので、
+  // sleep を挟むと 2 秒のトーストを過ぎてしまう（2026-08-12 に空振りした）。
+  // 中断バグ（#92）なら 200ms 程度で消えるので、この撃ち方でも十分に区別できる。
+  const during = uiDump('toast-during');
+  screenshot('09-toast');
+  // **hasText は完全一致。** トーストは「剪定を記録しました」なので
+  // '記録しました' では当たらない（2026-08-12 に空振りして誤検知した）
+  const TOAST = '剪定を記録しました';
+  if (!hasText(during, TOAST))
+    throw new Error('完了トーストが出ていない（#92 の再発か、記録自体の失敗）');
+
+  // 所定時間後には消える
+  await sleep(3500);
+  const after = uiDump('toast-after');
+  if (hasText(after, TOAST)) throw new Error('トーストが消えない（自動 dismiss の故障）');
+  return 'トーストが約 2 秒表示されて消える';
+}
+
+/** 収穫を記録する（R06 の最短 3 タップ） */
+async function testCreateHarvest() {
+  await openTestPlanting();
+
+  let xml = uiDump('detail-before-harvest');
+  const harvestButton = findByContentDesc(xml, '収穫を記録') || findByText(xml, '収穫した');
+  if (!harvestButton) throw new Error('「収穫した」が見つからない');
+  tap(harvestButton.cx, harvestButton.cy);
+  await sleep(2500);
+
+  // 開いた瞬間にカメラが起動する設計なので、権限ダイアログとカメラを片付ける
+  await denyPermissionDialogIfShown();
   await sleep(1200);
 
-  await tapTab('設定');
-  const { node: licensesLink } = await findTextWithScroll(
-    'ライセンス情報',
-    'settings-licenses-link',
-  );
-  tap(licensesLink.cx, licensesLink.cy);
+  screenshot('10-harvest-form');
+  xml = uiDump('harvest-form');
+  const save = findByText(xml, '記録') || findByText(xml, '保存');
+  if (!save) throw new Error('収穫フォームの保存ボタンが見つからない');
+  tap(save.cx, save.cy);
+  await sleep(2500);
+
+  screenshot('11-harvest-saved');
+  return '収穫を記録';
+}
+
+/** 収穫アルバム（R07）に出るか */
+async function testHarvestAlbum() {
+  await tapTab('収穫');
+  await sleep(2000);
+  screenshot('12-harvest-album');
+  const xml = uiDump('harvest-album');
+  // 月別グリッド。作った栽培の作物名か、空状態でないことを見る
+  if (hasText(xml, 'まだ収穫の記録がありません'))
+    throw new Error('収穫アルバムが空のまま（記録が反映されていない）');
+  return 'アルバムに収穫が出る';
+}
+
+/** カレンダー（R05）に作業・収穫が出るか */
+async function testCalendar() {
+  await launchApp();
+  const started = adb([
+    'shell',
+    'am',
+    'start',
+    '-a',
+    'android.intent.action.VIEW',
+    '-d',
+    'saientecho://calendar',
+    PKG,
+  ]);
+  if (/Error/i.test(started)) throw new Error('カレンダーへのディープリンクが失敗');
+  await sleep(2500);
+  screenshot('13-calendar');
+  const xml = uiDump('calendar');
+  if (!hasAnyText(xml, ['カレンダー', '月', '日'])) throw new Error('カレンダーが描画されていない');
+  return 'カレンダー描画';
+}
+
+/** 作物ガイド（R09）— 30 作物のマスターが載っているか */
+async function testCropGuide() {
+  const started = adb([
+    'shell',
+    'am',
+    'start',
+    '-a',
+    'android.intent.action.VIEW',
+    '-d',
+    'saientecho://crops',
+    PKG,
+  ]);
+  if (/Error/i.test(started)) throw new Error('作物ガイドへのディープリンクが失敗');
+  await sleep(2500);
+  screenshot('14-crop-guide');
+  const xml = uiDump('crop-guide');
+  if (!hasText(xml, '作物ガイド')) throw new Error('作物ガイドが描画されていない');
+  // 代表的な作物が出ていること（マスター投入の確認）
+  if (!hasAnyText(xml, ['トマト', 'ダイコン', 'キュウリ', 'ナス']))
+    throw new Error('作物マスターが空に見える');
+  return '作物ガイドに 30 作物マスターが載る';
+}
+
+/**
+ * 栽培を終了する。
+ *
+ * **このランで作った株は先に削除済み**なので、サンプルデータの株で確認する。
+ * 終了は状態遷移なので、対象がどの株でも導線の検証としては成立する。
+ * 終了した株は一覧の既定（育成中）から外れるため、削除より後に置けない。
+ */
+async function testEndSamplePlanting() {
+  // 一覧の先頭の株を開く（サンプルデータは常に何件かある）
+  adb([
+    'shell',
+    'am',
+    'start',
+    '-a',
+    'android.intent.action.VIEW',
+    '-d',
+    'saientecho://plantings',
+    PKG,
+  ]);
+  await sleep(2000);
+
+  let listXml = uiDump('plantings-for-end');
+  const firstRow = findByTextContaining(listXml, '日目');
+  if (!firstRow) throw new Error('一覧に栽培が 1 件も無い（サンプルデータ未投入？）');
+  tap(firstRow.cx, firstRow.cy);
+  await sleep(1800);
+
+  // 「栽培を終了する」は作業ログ・収穫・リマインダーの下にあるので送る必要がある。
+  // **文言は「終了する」。** findByText は完全一致なので「栽培を終了」では当たらない
+  // （2026-08-12 に空振りした）
+  const findEnd = (xml) =>
+    findByTextContaining(xml, '栽培を終了') || findByContentDesc(xml, '栽培を終了');
+
+  let xml = uiDump('detail-before-end');
+  let endButton = findEnd(xml);
+  for (let i = 0; i < 4 && !endButton; i += 1) {
+    scrollDown();
+    xml = uiDump(`detail-scroll-${i}`);
+    endButton = findEnd(xml);
+  }
+  if (!endButton) throw new Error('「栽培を終了する」が見つからない（4 回送っても出ない）');
+  tap(endButton.cx, endButton.cy);
   await sleep(1500);
-  screenshot('13-licenses');
-  const licensesXml = uiDump('licenses');
-  if (!hasText(licensesXml, 'オープンソースライセンス')) {
-    throw new Error('license screen summary not shown');
-  }
-  if (!hasText(licensesXml, 'Expo / Expo SDK')) throw new Error('license package list not shown');
-  key('KEYCODE_BACK');
-  await sleep(1200);
 
-  await tapTab('設定');
-  xml = uiDump('settings-family-link');
+  screenshot('16-end-sheet');
+  xml = uiDump('end-sheet');
+  // 終了理由のシート。最初の選択肢を選ぶ
+  const reason =
+    findByText(xml, '収穫が終わった') || findByText(xml, '終了') || findByText(xml, '枯れた');
+  if (!reason) throw new Error('終了理由の選択肢が見つからない');
+  tap(reason.cx, reason.cy);
+  await sleep(2500);
 
-  // 家族グループ画面へ
-  const familyLink = findByText(xml, '家族グループ');
-  if (familyLink) {
-    tap(familyLink.cx, familyLink.cy);
-    await sleep(1500);
-    screenshot('13-family');
-    const famXml = uiDump('family');
-    if (!hasText(famXml, '招待コード')) throw new Error('招待コード not shown');
-  }
-  return 'settings + backup/license/family/migration backup verified';
+  screenshot('17-planting-ended');
+  return '栽培を終了';
 }
 
-async function testTimelineHasContent() {
-  await launchApp();
-  await sleep(800);
-  const xml = uiDump('timeline-check');
-  screenshot('14-timeline');
-  if (!hasText(xml, 'DAIDOKO')) throw new Error('DAIDOKO brand text not found');
-  const filters = ['今週', '今月', 'すべて'].filter((filter) => hasText(xml, filter));
-  if (filters.length !== 3) throw new Error(`only ${filters.length}/3 filter tabs`);
-  if (lastCreatedRecipeName && hasText(xml, lastCreatedRecipeName)) {
-    return `timeline rendered with created recipe: ${lastCreatedRecipeName}`;
+/**
+ * このランで作った栽培を消す。
+ *
+ * **後片付けをしないと実機にゴミが溜まる。** 実測で 3 ランぶんの
+ * E2E<連番> が残り、一覧が汚れたうえに「どれが今回のか」が分からなくなった。
+ * 終了（アーカイブ）だけでは消えないので、詳細 → 削除まで行う。
+ */
+async function testCleanupTestPlanting() {
+  await openTestPlanting();
+
+  // 文言は「削除する」。完全一致だと外れるので部分一致で探す
+  const findDelete = (xml) =>
+    findByTextContaining(xml, '削除') || findByContentDesc(xml, 'この栽培を削除');
+
+  let xml = uiDump('cleanup-detail');
+  let deleteButton = findDelete(xml);
+  for (let i = 0; i < 4 && !deleteButton; i += 1) {
+    scrollDown();
+    xml = uiDump(`cleanup-scroll-${i}`);
+    deleteButton = findDelete(xml);
   }
-  return 'timeline rendered without requiring sample logs';
+  if (!deleteButton) throw new Error('「削除」が見つからない（4 回送っても出ない）');
+  tap(deleteButton.cx, deleteButton.cy);
+  await sleep(1500);
+
+  // 確認シート
+  xml = uiDump('cleanup-confirm');
+  const confirm = findByText(xml, '削除する') || findByText(xml, '削除');
+  if (confirm) {
+    tap(confirm.cx, confirm.cy);
+    await sleep(2000);
+  }
+
+  screenshot('15-cleaned-up');
+  return `${TEST_VARIETY} を削除`;
 }
 
-async function testFilterTabs() {
-  await launchApp();
-  const xml = uiDump('filter-tabs');
-  const filters = ['今週', '今月', 'すべて'].filter((f) => hasText(xml, f));
-  if (filters.length !== 3) throw new Error(`only ${filters.length}/3 filter tabs`);
-
-  // 今週タップ
-  const weekTab = findByText(xml, '今週');
-  if (weekTab) {
-    tap(weekTab.cx, weekTab.cy);
-    await sleep(1000);
-    screenshot('15-filter-week');
-  }
-  return 'all 3 filter tabs present and switchable';
-}
-
-// ─── メイン ───────────────────────────────────────────────────────────────
 async function main() {
   console.log('═'.repeat(60));
-  console.log('  だいどこ Android E2E テスト');
+  console.log('  さいえん手帳 Android E2E テスト（菜園の一巡）');
   console.log(`  ${new Date().toLocaleString('ja-JP')}`);
   console.log('═'.repeat(60));
 
   preflightCheck();
 
   await test('T01 アプリ起動 + ホーム描画', testAppLaunch);
-  await test('T02 フィルタータブ (今週/今月/すべて)', testFilterTabs);
-  await test('T03 タブ間ナビゲーション', testTabNavigation);
-  await test('T04 手動レシピ作成 → DB 保存検証', testManualRecipeCreate);
-  await test('T05 レシピ一覧に作成レシピ表示', testCreatedRecipeVisible);
-  await test('T06 レシピ詳細画面', testRecipeDetail);
-  await test('T07 料理中モード遷移', testCookingMode);
-  await test('T08 タイムライン表示', testTimelineHasContent);
-  await test('T09 レシピ削除 → 一覧反映', testDeleteCreatedRecipe);
-  await test('T10 URL 取り込み (例: example.com)', testUrlImport);
-  await test('T11 テキスト取り込み AI 指示コピー', testTextImportPromptCopy);
-  await test('T12 OCR 入口画面', testOcrEntry);
-  await test('T13 設定画面 + 家族グループ', testSettingsAndFamily);
+  await test('T02 タブ間ナビゲーション', testTabNavigation);
+  await test('T03 栽培を登録', testCreatePlanting);
+  await test('T04 クイック記録（水やり 1 タップ）', testQuickCareLog);
+  await test('T05 完了トーストが消えずに残る（#92 回帰）', testToastStaysVisible);
+  await test('T06 収穫を記録', testCreateHarvest);
+  await test('T07 収穫アルバムに出る', testHarvestAlbum);
+  await test('T08 カレンダー描画', testCalendar);
+  await test('T09 作物ガイド（30 作物マスター）', testCropGuide);
+  // **後片付けを終了より先に置く。** 終了した株は一覧の既定（育成中）から外れるため、
+  // 順番を逆にすると削除対象を見つけられない（2026-08-12 実測）
+  await test('T10 後片付け（テストで作った栽培を削除）', testCleanupTestPlanting);
+  await test('T11 栽培を終了（サンプルデータの株で確認）', testEndSamplePlanting);
 
   // サマリー
   console.log('\n' + '═'.repeat(60));
