@@ -29,6 +29,15 @@
             "command": "node scripts/agent/hook-posttool-docs-reminder.mjs"
           }
         ]
+      },
+      {
+        "matcher": "Bash|PowerShell",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node scripts/agent/hook-posttool-issue-check.mjs"
+          }
+        ]
       }
     ],
     "Stop": [

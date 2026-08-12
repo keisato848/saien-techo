@@ -64,6 +64,19 @@ if (!filePath || !content) {
     'pnpm overrides / patchedDependencies の追加は SDK51 時代の回避策の再導入の可能性があります。' +
       'SDK54 では不要と確定済み（再導入は 16KB 対応を壊すリスク — memory: expo-sdk-54-upgrade）。本当に必要か確認してください。',
   );
+} else if (isDistributedBinaryAsset(filePath)) {
+  // apps/mobile/assets/ に置いた画像・音声は **配布物に入る**。
+  // require() を Metro がビルド時に静的解決するので、EXPO_PUBLIC_ENABLE_SAMPLE_DATA の
+  // ような実行時フラグでは同梱を止められない（2026-08-12 に提出済み AAB の
+  // base/res/drawable-mdpi-v4/ でサンプル写真 4 枚を実測）。
+  // スマホ写真の EXIF には既定で GPS 座標・標高・撮影方向・端末名が入る。
+  respond(
+    'ask',
+    'apps/mobile/assets/ 配下の画像・音声は **APK/AAB に同梱されて全利用者へ配布されます**' +
+      '（サンプルデータ用でも同じ。実行時フラグでは止まりません）。' +
+      '提供写真なら EXIF の除去と検証（CLAUDE.md §4b の DoD 3 / release-verify Skill §6）を' +
+      '済ませてから置いてください。',
+  );
 } else {
   respond('allow', 'Write passed repo guardrails.');
 }
@@ -111,4 +124,15 @@ function isSecretSafeDestination(path) {
   // 相対パス・UNC パスはリポジトリ内とみなして検査対象（fail-closed）
   if (!/^[a-z]:\//.test(normalized)) return false;
   return normalized !== REPO_ROOT && !normalized.startsWith(`${REPO_ROOT}/`);
+}
+
+/**
+ * 配布物に同梱されるバイナリ資産か。
+ * apps/mobile/assets/ 配下の画像・音声・動画が対象（ブランド資産の SVG は除く —
+ * pnpm assets:brand が生成する経路で、個人情報の混入経路ではない）。
+ */
+function isDistributedBinaryAsset(target) {
+  const normalized = target.split('\\').join('/').toLowerCase();
+  if (!normalized.includes('/apps/mobile/assets/')) return false;
+  return /\.(jpe?g|png|webp|heic|heif|gif|mp4|mov|m4a|mp3|wav)$/.test(normalized);
 }
