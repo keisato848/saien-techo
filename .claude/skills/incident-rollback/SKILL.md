@@ -5,7 +5,9 @@ description: リリース後に問題が発覚したときの巻き戻し・被�
 
 # 障害時の巻き戻し（Play / Railway）
 
-> **停止**: だいどこの値またはプレースホルダが残っている。WBS 3.7〜3.9 で さいえん手帳用に差し替えるまで実行しないこと。
+> **さいえん手帳の値で運用可**（2026-08-12 の v1.0 提出で前提が揃った）。**未実行**。
+> 初回公開前は「§1 の止血」が使えない（まだ誰にも配られていない）— 審査リジェクトは
+> 障害ではないので `release-play` で修正して再提出する。
 
 ## 大原則
 
@@ -26,22 +28,29 @@ description: リリース後に問題が発覚したときの巻き戻し・被�
 
 ## 2. Railway（サーバー側の障害）
 
+> **サーバーはだいどこと共用**（決定⑨）。リポジトリは `C:\Projects\daidoko`、
+> サービス名も `daidoko`。**ここを触るとだいどこ本番も巻き添えになる。**
+> さいえん手帳が使うのは `/api/v1/garden/*` だけなので、
+> 切り分けでは「ガーデンのルートだけが壊れているのか、サーバー全体か」を先に見る。
+> レート制限のグローバル上限（既定 30/日）は**両アプリで共有**しているため、
+> だいどこ側の消費でさいえん手帳の AI 相談が止まることがある。
+
 ```bash
-railway logs --service <さいえん手帳の Railway サービス名 — 未作成>            # まずログで原因を特定
-railway deployment list --service <さいえん手帳の Railway サービス名 — 未作成> --json   # 直近の SUCCESS デプロイ ID を確認
+railway logs --service daidoko            # まずログで原因を特定（daidoko-ref-ok: 共用サーバー）
+railway deployment list --service daidoko --json   # 直近の SUCCESS を確認（daidoko-ref-ok）
 ```
 
 - **設定起因**（環境変数の誤り等）: `railway variables --set` で修正 → 再デプロイ
-- **コード起因**: 直前の正常コミットを checkout して `railway up --service <さいえん手帳の Railway サービス名 — 未作成> --detach`
+- **コード起因**: 直前の正常コミットを checkout して `railway up --service daidoko --detach` <!-- daidoko-ref-ok -->
   （Railway はローカルディレクトリをビルドするため、**git で戻してから up** すればそれが旧版再デプロイに相当）
 - 復旧確認: `/health` 200 → AI エンドポイント疎通（node fetch で日本語 POST — Git Bash curl は CP932 で壊れる）
 
 ## 3. ストア掲載・申告の巻き戻し
 
 - 掲載文/スクショ: `docs/store/` の git 履歴から旧版を取り出し `update-play-listing.mjs` / `update-play-screenshots.mjs` で再反映
-- データセーフティ申告: 旧申告内容は docs/リリース手順.md（未整備 — WBS 3.9 で作成） §4 に記録がある → console-browser-ops で再申告
+- データセーフティ申告: 旧申告内容は docs/リリース手順.md §4 に記録がある → console-browser-ops で再申告
 
 ## 4. 事後
 
-- 原因と対処を docs/リリース手順.md（未整備 — WBS 3.9 で作成） §5（トラブルシューティング表）へ追記
+- 原因と対処を docs/リリース手順.md §5（トラブルシューティング表）へ追記
 - 再発をフック/検証で防げるなら scripts/agent/hook-pretool-guard.mjs / release-verify Skill に反映

@@ -5,7 +5,7 @@ description: リリース前の成果物検証チェック集。AAB の 16KB ELF
 
 # リリース前 成果物検証
 
-> **停止**: だいどこの値またはプレースホルダが残っている。WBS 3.7〜3.9 で さいえん手帳用に差し替えるまで実行しないこと。
+> **さいえん手帳の値で運用中**（2026-08-12 の v1.0 提出で §2・§6 を実施）。
 
 `release-play`（提出フロー）から呼ばれる検証の詳細。**バリデーション拒否では versionCode は未消費**
 （同じ番号で再提出できる）ので、拒否を恐れず提出前にここで潰す。
@@ -39,21 +39,32 @@ unzip -p <aab> base/manifest/AndroidManifest.xml | strings | grep -i permission
 adb install -r <new.apk>   # -r 必須（データ維持）
 ```
 
-- 既存の SQLite データ（レシピ・調理記録・在庫）が残り、マイグレーション（migrate.ts の ALTER）が正常に走ること
+- 既存の SQLite データ（栽培・作業ログ・収穫・資材・写真）が残り、マイグレーション
+  （migrate.ts の `CURRENT_SCHEMA_VERSION` / ADD_COLUMN_MIGRATIONS）が正常に走ること
 - 署名が一致していること（EAS 鍵 76:BA:… ↔ ローカル release 鍵は別物。混在時は install が失敗する）
 
 ## 4. config plugin 注入の確認（サイレント no-op 対策）
 
 Expo config plugin のネイティブ注入は**アンカー文字列の不一致で黙って no-op になる**
-（OCR が EAS ビルド 4 世代連続で壊れていた実績）。plugins/ を変更したリリースでは:
+（だいどこで OCR が EAS ビルド 4 世代連続で壊れていた実績）。plugins/ を変更したリリースでは:
 
 1. クリーン prebuild: `pnpm --filter mobile exec expo prebuild --platform android --clean`
    （またはビルドスクリプトの `--prebuild`）
-2. 注入結果を grep で確認:
+2. 注入結果を grep で確認。**現行の plugin と、その注入先**:
+
+   | plugin                      | 注入先                     | 確認する文字列                                     |
+   | --------------------------- | -------------------------- | -------------------------------------------------- |
+   | `withSaienUploadSigning.js` | `android/app/build.gradle` | `SAIEN_UPLOAD_STORE_FILE` / `bundleRelease` ゲート |
+   | `withKotlinMetadataSkip.js` | Gradle 設定                | packagingOptions の除外                            |
+
    ```bash
-   grep -rn "DaidokoOcr" apps/mobile/android/app/src/main/java/ | head
-   grep -n "daidokoOcr\|packageList" apps/mobile/android/app/src/main/java/com/daidoko/app/MainApplication.kt
+   grep -n "SAIEN_UPLOAD_STORE_FILE" apps/mobile/android/app/build.gradle
+   grep -n "bundleRelease" apps/mobile/android/app/build.gradle
    ```
+
+   `withSaienUploadSigning` は**アンカーが外れたら例外を投げる**（黙って no-op しない）。
+   他の plugin を足すときも同じ作りにすること。
+
 3. そのビルドを実機/エミュレータで起動し、該当 NativeModule が `NativeModules.<name>` に到達することを確認
 
 ## 5. リリースノート（提出前に起草）

@@ -98,11 +98,17 @@ Expo SDK 54 / Expo Router v6 / expo-sqlite + Drizzle ORM / Zustand / TanStack Qu
 `.claude/`(skills・agents・workflows・settings.json のフック配線)と `scripts/agent/` はだいどこからの移植。
 
 - フックは `node scripts/agent/*.mjs` を参照(配線済み)。`pnpm agent:*` スクリプトも移植済み
-- アプリ ID・スキーム(`app.json`)は さいえん手帳用に差し替え済み。AdMob/RevenueCat の ID は空 or Google 公式テスト ID のプレースホルダー(WBS 3.7 で実 ID を投入)
-- **だいどこ固有の参照が残っている**: ストア掲載素材(`scripts/release/`)、`.claude/workflows/release-readiness.js` のリポジトリ名。WBS 3.8〜3.9 で差し替えること
+- アプリ ID・スキーム(`app.json`)は さいえん手帳用に差し替え済み。**AdMob は実 ID 投入済み**(2026-08-11・アプリ/起動/リワード/バナーの 4 種。docs/広告・収益化方針.md)。RevenueCat は方針 A の間は空のまま
+- **だいどこ固有の参照は解消済み**(2026-08-12 確認)。`scripts/release/` に残るのは
+  由来を説明するコメントだけ、`release-readiness.js` のリポジトリ名も さいえん手帳。
+  **ただし AI 推論サーバーはだいどこの Railway を意図的に共用している**(決定⑨) —
+  意図的な参照は行末に `daidoko-ref-ok` を書く
 - DB ファイル名(`saien-techo.db`)は WBS 1.5 で差し替え済み。OCR ネイティブモジュール(旧 `plugins/withSaienOcr.js`・`com.daidoko.app.ocr`)はさいえん手帳で使い道が無く、WBS 2.9d で ML Kit・expo-camera ごと削除済み
 - `scripts/agent/validate-claude-customizations.mjs` の `foreign-app-identifier` 検査が `apps/` も走査する。だいどこの識別子を書くと pre-commit で止まる(意図的な参照は行末に `daidoko-ref-ok`)
-- release-play / update-store-listing / monetize-golive / promo-video 等のリリース系 skill は、差し替え完了までだいどこの値のまま実行しないこと
+- リリース系 skill の停止は解除済み: `release-play` / `release-verify` /
+  `console-browser-ops` / `update-store-listing` / `incident-rollback` は**実測で書き直して運用可**。
+  **`deploy-server` / `ios-release` / `monetize-golive` / `promo-video` は停止のまま**
+  (未着手・だいどこの値。着手時に差し替える)
 
 ## 7. ブランド(Q2 — 確定)
 
