@@ -48,7 +48,12 @@ v2 化した(旧 v1 形式のファイルもバックアップ画面から引き
 - GitHub: `keisato848/saien-techo`(private)
 - 進捗: [GitHub Project「さいえん手帳 開発計画」](https://github.com/users/keisato848/projects/3) + Issues(タイトル先頭に WBS 番号)
 - マイルストーン: v0.1 Alpha → v0.5 Beta → v1.0 ストア公開 → v1.5 AI・統計 → v1.6 春支度 → v2.0 Backlog
-- 着手時は該当 Issue のチェックリストに従い、完了時に Issue をクローズする
+- 着手時は該当 Issue のチェックリストに従う
+- **完了 Issue のクローズはフックが強制する**（散文では守られなかった — 2026-08-12 に
+  完了済み 4 件が open のまま残った）。WBS 番号つきの PR は本文に `Closes #N` を書く。
+  マージ時に GitHub が自動で閉じるので、閉じる作業自体が要らない。
+  複数 PR にまたがるなら `Refs #N`、Issue が無いなら `Issue: なし（理由）`。
+  規則の実体は `scripts/agent/lib/issue-link.mjs`（docs/開発ハーネス.md §2）
 
 ## 4. 技術スタック(だいどこ踏襲)
 

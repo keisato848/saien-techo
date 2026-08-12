@@ -23,7 +23,7 @@
     "agent:android:loop": "node scripts/agent/android-release-loop.mjs",
     "agent:android:signing:check": "node scripts/agent/check-play-signing.mjs",
     "agent:android:device:health": "node scripts/agent/check-device-health.mjs",
-    "agent:customizations:test": "node scripts/agent/test-customizations.mjs",
+    "agent:customizations:test": "node scripts/agent/test-customizations.mjs && pnpm agent:guards:test",
     "agent:hooks:install": "node scripts/agent/install-git-hooks.mjs",
     "agent:hooks:test": "node scripts/agent/test-customizations.mjs",
     "agent:preflight": "node scripts/agent/preflight.mjs",
@@ -37,7 +37,8 @@
     "lint": "pnpm --filter \"./apps/**\" --filter \"./packages/**\" lint",
     "typecheck": "pnpm --filter \"./apps/**\" --filter \"./packages/**\" typecheck",
     "format": "prettier --write \"**/*.{ts,tsx,js,json,md}\"",
-    "format:check": "prettier --check \"**/*.{ts,tsx,js,json,md}\""
+    "format:check": "prettier --check \"**/*.{ts,tsx,js,json,md}\"",
+    "agent:guards:test": "node scripts/agent/__tests__/issue-link.test.mjs"
   },
   "devDependencies": {
     "@typescript-eslint/eslint-plugin": "^7.0.0",

@@ -5,6 +5,7 @@
  */
 import { readStdinJson } from './lib/runtime.mjs';
 import { classifySigningEnv } from './lib/signing.mjs';
+import { inspectPrCreate } from './lib/issue-link.mjs';
 
 const payload = await readStdinJson();
 const commandText = extractCommandText(payload);
@@ -12,6 +13,11 @@ const toolName = extractToolName(payload);
 
 if (!commandText) {
   respond('allow', 'No shell-like command detected.');
+} else if (!inspectPrCreate(commandText).ok) {
+  // WBS 番号つき PR は Issue の紐付けを本文に宣言させる。
+  // 「マージ後に閉じる」を規律に頼ると守られない（2026-08-12 に 4 件が open のまま残った）。
+  // Closes #N があれば GitHub がマージ時に自動で閉じるので、閉じる作業自体が消える。
+  respond('deny', inspectPrCreate(commandText).reason);
 } else if (/git\s+reset\s+--hard/i.test(commandText)) {
   respond('deny', 'Destructive git reset is blocked by the repo guardrail.');
 } else if (/git\s+checkout\s+--\s+/i.test(commandText)) {
