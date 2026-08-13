@@ -7,6 +7,9 @@ description: Android エミュレータ/実機での画面・機能検証の定�
 
 実機操作の細則は `.claude/agents/android-verifier.md`、リリース検証は `release-play` / `release-verify` Skill。
 一巡を機械で回すなら `pnpm agent:android:e2e:base`（`e2e/android-e2e.mjs`・実機必須・CI 外）。
+**E2E が途中で落ちたら `pnpm agent:android:e2e:restore` を回す** — 後片付けはテストの
+最後に置いてあるので、途中で止まると作った栽培・場所が残り、終了させたサンプル株が
+終了したままになる。放置すると育成中の株が尽きて起動直後から落ちるようになる。
 
 ## 1. エミュレータ準備
 
