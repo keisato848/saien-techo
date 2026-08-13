@@ -156,10 +156,14 @@ export default function PlantingDetailScreen() {
   return (
     <View style={styles.root}>
       <View style={[styles.header, { paddingTop: insets.top + 10 }]}>
-        <Pressable onPress={() => router.back()} hitSlop={12}>
+        <Pressable onPress={() => router.back()} hitSlop={12} accessibilityLabel="戻る">
           <ChevronLeft size={22} color={Colors.ink} />
         </Pressable>
-        <Pressable onPress={() => router.push(`/plantings/${planting.id}/edit`)} hitSlop={12}>
+        <Pressable
+          onPress={() => router.push(`/plantings/${planting.id}/edit`)}
+          hitSlop={12}
+          accessibilityLabel="この栽培を編集"
+        >
           <Pencil size={18} color={Colors.accent} />
         </Pressable>
       </View>
