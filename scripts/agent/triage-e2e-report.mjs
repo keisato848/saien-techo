@@ -63,11 +63,9 @@ function parseArgs(argv) {
 }
 
 function defaultFiles() {
-  return [
-    'e2e/android-e2e-result.json',
-    'e2e/android-ocr-e2e-result.json',
-    'e2e/android-photo-recipe-e2e-result.json',
-  ];
+  // さいえん手帳の E2E は 1 本だけ。だいどこ由来の ocr / photo は WBS 2.9d で
+  // 機能ごと消えたので、レポートも無い
+  return ['e2e/android-e2e-result.json'];
 }
 
 function summarizeReport(file, parsed) {

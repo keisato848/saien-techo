@@ -157,7 +157,18 @@ function scrollDown(times = 1) {
   }
 }
 
+/**
+ * 入力欄へ文字を送る。
+ *
+ * **送れるのは大文字 ASCII と数字だけ。** `input text` は端末の IME を通るので、
+ * 日本語 IME が有効な実機では小文字がローマ字かな変換されて別の文字列になる
+ * （`E2EPlace576577` → `E2EPぁせ５７６５７７`・AQUOS SH-RM19s で実測）。
+ * 変換されても入力自体は成功するため、**検証側で気づけない**。ここで弾く。
+ */
 function inputText(text) {
+  if (/[a-z]/.test(text)) {
+    throw new Error(`inputText に小文字が含まれる: ${text}（IME にかな変換される）`);
+  }
   // ADB input text はスペースをそのまま送れないので %s に置換
   const safe = text.replace(/ /g, '%s');
   adb(['shell', 'input', 'text', safe]);
@@ -469,6 +480,19 @@ function hasText(xml, text) {
   return xml.includes(`text="${text}"`);
 }
 
+/**
+ * content-desc が正規表現に当たるノードがあるか。
+ *
+ * 点や丸のような**文字を持たない描画**を見るのに使う。カレンダーのマスは
+ * 「15日　記録 2 件」を content-desc に載せているので、点の有無をここで読める。
+ */
+function hasContentDescMatching(xml, pattern) {
+  for (const match of xml.matchAll(/content-desc="([^"]*)"/g)) {
+    if (pattern.test(match[1])) return true;
+  }
+  return false;
+}
+
 // ─── 共通フロー ────────────────────────────────────────────────────────────
 async function dismissCompatWarningIfShown() {
   await sleep(500);
@@ -596,6 +620,15 @@ function preflightCheck() {
 /** このランで作る栽培の品種名。実行ごとに変えて既存データと衝突させない */
 const RUN_TAG = String(Date.now()).slice(-6);
 const TEST_VARIETY = `E2E${RUN_TAG}`;
+/**
+ * このランで作る場所名。
+ *
+ * **小文字を混ぜてはいけない。** `adb shell input text` は端末の IME を通るため、
+ * 日本語 IME が有効な実機では小文字がローマ字かな変換される。
+ * `E2EPlace576577` を送ったら `E2EPぁせ５７６５７７` になった（AQUOS SH-RM19s・2026-08-13 実測。
+ * かなに落ちたあと続く数字まで全角になる）。大文字と数字だけなら素通りする。
+ */
+const TEST_PLACE = `E2EPLACE${RUN_TAG}`;
 
 async function testAppLaunch() {
   await launchApp();
@@ -823,7 +856,14 @@ async function testCalendar() {
   screenshot('13-calendar');
   const xml = uiDump('calendar');
   if (!hasAnyText(xml, ['カレンダー', '月', '日'])) throw new Error('カレンダーが描画されていない');
-  return 'カレンダー描画';
+
+  // **描画されただけでは足りない。** T04/T06 で今日の記録を作っているので、
+  // 記録のある日には印（点）が付いていなければならない。点は文字を持たないが、
+  // マスの content-desc が「N日　記録 M 件」になるのでここで読める
+  if (!hasContentDescMatching(xml, /記録\s*\d+\s*件/)) {
+    throw new Error('記録のある日に印が付いていない（今日の作業ログと収穫が反映されていない）');
+  }
+  return 'カレンダー描画 + 記録のある日に印';
 }
 
 /** 作物ガイド（R09）— 30 作物のマスターが載っているか */
@@ -913,6 +953,132 @@ async function testEndSamplePlanting() {
  * E2E<連番> が残り、一覧が汚れたうえに「どれが今回のか」が分からなくなった。
  * 終了（アーカイブ）だけでは消えないので、詳細 → 削除まで行う。
  */
+/**
+ * 場所を登録する（R02 / WBS 1.6）。
+ *
+ * 場所は**それ自体が目的の画面ではない** — 栽培フォームのピッカーに出て
+ * はじめて意味を持つ。登録できることと、出ることを 2 本に分けて見る。
+ */
+async function testCreatePlace() {
+  await launchApp();
+  adb([
+    'shell',
+    'am',
+    'start',
+    '-a',
+    'android.intent.action.VIEW',
+    '-d',
+    'saientecho://places',
+    PKG,
+  ]);
+  await sleep(2500);
+
+  let xml = uiDump('places-before-add');
+  // ＋ と空状態のボタンが同じラベル。どちらでもフォームは開く
+  const add = findByContentDesc(xml, '場所を追加') || findByText(xml, '場所を追加');
+  if (!add) throw new Error('「場所を追加」が見つからない');
+  tap(add.cx, add.cy);
+  await sleep(2000);
+
+  xml = uiDump('place-form');
+  screenshot('16-place-form');
+  const fields = findAllEditTexts(xml);
+  // 0=名前 / 1=メモ。RN の TextInput は hint を持たないので順番で掴む
+  if (fields.length < 1) throw new Error('場所フォームに入力欄が無い');
+  tap(fields[0].cx, fields[0].cy);
+  await sleep(600);
+  inputText(TEST_PLACE);
+  await sleep(400);
+
+  xml = uiDump('place-form-filled');
+  const save = findByText(xml, '登録') || findByText(xml, '保存');
+  if (!save) throw new Error('「登録」が見つからない');
+  tap(save.cx, save.cy);
+  await sleep(2500);
+
+  screenshot('17-place-created');
+  xml = uiDump('places-after-add');
+  if (!hasTextContaining(xml, TEST_PLACE)) throw new Error(`一覧に ${TEST_PLACE} が出ない`);
+  return `${TEST_PLACE} を登録`;
+}
+
+/** 登録した場所が栽培フォームのピッカーに出るか（場所単体では意味を持たない） */
+async function testPlaceInPlantingForm() {
+  adb([
+    'shell',
+    'am',
+    'start',
+    '-a',
+    'android.intent.action.VIEW',
+    '-d',
+    'saientecho://plantings/new',
+    PKG,
+  ]);
+  await sleep(2500);
+
+  let xml = uiDump('planting-form-for-place');
+  // 必須ラベルは「作物名 *」。完全一致だと外れる
+  if (!hasTextContaining(xml, '作物名')) throw new Error('栽培フォームが開いていない');
+
+  // 場所は下の方。画面に入るまで送る
+  for (let i = 0; i < 4 && !hasTextContaining(xml, TEST_PLACE); i += 1) {
+    scrollDown();
+    xml = uiDump(`planting-form-place-scroll-${i}`);
+  }
+  screenshot('18-planting-form-place');
+  if (!hasTextContaining(xml, TEST_PLACE))
+    throw new Error(`栽培フォームのピッカーに ${TEST_PLACE} が出ない（4 回送っても出ない）`);
+
+  // 開いたままにすると次のテストが別画面を掴む
+  adb(['shell', 'input', 'keyevent', 'KEYCODE_BACK']);
+  await sleep(1200);
+  return `ピッカーに ${TEST_PLACE} が出る`;
+}
+
+/** 後片付け。物理削除は「まだ使っていない場所」だけに出る（このランの場所は未使用） */
+async function testCleanupTestPlace() {
+  adb([
+    'shell',
+    'am',
+    'start',
+    '-a',
+    'android.intent.action.VIEW',
+    '-d',
+    'saientecho://places',
+    PKG,
+  ]);
+  await sleep(2200);
+
+  let xml = uiDump('place-cleanup-list');
+  const row = findByTextContaining(xml, TEST_PLACE);
+  if (!row) throw new Error(`一覧に ${TEST_PLACE} が無い`);
+  tap(row.cx, row.cy);
+  await sleep(1800);
+
+  xml = uiDump('place-cleanup-edit');
+  let deleteButton = findByTextContaining(xml, '削除');
+  for (let i = 0; i < 3 && !deleteButton; i += 1) {
+    scrollDown();
+    xml = uiDump(`place-cleanup-scroll-${i}`);
+    deleteButton = findByTextContaining(xml, '削除');
+  }
+  if (!deleteButton) throw new Error('「削除する」が見つからない（使用中と判定された可能性）');
+  tap(deleteButton.cx, deleteButton.cy);
+  await sleep(1500);
+
+  // 確認は端末のダイアログ。**後から描かれる方**がダイアログのボタン
+  xml = uiDump('place-cleanup-confirm');
+  const confirms = findAllByText(xml, '削除する');
+  if (confirms.length > 0) {
+    tap(confirms[confirms.length - 1].cx, confirms[confirms.length - 1].cy);
+    await sleep(2000);
+  }
+
+  xml = uiDump('places-after-cleanup');
+  if (hasTextContaining(xml, TEST_PLACE)) throw new Error(`${TEST_PLACE} が消えていない`);
+  return `${TEST_PLACE} を削除`;
+}
+
 async function testCleanupTestPlanting() {
   await openTestPlanting();
 
@@ -960,10 +1126,13 @@ async function main() {
   await test('T07 収穫アルバムに出る', testHarvestAlbum);
   await test('T08 カレンダー描画', testCalendar);
   await test('T09 作物ガイド（30 作物マスター）', testCropGuide);
+  await test('T10 場所を登録', testCreatePlace);
+  await test('T11 場所が栽培フォームのピッカーに出る', testPlaceInPlantingForm);
   // **後片付けを終了より先に置く。** 終了した株は一覧の既定（育成中）から外れるため、
   // 順番を逆にすると削除対象を見つけられない（2026-08-12 実測）
-  await test('T10 後片付け（テストで作った栽培を削除）', testCleanupTestPlanting);
-  await test('T11 栽培を終了（サンプルデータの株で確認）', testEndSamplePlanting);
+  await test('T12 後片付け（テストで作った栽培を削除）', testCleanupTestPlanting);
+  await test('T13 後片付け（テストで作った場所を削除）', testCleanupTestPlace);
+  await test('T14 栽培を終了（サンプルデータの株で確認）', testEndSamplePlanting);
 
   // サマリー
   console.log('\n' + '═'.repeat(60));

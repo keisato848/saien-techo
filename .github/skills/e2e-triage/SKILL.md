@@ -9,7 +9,7 @@ argument-hint: 'Pass a result json path or ask for all known E2E result files'
 
 ## When To Use
 
-- After `android-e2e.mjs`, `android-ocr-e2e.mjs`, or `android-photo-recipe-e2e.mjs` fails.
+- After `android-e2e.mjs` fails. (This is the only E2E suite; the daidoko-era `android-ocr-e2e.mjs` and `android-photo-recipe-e2e.mjs` were deleted with their features in WBS 2.9d.)
 - When a report exists but the user should not have to inspect raw JSON.
 
 ## Procedure

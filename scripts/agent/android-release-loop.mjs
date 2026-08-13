@@ -51,12 +51,7 @@ if (!options.skipInstall && healthOk) {
 if (!options.skipE2e && healthOk) {
   for (const suite of resolveSuites(options.suite)) {
     steps.push(
-      runStepWithRecovery(
-        suite,
-        suiteCommand(suite),
-        buildSuiteEnv(options.device),
-        options.device,
-      ),
+      runStepWithRecovery(suite, suiteCommand(), buildSuiteEnv(options.device), options.device),
     );
   }
 }
@@ -147,20 +142,23 @@ function parseArgs(argv) {
   return parsed;
 }
 
+/**
+ * さいえん手帳の E2E は base の 1 本だけ。だいどこ由来の ocr / photo は
+ * WBS 2.9d で機能ごと消えたため、スイートも削除した（'all' も base に落ちる）。
+ *
+ * 知らない名前は**黙って base に落とさず止める**。落とすと `--suite ocr` が
+ * base を回して 'ocr' という名前で PASS を記録し、走っていないものが
+ * 走ったことになる。
+ */
 function resolveSuites(suite) {
-  if (suite === 'all') {
-    return ['base', 'ocr', 'photo'];
+  if (suite === 'all' || suite === 'base') {
+    return ['base'];
   }
-  return [suite];
+  console.error(`[NG] 知らない E2E スイート: ${suite}（使えるのは base / all）`);
+  process.exit(1);
 }
 
-function suiteCommand(suite) {
-  if (suite === 'ocr') {
-    return [process.execPath, 'e2e/android-ocr-e2e.mjs'];
-  }
-  if (suite === 'photo') {
-    return [process.execPath, 'e2e/android-photo-recipe-e2e.mjs'];
-  }
+function suiteCommand() {
   return [process.execPath, 'e2e/android-e2e.mjs'];
 }
 
