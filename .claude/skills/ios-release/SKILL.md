@@ -37,11 +37,17 @@ Android の再提出時に変更が混ざる。
 > `android.permissions` へ `RECORD_AUDIO`（`blockedPermissions` で塞いでいる権限）が
 > 追加された。`extra.eas.projectId` 以外の差分は落とすこと。
 
-### 残る空欄
+### 外部で発行する値（すべて 2026-08-13 に取得・投入済み）
 
-AdMob の iOS アプリ ID とユニット 3 種は **2026-08-13 に発行・投入済み**（`docs/リリース手順.md` §7-4）。
-残るのは **App Store Connect の App ID** → `eas.json` の `ascAppId`。
-未設定でもビルドは通るが、`eas submit` が通らない。
+`docs/リリース手順.md` §7-4 / §7-4b が単一ソース。
+
+| 値                                   | 状態                                   |
+| ------------------------------------ | -------------------------------------- |
+| AdMob iOS アプリ + ユニット 3 種     | 投入済み（app.json / eas.json）        |
+| App Store Connect App ID             | `6801141151`（eas.json の `ascAppId`） |
+| バンドル ID の Developer Portal 登録 | `com.saientecho.app` 登録済み          |
+
+残るユーザー作業は **`eas credentials -p ios`**（Apple ID + 2FA の対話）。
 
 ## 1. シミュレータで動作確認
 
