@@ -1,11 +1,12 @@
 ---
 name: emulator-verify
-description: Android エミュレータ/実機での画面・機能検証の定型。AVD 準備（DNS・wipe）、検証用ビルド（サンプルデータ/コーチマーク無効/無料枠調整）、ディープリンク遷移、スクショ確認、ローカルサーバー E2E、テスト写真の投入まで。ML Kit・広告などネット必須機能の落とし穴込み。
+description: Android エミュレータ/実機での画面・機能検証の定型。AVD 準備（DNS・wipe）、検証用ビルド（サンプルデータ/コーチマーク無効/配色切替/無料枠調整）、ディープリンク遷移、スクショ確認、ローカルサーバー E2E、AI 相談用のテスト写真投入まで。広告などネット必須機能の落とし穴込み。
 ---
 
 # Android エミュレータ/実機 検証の定型
 
 実機操作の細則は `.claude/agents/android-verifier.md`、リリース検証は `release-play` / `release-verify` Skill。
+一巡を機械で回すなら `pnpm agent:android:e2e:base`（`e2e/android-e2e.mjs`・実機必須・CI 外）。
 
 ## 1. エミュレータ準備
 
@@ -15,35 +16,57 @@ description: Android エミュレータ/実機での画面・機能検証の定�
 & "$env:LOCALAPPDATA\Android\Sdk\emulator\emulator.exe" -avd saien_e2e_api36 -no-boot-anim -no-audio -no-snapshot -dns-server 8.8.8.8,1.1.1.1
 ```
 
-- **`-dns-server 8.8.8.8,1.1.1.1` を必ず付ける**（エミュレータ DNS 死亡の実績。広告/UMP/ML Kit モデル DL はネット必須）
+- **`-dns-server 8.8.8.8,1.1.1.1` を必ず付ける**（エミュレータ DNS 死亡の実績。広告 / UMP / AI 相談はネット必須）
 - **疎通判定に ping は使えない**（emulator NAT は ICMP 不可）— `dumpsys connectivity` の `IS_VALIDATED` を見る
 - クリーン状態が要る検証（初回フロー・シード確認）だけ `-wipe-data`。wipe 直後は SystemUI ANR が出やすい
   （dumpsys で `Application Not Responding` を検出 → 画面 x30%/y57% の「Wait」をタップ。capture スクリプトは自動処理）
-- **ML Kit（OCR/ラベリング）はオフラインでは動かない**（unbundled モデルを Play Services 経由で初回 DL）。
-  OCR 検証は実機かオンラインの Google Play イメージで
+
+**実機（AQUOS SH-RM19s）で回すときは先に画面ロックを解除する。** ロック中は
+uiautomator dump が全部失敗し、E2E は 10 本すべて落ちる。`e2e/android-e2e.mjs` は
+preflight で検出して即止める（気づかずに 1 分半を捨てた実績・2026-08-12）。
 
 ## 2. 検証用ビルドのフラグ
 
 ```bash
 # すべて EXPO_PUBLIC_* はビルド時焼き込み。組み合わせて使う
-EXPO_PUBLIC_ENABLE_SAMPLE_DATA=1     # サンプルシード（recipe-1〜6・調理記録・家族「恵/健/陽」）
+EXPO_PUBLIC_ENABLE_SAMPLE_DATA=1     # サンプルシード（場所・栽培・作業ログ・収穫・資材 + 写真 4 枚）
 EXPO_PUBLIC_DISABLE_COACH_MARKS=1    # コーチマーク非表示（スクショ・回帰確認用）
-EXPO_PUBLIC_FREE_DAILY_LIMIT=0       # 無料枠0=常時ペイウォール（広告フロー E2E 用）
+EXPO_PUBLIC_PALETTE=naedoko          # 配色の実機比較（既定は「若葉」。CLAUDE.md §7）
+EXPO_PUBLIC_FREE_DAILY_LIMIT=0       # 無料枠0=常時ペイウォール（リワード広告フローの E2E 用）
 EXPO_PUBLIC_ADMOB_ENABLED=true       # 広告有効（テストIDなら Google テスト広告）
+EXPO_PUBLIC_ADMOB_IGNORE_FREQUENCY=1 # 起動広告の頻度制限を外す（毎回出したいとき）
 node scripts/agent/build-android.mjs --arch x86_64   # app.json/plugins 変更時は --prebuild 必須
 ```
 
 インストールは常に `adb install -r`（`-r` なしはローカルデータ消失リスクで hook が ask）。
 
+> **`EXPO_PUBLIC_ENABLE_SAMPLE_DATA` は同梱を止めない。** これは**実行時**の
+> シード可否だけ。`assets/` に置いた画像は Metro が `require()` を**ビルド時に
+> 静的解決**するので、フラグが無効でも AAB に入る（サンプル写真 4 枚が
+> 実際に入っていた・2026-08-12 確認）。配布物から外すのは 3.13a の仕事。
+
 ## 3. 画面遷移・確認
 
 - 遷移は **ディープリンクが最も堅牢**: `adb shell am start -W -a android.intent.action.VIEW -d "saientecho://<route>" com.saientecho.app`
-  （route 例: 空=ホーム / recipes / recipes/recipe-1 / recipes/recipe-1/cook / family / recipes/import-photo / settings / pantry / shopping）
+
+  | route                                               | 画面                     |
+  | --------------------------------------------------- | ------------------------ |
+  | 空                                                  | ホーム                   |
+  | `plantings` / `plantings/new` / `plantings/<id>`    | 栽培の一覧・登録・詳細   |
+  | `plantings/<id>/care-logs/new` / `.../harvests/new` | 作業ログ・収穫の記録     |
+  | `plantings/<id>/consult`                            | AI 相談                  |
+  | `crops` / `crops/<id>`                              | 作物ガイド（30 作物）    |
+  | `harvests`                                          | 収穫アルバム             |
+  | `calendar` / `gallery`                              | カレンダー・写真         |
+  | `places` / `places/new`                             | 場所の管理・登録         |
+  | `materials` / `materials/shopping`                  | 資材在庫・買い物リスト   |
+  | `settings` / `region` / `backup`                    | 設定・地域・バックアップ |
+
 - 状態を確定させたいときは事前に `adb shell am force-stop com.saientecho.app`（コールドスタート）
 - スクショ: `adb exec-out screencap -p > file.png` → Read で目視。**adb は PowerShell ツールで**（Git Bash は /sdcard を壊す）
 - 座標タップは**直前のスクショで座標を確認**（コーチマーク・ANR・通知パネル等のオーバーレイが座標を奪う）
 
-## 4. ローカルサーバー E2E（AI 機能）
+## 4. ローカルサーバー E2E（AI 相談）
 
 ```bash
 # サーバー起動（.env は自動ロードされない — --env-file 必須）
@@ -55,26 +78,31 @@ adb reverse tcp:3000 tcp:3000        # 端末 localhost:3000 → ホスト（開
 adb reverse --remove-all             # 本番構成検証時は必ず除去（既定 = Railway 本番へ向く）
 ```
 
-サーバーログの 200 応答で「端末から届いた」ことを裏どりする。
+サーバーログの 200 応答（`/api/v1/garden/consult`）で「端末から届いた」ことを裏どりする。
+**推論サーバーはだいどこの Railway を意図的に共用している**（決定⑨）。
 
-## 5. テスト写真の投入（AI 写真機能の E2E）
+## 5. テスト写真の投入（AI 相談の E2E）
 
 ギャラリーに画像が要る場合:
 
 ```powershell
-adb push test.jpg /sdcard/Pictures/test.jpg
-adb shell am broadcast -a android.intent.action.MEDIA_SCANNER_SCAN_FILE -d file:///sdcard/Pictures/test.jpg
+adb push plant.jpg /sdcard/Pictures/plant.jpg
+adb shell am broadcast -a android.intent.action.MEDIA_SCANNER_SCAN_FILE -d file:///sdcard/Pictures/plant.jpg
 ```
 
-（画像自体は実写真をコピーするか、System.Drawing 等で生成した「料理らしい」画像。not_a_dish 判定される画像は無料枠を消費しない）
+写真は**苗・葉・果実など植物が写っているもの**を使う。作物名を偽って送っても
+モデルは写真から判断し直す（「ミニトマト」と伝えてダイズの幼苗を送ったところ
+「ダイズ（枝豆）の幼苗」と訂正された・2026-08-12 実測）ので、
+**推定の検証には写真の中身を正とする**こと。
 
 ## 既知の落とし穴まとめ
 
-| 症状                         | 原因と対処                                                                                                |
-| ---------------------------- | --------------------------------------------------------------------------------------------------------- |
-| 広告/UMP/名寄せが失敗        | エミュレータの DNS 死亡 → `-dns-server` 付きで再起動。ping での判定は不可                                 |
-| OCR/ラベリングが動かない     | ML Kit モデル未DL（オフライン）→ オンライン実機/Google Playイメージで                                     |
-| スクショに ANR ダイアログ    | wipe 直後の SystemUI 高負荷 → Wait をタップ、2〜3分待つ                                                   |
-| タップが効かない             | オーバーレイ（コーチマーク等）が手前 → スクショで確認して先に閉じる                                       |
-| ネイティブ変更が反映されない | prebuild していない → `--prebuild`（build スクリプトが警告を出す）                                        |
-| 署名不一致で install 失敗    | debug/release・EAS 鍵の混在 → 同一署名のビルドで `-r`、やむを得ない時だけユーザー承認の上アンインストール |
+| 症状                         | 原因と対処                                                                                                                                                                                                                                                                                           |
+| ---------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 広告/UMP/AI 相談が失敗       | エミュレータの DNS 死亡 → `-dns-server` 付きで再起動。ping での判定は不可                                                                                                                                                                                                                            |
+| uiautomator dump が全部失敗  | 端末がロック画面 → 解除してから再実行（E2E は preflight で止める）                                                                                                                                                                                                                                   |
+| スクショに ANR ダイアログ    | wipe 直後の SystemUI 高負荷 → Wait をタップ、2〜3分待つ                                                                                                                                                                                                                                              |
+| タップが効かない             | オーバーレイ（コーチマーク等）が手前 → スクショで確認して先に閉じる                                                                                                                                                                                                                                  |
+| ネイティブ変更が反映されない | prebuild していない → `--prebuild`（build スクリプトが警告を出す）                                                                                                                                                                                                                                   |
+| 署名不一致で install 失敗    | debug/release・EAS 鍵の混在 → 同一署名のビルドで `-r`、やむを得ない時だけユーザー承認の上アンインストール                                                                                                                                                                                            |
+| 入力した文字が別物になる     | `adb shell input text` は**端末の IME を通る**。日本語 IME 有効時は小文字がローマ字かな変換される（`E2EPlace576577` → `E2EPぁせ５７６５７７`・AQUOS で実測。かなに落ちた後は数字まで全角）。**大文字 ASCII と数字だけを送る**。入力自体は成功するので検証側で気づけない — `inputText` が小文字を弾く |

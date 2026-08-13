@@ -17,8 +17,6 @@
     "agent:android:build:emulator": "node scripts/agent/build-android.mjs --arch x86_64",
     "agent:android:build:play": "node scripts/agent/build-android.mjs --bundle",
     "agent:android:e2e:base": "node e2e/android-e2e.mjs",
-    "agent:android:e2e:ocr": "node e2e/android-ocr-e2e.mjs",
-    "agent:android:e2e:photo": "node e2e/android-photo-recipe-e2e.mjs",
     "agent:android:install": "node scripts/agent/install-apk.mjs",
     "agent:android:loop": "node scripts/agent/android-release-loop.mjs",
     "agent:android:signing:check": "node scripts/agent/check-play-signing.mjs",

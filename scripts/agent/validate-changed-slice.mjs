@@ -1,3 +1,4 @@
+import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -118,7 +119,12 @@ function gitDiff(extraArgs) {
 function buildValidationPlan(files) {
   const taskMap = new Map();
   const recommendations = [];
-  const docsFiles = files.filter(isDocsLikeFile);
+  // 消したファイルは prettier に渡せない（"No files matching the pattern" で落ちる）。
+  // 判定用の files には残す — 消したことも「その領域を触った」ことに変わりはなく、
+  // androidChanged 等のフラグは立てたい
+  const docsFiles = files.filter(
+    (file) => isDocsLikeFile(file) && existsSync(resolve(rootDir, file)),
+  );
   const customizationChanged = files.some(isCustomizationFile);
   const rootConfigChanged = files.some(isRootConfigFile);
   const sharedChanged = files.some((file) => file.startsWith('packages/shared/'));
@@ -126,10 +132,6 @@ function buildValidationPlan(files) {
   const mobileChanged = files.some((file) => file.startsWith('apps/mobile/'));
   const androidChanged = files.some(
     (file) => file.startsWith('apps/mobile/android/') || file.startsWith('e2e/'),
-  );
-  const photoOrOcrChanged = files.some(
-    (file) =>
-      /photo|ocr/i.test(file) && (file.startsWith('apps/mobile/') || file.startsWith('e2e/')),
   );
 
   if (docsFiles.length > 0) {
@@ -257,12 +259,6 @@ function buildValidationPlan(files) {
 
   if (androidChanged) {
     recommendations.push('Consider pnpm agent:android:e2e:base after code validation passes.');
-  }
-
-  if (photoOrOcrChanged) {
-    recommendations.push(
-      'Consider pnpm agent:android:e2e:ocr and pnpm agent:android:e2e:photo for OCR/photo flows.',
-    );
   }
 
   return {
