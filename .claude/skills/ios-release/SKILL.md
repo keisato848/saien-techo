@@ -46,8 +46,12 @@ Android の再提出時に変更が混ざる。
 | AdMob iOS アプリ + ユニット 3 種     | 投入済み（app.json / eas.json）        |
 | App Store Connect App ID             | `6801141151`（eas.json の `ascAppId`） |
 | バンドル ID の Developer Portal 登録 | `com.saientecho.app` 登録済み          |
+| iOS 署名クレデンシャル               | 構築済み（有効期限 2027-08-13）        |
 
-残るユーザー作業は **`eas credentials -p ios`**（Apple ID + 2FA の対話）。
+**外部発行の値はすべて揃っている。** 残るのは I5（Mac でのシミュレータ確認）以降。
+
+> **配布証明書はだいどこと共有。** 失効・再生成すると**両アプリのビルドが通らなくなる**。
+> 片方の都合で作り直さないこと（プロファイルはアプリごとに別）。
 
 ## 1. シミュレータで動作確認
 
