@@ -935,15 +935,62 @@ async function testEndSamplePlanting() {
 
   screenshot('16-end-sheet');
   xml = uiDump('end-sheet');
-  // 終了理由のシート。最初の選択肢を選ぶ
+  // 終了理由のシート。文言は ENDED_REASON_LABEL（収穫完了 / 枯れた / その他）
   const reason =
-    findByText(xml, '収穫が終わった') || findByText(xml, '終了') || findByText(xml, '枯れた');
+    findByText(xml, '収穫完了') || findByText(xml, '枯れた') || findByText(xml, 'その他');
   if (!reason) throw new Error('終了理由の選択肢が見つからない');
   tap(reason.cx, reason.cy);
   await sleep(2500);
 
+  // **押しただけでは足りない。** 終了した株は詳細で「育成中に戻す」に変わり、
+  // クイック記録が消える。ここを見ないと、シートを閉じただけでも PASS する
   screenshot('17-planting-ended');
-  return '栽培を終了';
+  xml = uiDump('detail-after-end');
+  if (!hasTextContaining(xml, '育成中に戻す'))
+    throw new Error('終了後の詳細が「育成中に戻す」になっていない');
+  if (hasText(xml, 'やった！を記録')) throw new Error('終了した栽培にクイック記録が残っている');
+
+  // 一覧の既定（育成中）から外れ、「終了した栽培」側に移ること
+  adb([
+    'shell',
+    'am',
+    'start',
+    '-a',
+    'android.intent.action.VIEW',
+    '-d',
+    'saientecho://plantings',
+    PKG,
+  ]);
+  await sleep(2000);
+  listXml = uiDump('plantings-after-end');
+  const endedTab = findByText(listXml, '終了した栽培');
+  if (!endedTab) throw new Error('一覧に「終了した栽培」の切り替えが無い');
+  tap(endedTab.cx, endedTab.cy);
+  await sleep(1800);
+
+  screenshot('18-ended-list');
+  listXml = uiDump('plantings-ended-list');
+  // 終了理由が添えられている行があること（終了済みの一覧である証拠）
+  if (!hasTextContaining(listXml, '収穫完了') && !hasTextContaining(listXml, '枯れた'))
+    throw new Error('「終了した栽培」に終了理由つきの行が出ない');
+
+  // **終わったら育成中に戻す。** 戻さないと 1 回走らせるごとにサンプルの株が
+  // 1 つ減り、繰り返すと「一覧に栽培が 1 件も無い」で落ちるようになる
+  const endedRow = findByTextContaining(listXml, '日目');
+  if (!endedRow) throw new Error('「終了した栽培」に行が無い');
+  tap(endedRow.cx, endedRow.cy);
+  await sleep(1800);
+
+  xml = uiDump('detail-for-resume');
+  const resume = findByTextContaining(xml, '育成中に戻す');
+  if (!resume) throw new Error('「育成中に戻す」が見つからない');
+  tap(resume.cx, resume.cy);
+  await sleep(2500);
+
+  xml = uiDump('detail-after-resume');
+  if (!hasText(xml, 'やった！を記録')) throw new Error('育成中に戻したのにクイック記録が出ない');
+
+  return '栽培を終了 →「終了した栽培」へ移る → 育成中に戻す';
 }
 
 /**
@@ -1132,7 +1179,7 @@ async function main() {
   // 順番を逆にすると削除対象を見つけられない（2026-08-12 実測）
   await test('T12 後片付け（テストで作った栽培を削除）', testCleanupTestPlanting);
   await test('T13 後片付け（テストで作った場所を削除）', testCleanupTestPlace);
-  await test('T14 栽培を終了（サンプルデータの株で確認）', testEndSamplePlanting);
+  await test('T14 栽培を終了 →「終了した栽培」→ 育成中に戻す', testEndSamplePlanting);
 
   // サマリー
   console.log('\n' + '═'.repeat(60));
