@@ -75,6 +75,9 @@
     "extra": {
       "router": {
         "origin": false
+      },
+      "eas": {
+        "projectId": "6728a865-8df2-49e0-a39d-d55ed99a1872"
       }
     },
     "owner": "keisato848"
