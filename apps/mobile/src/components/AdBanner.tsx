@@ -16,9 +16,11 @@ import { useCallback, useState } from 'react';
 import { View } from 'react-native';
 import { AdsConsent, BannerAd, BannerAdSize, TestIds } from 'react-native-google-mobile-ads';
 
-import { ADMOB_BANNER_UNIT_ID, ADMOB_ENABLED } from '../config';
+import { ADMOB_ALLOW_TEST_UNITS, ADMOB_BANNER_UNIT_ID, ADMOB_ENABLED } from '../config';
 
-const UNIT_ID = ADMOB_BANNER_UNIT_ID || TestIds.BANNER;
+// **空のまま TestIds へ落とさない**（config.ts の ADMOB_ALLOW_TEST_UNITS 参照）。
+// 落とすと本番ビルドにテスト広告が出る。空ならバナーごと出さない
+const UNIT_ID = ADMOB_BANNER_UNIT_ID || (ADMOB_ALLOW_TEST_UNITS ? TestIds.BANNER : '');
 
 export function AdBanner() {
   const [canRequestAds, setCanRequestAds] = useState(false);
@@ -45,7 +47,7 @@ export function AdBanner() {
     }, [canRequestAds]),
   );
 
-  if (!ADMOB_ENABLED || !canRequestAds || failed) return null;
+  if (!ADMOB_ENABLED || UNIT_ID === '' || !canRequestAds || failed) return null;
 
   return (
     <View>

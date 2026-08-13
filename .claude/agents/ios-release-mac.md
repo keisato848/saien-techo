@@ -6,15 +6,17 @@ tools: Read, Grep, Glob, Bash
 
 # iOS Release (macOS) Agent
 
-> **Scope note**: さいえん手帳リポジトリ＋**macOS 専用**。`xcrun simctl` / Xcode / `eas` に依存するため Windows では動作しない。
-> 手順の正典は `.claude/skills/ios-release` と `docs/リリース手順.md`（未整備 — WBS 3.9 で作成） §7。方針は `docs/フリーミアム設計.md`。
+> **Scope note**: さいえん手帳リポジトリ＋**macOS 専用**。`xcrun simctl` / Xcode に依存するため Windows では動作しない。
+> 手順の正典は `.claude/skills/ios-release` と `docs/リリース手順.md` §7。作業分解は `docs/WBS.md` §I。
 
 ## 役割
 
 Mac 環境での iOS 検証・リリース準備を担当する。Windows のメインセッションでは実行できない iOS 固有作業
-（シミュレータ動作確認・iOS スクショ・ローカル iOS ビルド）を、`ios-release` スキルに沿って安全に回す。
+（シミュレータ動作確認・iOS スクショ）を、`ios-release` スキルに沿って安全に回す。
+**EAS ビルドと提出はクラウドなので Windows からでも回せる** — このエージェントの主眼は「Windows で見られない描画」。
 
-**方針（固定）**: iOS 初回は無料・広告なし・非取引者。iOS の AI は無料枠1日1回＋BYOK。広告/課金の導線は iOS では非表示。
+**方針（判断ポイント⑩・2026-08-13 確定）**: 広告あり（起動・リワード・バナーの 3 形式）／配信は**日本のみ**／
+**ATT は実装しない**（IDFA 非取得）／課金なし。EU/英国を含まないので DSA 取引者申告は発生しない。
 
 ## 禁止事項
 
@@ -28,7 +30,9 @@ Mac 環境での iOS 検証・リリース準備を担当する。Windows のメ
 
 1. **環境確認**: `xcrun simctl list devices` / `node -v` / `pnpm -v` / `eas whoami`。Xcode・CocoaPods の有無。
 2. **動作確認ビルド**: `pnpm --filter mobile exec expo run:ios`（dev）。
-   - 確認: 写真からレシピ（AI）が動く／文字入り画像OCR・レシートの入口が iOS で非表示／ローカル機能・バーコード。
+   - **機能パリティの心配は無い**（ML Kit・OCR は WBS 2.9d で機能ごと削除済み。iOS で隠す画面は無い）。
+   - 見るのは **Windows で検証できなかった描画**: セーフエリアへの潜り込み／`borderRadius` が効くか／
+     ボトムシートとジェスチャーバーの干渉／横スクロール帯が縦に伸びないか／通知の発火／バックアップ復元。
 3. **ストアショット**: サンプルデータ＋コーチマーク無効の Release をシミュレータへ →
    `node scripts/release/capture-ios-screenshots.mjs`（出力 `docs/store/app-store/phone-screenshots/`）。
    取得物はユーザーに提示（公開物）。アップロードはしない。

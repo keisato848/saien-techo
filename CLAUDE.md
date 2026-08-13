@@ -107,8 +107,11 @@ Expo SDK 54 / Expo Router v6 / expo-sqlite + Drizzle ORM / Zustand / TanStack Qu
 - `scripts/agent/validate-claude-customizations.mjs` の `foreign-app-identifier` 検査が `apps/` も走査する。だいどこの識別子を書くと pre-commit で止まる(意図的な参照は行末に `daidoko-ref-ok`)
 - リリース系 skill の停止は解除済み: `release-play` / `release-verify` /
   `console-browser-ops` / `update-store-listing` / `incident-rollback` は**実測で書き直して運用可**。
-  **`deploy-server` / `ios-release` / `monetize-golive` / `promo-video` は停止のまま**
+  **`deploy-server` / `monetize-golive` / `promo-video` は停止のまま**
   (未着手・だいどこの値。着手時に差し替える)
+- **`ios-release` の停止も解除済み**(2026-08-13)。iOS の方針は WBS 判断ポイント⑩で
+  6 件確定 — 広告あり / 日本のみ配信 / ATT なし / 着手は Android 公開後。
+  手順は docs/リリース手順.md §7、作業分解は docs/WBS.md §I
 
 ## 7. ブランド(Q2 — 確定)
 

@@ -4,6 +4,14 @@
  */
 import mobileAds, { AdsConsent, RewardedAd } from 'react-native-google-mobile-ads';
 
+// ユニット ID は本番の実 ID が入っている前提。**空のときの挙動は別テスト**
+// （config.test.ts）で見る — 空なら広告を出さないのが正しく、ここで空にすると
+// 「同意フローの結線」を検証できない
+jest.mock('../../config', () => ({
+  ADMOB_REWARDED_UNIT_ID: 'ca-app-pub-0000000000000000/1111111111',
+  ADMOB_ALLOW_TEST_UNITS: false,
+}));
+
 import { AdMobRewardProvider } from '../ad-reward.admob';
 import { AdUnavailableError } from '../ad-reward.types';
 

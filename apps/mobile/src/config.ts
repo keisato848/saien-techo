@@ -32,17 +32,48 @@ const rawFreeLimit = process.env['EXPO_PUBLIC_FREE_DAILY_LIMIT'];
 const parsedFreeLimit = rawFreeLimit ? Number(rawFreeLimit) : NaN;
 export const FREE_DAILY_LIMIT_CONFIG =
   Number.isInteger(parsedFreeLimit) && parsedFreeLimit >= 0 ? parsedFreeLimit : 1;
-// リワード広告ユニット ID。未設定なら SDK の公式テスト ID（TestIds.REWARDED）を使う。
-export const ADMOB_REWARDED_UNIT_ID = process.env['EXPO_PUBLIC_ADMOB_REWARDED_UNIT_ID'] ?? '';
+// ── 広告ユニット ID ─────────────────────────────────────────────────────────
+//
+// **AdMob のユニットはアプリ（= プラットフォーム）ごとに別物。** iOS でも広告を
+// 出す方針にしたので（iOS 決定①・2026-08-13）、無印 = Android・`_IOS` 付き = iOS
+// として持ち、実行中のプラットフォームのものへ解決する。
+// Android のユニット ID を iOS で使っても配信されない。
+export function platformAdUnit(androidId: string | undefined, iosId: string | undefined): string {
+  return (Platform.OS === 'ios' ? iosId : androidId) ?? '';
+}
+
+/**
+ * 公式テストユニットへのフォールバックを許可する（**検証ビルド専用**）。
+ *
+ * これが無いと、**ユニット ID 未設定の本番ビルドにテスト広告が出る**。
+ * 実際、iOS のユニットを作る前に iOS ビルドを回すとこの状態になる
+ * （`_IOS` 系が空 → 空文字 → テスト ID へフォールバック）。
+ * テスト広告は収益がゼロなだけでなく、本番配信は AdMob のポリシー違反にあたる。
+ *
+ * そこで**既定は「空なら広告を出さない」**にして、テスト広告を見たいときだけ
+ * `EXPO_PUBLIC_ADMOB_ALLOW_TEST_UNITS=true` を明示的に付ける
+ * （`.claude/skills/emulator-verify` §2 参照）。本番の eas.json には入れない。
+ */
+export const ADMOB_ALLOW_TEST_UNITS = process.env['EXPO_PUBLIC_ADMOB_ALLOW_TEST_UNITS'] === 'true';
+
+// リワード広告ユニット ID。
+export const ADMOB_REWARDED_UNIT_ID = platformAdUnit(
+  process.env['EXPO_PUBLIC_ADMOB_REWARDED_UNIT_ID'],
+  process.env['EXPO_PUBLIC_ADMOB_REWARDED_UNIT_ID_IOS'],
+);
 
 // 起動広告（アプリを開いたときに出す全画面広告）のユニット ID。§8.2 / WBS 3.7。
-// 未設定なら SDK の公式テスト ID（TestIds.APP_OPEN）を使うので、
-// 実 ID を入れる前でもテスト広告で導線を確認できる。
-export const ADMOB_APP_OPEN_UNIT_ID = process.env['EXPO_PUBLIC_ADMOB_APP_OPEN_UNIT_ID'] ?? '';
+export const ADMOB_APP_OPEN_UNIT_ID = platformAdUnit(
+  process.env['EXPO_PUBLIC_ADMOB_APP_OPEN_UNIT_ID'],
+  process.env['EXPO_PUBLIC_ADMOB_APP_OPEN_UNIT_ID_IOS'],
+);
 
 // バナー広告のユニット ID。置くのは**作物ガイド（閲覧型画面）だけ** — 記録導線に
-// 広告を挟まない方針（§8.2）。未設定なら TestIds.BANNER。
-export const ADMOB_BANNER_UNIT_ID = process.env['EXPO_PUBLIC_ADMOB_BANNER_UNIT_ID'] ?? '';
+// 広告を挟まない方針（§8.2）。
+export const ADMOB_BANNER_UNIT_ID = platformAdUnit(
+  process.env['EXPO_PUBLIC_ADMOB_BANNER_UNIT_ID'],
+  process.env['EXPO_PUBLIC_ADMOB_BANNER_UNIT_ID_IOS'],
+);
 
 // **検証用**: 起動広告の頻度制限（猶予 24 時間・60 分間隔・1 日 3 回）を無視する。
 // 入れたばかりの端末では猶予に入って広告が出ないため、実機確認で表示そのものを

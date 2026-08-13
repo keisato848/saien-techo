@@ -20,14 +20,17 @@ import mobileAds, {
   TestIds,
 } from 'react-native-google-mobile-ads';
 
-import { ADMOB_REWARDED_UNIT_ID } from '../config';
+import { ADMOB_ALLOW_TEST_UNITS, ADMOB_REWARDED_UNIT_ID } from '../config';
 import {
   AdUnavailableError,
   type AdRewardProvider,
   type RewardedAdResult,
 } from './ad-reward.types';
 
-const UNIT_ID = ADMOB_REWARDED_UNIT_ID || TestIds.REWARDED;
+// **空のまま TestIds へ落とさない。** 落とすと本番ビルドにテスト広告が出る
+// （iOS のユニットを作る前に iOS ビルドを回すとこの状態になる）。config.ts の
+// ADMOB_ALLOW_TEST_UNITS を参照。空なら「リワード広告は使えない」として扱う。
+const UNIT_ID = ADMOB_REWARDED_UNIT_ID || (ADMOB_ALLOW_TEST_UNITS ? TestIds.REWARDED : '');
 
 export class AdMobRewardProvider implements AdRewardProvider {
   private initialized = false;
@@ -50,8 +53,9 @@ export class AdMobRewardProvider implements AdRewardProvider {
   }
 
   isAvailable(): boolean {
-    // The factory only returns this provider when AdMob is enabled; ads load on demand.
-    return true;
+    // ユニット ID が無ければ「使えない」。呼び出し側は無料枠の回復手段として
+    // リワードを出さなくなる（テスト広告で代用しない）
+    return UNIT_ID !== '';
   }
 
   async isPrivacyOptionsRequired(): Promise<boolean> {
@@ -70,6 +74,9 @@ export class AdMobRewardProvider implements AdRewardProvider {
   }
 
   async showRewardedAd(): Promise<RewardedAdResult> {
+    if (UNIT_ID === '') {
+      throw new AdUnavailableError('広告の設定が未完了のため表示できません。');
+    }
     await this.ensureInitialized();
     return new Promise<RewardedAdResult>((resolve, reject) => {
       const ad = RewardedAd.createForAdRequest(UNIT_ID);
