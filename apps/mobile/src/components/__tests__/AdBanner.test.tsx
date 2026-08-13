@@ -15,11 +15,14 @@ jest.mock('expo-router', () => ({
 }));
 
 let mockAdmobEnabled = false;
+// ユニット ID は実 ID が入っている前提。**空のときの挙動は config.test.ts** で見る
+// （空なら出さないのが正しく、ここで空にすると同意分岐を検証できない）
 jest.mock('../../config', () => ({
   get ADMOB_ENABLED() {
     return mockAdmobEnabled;
   },
-  ADMOB_BANNER_UNIT_ID: '',
+  ADMOB_BANNER_UNIT_ID: 'ca-app-pub-0000000000000000/2222222222',
+  ADMOB_ALLOW_TEST_UNITS: false,
 }));
 
 import { AdBanner } from '../AdBanner';

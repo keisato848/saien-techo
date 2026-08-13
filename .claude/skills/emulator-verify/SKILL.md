@@ -36,12 +36,18 @@ EXPO_PUBLIC_ENABLE_SAMPLE_DATA=1     # サンプルシード（場所・栽培�
 EXPO_PUBLIC_DISABLE_COACH_MARKS=1    # コーチマーク非表示（スクショ・回帰確認用）
 EXPO_PUBLIC_PALETTE=naedoko          # 配色の実機比較（既定は「若葉」。CLAUDE.md §7）
 EXPO_PUBLIC_FREE_DAILY_LIMIT=0       # 無料枠0=常時ペイウォール（リワード広告フローの E2E 用）
-EXPO_PUBLIC_ADMOB_ENABLED=true       # 広告有効（テストIDなら Google テスト広告）
+EXPO_PUBLIC_ADMOB_ENABLED=true       # 広告有効
+EXPO_PUBLIC_ADMOB_ALLOW_TEST_UNITS=1 # ユニット未設定のとき公式テスト広告を出す（**検証専用**）
 EXPO_PUBLIC_ADMOB_IGNORE_FREQUENCY=1 # 起動広告の頻度制限を外す（毎回出したいとき）
 node scripts/agent/build-android.mjs --arch x86_64   # app.json/plugins 変更時は --prebuild 必須
 ```
 
 インストールは常に `adb install -r`（`-r` なしはローカルデータ消失リスクで hook が ask）。
+
+> **`EXPO_PUBLIC_ADMOB_ALLOW_TEST_UNITS` を本番ビルドに入れない。** ユニット ID が
+> 未設定のとき公式テスト ID へ落ちる挙動は**検証専用**。本番で落とすとテスト広告が
+> 実配信され、AdMob のポリシー違反になる。既定は「空なら広告を出さない」。
+> iOS のユニットを作る前に iOS ビルドを回すと、まさにこの状態になる。
 
 > **`EXPO_PUBLIC_ENABLE_SAMPLE_DATA` は同梱を止めない。** これは**実行時**の
 > シード可否だけ。`assets/` に置いた画像は Metro が `require()` を**ビルド時に

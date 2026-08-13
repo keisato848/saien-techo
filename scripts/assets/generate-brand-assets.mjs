@@ -48,6 +48,17 @@ ${background ? `  <rect width="${size}" height="${size}" fill="${background}"/>`
 </svg>`;
 }
 
+/*
+ * `background` を持つものは**アルファチャンネルごと落とす**（flatten）。
+ *
+ * Apple は App Store のアプリアイコンに透過・アルファチャンネルを認めない。
+ * 背景の rect を敷いても sharp の既定は RGBA のままなので、全ピクセルが
+ * 不透明でも「アルファチャンネルを持つ PNG」として出てしまう。
+ * prebuild 側が落としてくれる可能性はあるが、Windows では検証できないので
+ * 生成時点で確実にしておく（iOS 提出準備・2026-08-13）。
+ *
+ * 透過が要るもの（アダプティブアイコンの前景・スプラッシュ）は flatten しない。
+ */
 const TARGETS = [
   // ストア / ランチャー。背景込みの正方形（角丸は端末側が付ける）
   { file: 'icon.png', size: 1024, contentRatio: 0.68, background: PLATE },
@@ -69,7 +80,10 @@ let stale = 0;
 
 for (const target of TARGETS) {
   const svg = composeSvg(target);
-  const png = await sharp(Buffer.from(svg)).png({ compressionLevel: 9 }).toBuffer();
+  let pipeline = sharp(Buffer.from(svg));
+  // 背景色を敷くもの＝不透明で良いもの。アルファを落として RGB で書き出す
+  if (target.background) pipeline = pipeline.flatten({ background: target.background });
+  const png = await pipeline.png({ compressionLevel: 9 }).toBuffer();
   const outPath = join(assetsDir, target.file);
 
   if (checkOnly) {

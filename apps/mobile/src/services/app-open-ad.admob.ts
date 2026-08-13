@@ -25,10 +25,12 @@ import mobileAds, {
   TestIds,
 } from 'react-native-google-mobile-ads';
 
-import { ADMOB_APP_OPEN_UNIT_ID } from '../config';
+import { ADMOB_ALLOW_TEST_UNITS, ADMOB_APP_OPEN_UNIT_ID } from '../config';
 import type { AppOpenAdProvider } from './app-open-ad.types';
 
-const UNIT_ID = ADMOB_APP_OPEN_UNIT_ID || TestIds.APP_OPEN;
+// **空のまま TestIds へ落とさない**（config.ts の ADMOB_ALLOW_TEST_UNITS 参照）。
+// 落とすと本番ビルドにテスト広告が出る。空なら起動広告は出さない
+const UNIT_ID = ADMOB_APP_OPEN_UNIT_ID || (ADMOB_ALLOW_TEST_UNITS ? TestIds.APP_OPEN : '');
 
 /** 読み込みがこれ以上かかるなら諦める。起動を待たせない */
 const LOAD_TIMEOUT_MS = 8_000;
@@ -73,6 +75,8 @@ export class AdMobAppOpenAdProvider implements AppOpenAdProvider {
   }
 
   async showAppOpenAd(): Promise<boolean> {
+    // ユニット未設定なら出さない。起動広告は出なくてもアプリは使える
+    if (UNIT_ID === '') return false;
     return new Promise<boolean>((resolve) => {
       let settled = false;
       const cleanups: Array<() => void> = [];
