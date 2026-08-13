@@ -2,6 +2,11 @@
  * 資材の編集（R12 / WBS 2.6）
  *
  * 資材は他の記録から参照されないので、場所（S05）と違って常に削除できる。
+ *
+ * **id が変わったら material を null に戻してから読み直す。** 作業ログ・場所の
+ * 編集画面と同じ理由。この画面は 2 回目以降の遷移で再マウントされず、
+ * MaterialForm も useState で初期値を受けるため、null を挟まないと前の資材の
+ * 内容が残ったまま次の資材を編集することになる。
  */
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Trash2 } from 'lucide-react-native';
@@ -25,14 +30,22 @@ export default function EditMaterialScreen() {
   const [material, setMaterial] = useState<MaterialItem | null>(null);
 
   useEffect(() => {
+    let cancelled = false;
+    setMaterial(null);
+
     void (async () => {
       const item = await getMaterial(id);
+      if (cancelled) return;
       if (!item) {
         router.back();
         return;
       }
       setMaterial(item);
     })();
+
+    return () => {
+      cancelled = true;
+    };
   }, [id, router]);
 
   const handleSubmit = useCallback(

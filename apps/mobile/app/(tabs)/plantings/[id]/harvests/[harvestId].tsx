@@ -1,5 +1,10 @@
 /**
  * 収穫の編集・削除（R06 / WBS 2.1）
+ *
+ * **harvestId が変わったら initialValues を null に戻してから読み直す。**
+ * 作業ログ・場所・資材の編集画面と同じ理由。この画面は 2 回目以降の遷移で
+ * 再マウントされず、HarvestForm も useState で初期値を受けるため、null を
+ * 挟まないと前の収穫の内容が残ったまま次の収穫を編集することになる。
  */
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Trash2 } from 'lucide-react-native';
@@ -22,8 +27,12 @@ export default function EditHarvestScreen() {
   const [initialValues, setInitialValues] = useState<HarvestFormValues | null>(null);
 
   useEffect(() => {
+    let cancelled = false;
+    setInitialValues(null);
+
     void (async () => {
       const harvest = await getHarvest(harvestId);
+      if (cancelled) return;
       if (!harvest) {
         router.back();
         return;
@@ -36,6 +45,10 @@ export default function EditHarvestScreen() {
         photoUris: harvest.photoUris,
       });
     })();
+
+    return () => {
+      cancelled = true;
+    };
   }, [harvestId, router]);
 
   const handleSubmit = useCallback(

@@ -1,5 +1,11 @@
 /**
  * 栽培の編集（R01 / WBS 1.5）
+ *
+ * **id が変わったら initialValues を null に戻してから読み直す。**
+ * 作業ログ・お知らせの編集画面と同じ理由（そちらのコメント参照）。この画面は
+ * 2 回目以降の遷移で再マウントされず、PlantingForm も useState で初期値を
+ * 受けるため、「栽培 A を編集 → 戻る → 栽培 B を編集」で B の画面に A の内容が
+ * 出る。保存すると**B が A の内容で上書きされる**。
  */
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
@@ -19,8 +25,13 @@ export default function EditPlantingScreen() {
   const [showToast, setShowToast] = useState(false);
 
   useEffect(() => {
+    let cancelled = false;
+    // 前の栽培の内容を一瞬でも出さない（出すと useState がそれで固まる）
+    setInitialValues(null);
+
     void (async () => {
       const detail = await getPlantingDetail(id);
+      if (cancelled) return;
       if (!detail) {
         router.back();
         return;
@@ -38,6 +49,10 @@ export default function EditPlantingScreen() {
         tags: detail.tags,
       });
     })();
+
+    return () => {
+      cancelled = true;
+    };
   }, [id, router]);
 
   const handleSubmit = useCallback(
