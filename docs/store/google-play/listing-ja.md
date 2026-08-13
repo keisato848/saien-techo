@@ -1,5 +1,8 @@
 # Google Play 掲載情報（ja-JP）
 
+> iOS（App Store）向けは `docs/store/app-store/listing-ja.md`（フィールド構成が
+> 異なるため別ファイル。詳しい説明の本文はほぼ共通）。
+>
 > 作成: 2026-08-11（WBS 3.8）
 > **このファイルが掲載文の唯一の正。** `node scripts/release/update-play-listing.mjs` が
 > 「## 短い説明」「## 詳しい説明」を読んで Play へ反映する（`--dry-run` で確認できる）。
