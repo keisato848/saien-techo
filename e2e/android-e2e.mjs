@@ -158,6 +158,20 @@ function scrollDown(times = 1) {
 }
 
 /**
+ * 画面を先頭まで戻す。
+ *
+ * **uiautomator は画面外のノードを落とす。** 送った状態のまま上の要素を探すと
+ * 「無い」と誤判定する。位置に依存しない検証をしたいときは、まずここで
+ * 状態を先頭に固定してから見る。
+ */
+function scrollToTop(times = 5) {
+  for (let i = 0; i < times; i += 1) {
+    adb(['shell', 'input', 'swipe', '540', '700', '540', '1800', '300']);
+    sleepSync(700);
+  }
+}
+
+/**
  * 入力欄へ文字を送る。
  *
  * **送れるのは大文字 ASCII と数字だけ。** `input text` は端末の IME を通るので、
@@ -640,12 +654,25 @@ async function testAppLaunch() {
 }
 
 async function testTabNavigation() {
-  // 5 タブ（ホーム / 栽培 / 追加 / 収穫 / 設定）
+  const TABS = ['ホーム', '栽培', '追加', '収穫', '設定'];
+
+  // まずタブ構成そのものを見る。1 つ増減しても往復だけでは気づけない
+  const xml = uiDump('tabbar-composition');
+  const missing = TABS.filter((label) => !hasText(xml, label));
+  if (missing.length > 0) throw new Error(`タブバーに無い: ${missing.join(' / ')}`);
+
+  // 「追加」は記録の入口。ここが開かないと 1 タップ記録の導線が死ぬ
+  await tapTab('追加');
+  screenshot('02-tab-追加');
+  const addXml = uiDump('tab-add-screen');
+  if (!hasAnyText(addXml, ['作業を記録', '栽培を追加']))
+    throw new Error('「追加」が記録の入口になっていない');
+
   for (const label of ['栽培', '収穫', '設定', 'ホーム']) {
     await tapTab(label);
     screenshot(`02-tab-${label}`);
   }
-  return '4 タブを往復';
+  return '5 タブの構成を確認 + 往復';
 }
 
 /**
@@ -981,14 +1008,26 @@ async function testEndSamplePlanting() {
   tap(endedRow.cx, endedRow.cy);
   await sleep(1800);
 
+  // 「育成中に戻す」は作業ログ・収穫の下。記録の多い株では折り返しの外にある
+  // （記録の少ない株がたまたま当たると、送らなくても見えて通ってしまう）
   xml = uiDump('detail-for-resume');
-  const resume = findByTextContaining(xml, '育成中に戻す');
-  if (!resume) throw new Error('「育成中に戻す」が見つからない');
+  let resume = findByTextContaining(xml, '育成中に戻す');
+  for (let i = 0; i < 4 && !resume; i += 1) {
+    scrollDown();
+    xml = uiDump(`detail-resume-scroll-${i}`);
+    resume = findByTextContaining(xml, '育成中に戻す');
+  }
+  if (!resume) throw new Error('「育成中に戻す」が見つからない（4 回送っても出ない）');
   tap(resume.cx, resume.cy);
   await sleep(2500);
 
+  // 再開するとクイック記録とお知らせが挿さって画面が伸びる。**送った位置のまま
+  // 見ると、上も下も画面外に落ちて何を探しても外れる。** 先頭に戻してから見る
+  scrollToTop();
   xml = uiDump('detail-after-resume');
   if (!hasText(xml, 'やった！を記録')) throw new Error('育成中に戻したのにクイック記録が出ない');
+  if (hasTextContaining(xml, 'に終了（'))
+    throw new Error('育成中に戻したのに終了バナーが残っている');
 
   return '栽培を終了 →「終了した栽培」へ移る → 育成中に戻す';
 }
