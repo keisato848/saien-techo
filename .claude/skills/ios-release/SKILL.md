@@ -37,13 +37,11 @@ Android の再提出時に変更が混ざる。
 > `android.permissions` へ `RECORD_AUDIO`（`blockedPermissions` で塞いでいる権限）が
 > 追加された。`extra.eas.projectId` 以外の差分は落とすこと。
 
-### 着手前に埋まっている必要がある 3 つの空欄
+### 残る空欄
 
-未設定でもビルドは通り**広告が出ないだけ**だが、提出前には埋める（`docs/リリース手順.md` §7-4）。
-
-1. AdMob iOS アプリ ID → `app.json` の `iosAppId`（**現在はテスト ID のまま**）
-2. AdMob iOS ユニット ID × 3 → `eas.json` の `*_UNIT_ID_IOS`
-3. App Store Connect の App ID → `eas.json` の `ascAppId`
+AdMob の iOS アプリ ID とユニット 3 種は **2026-08-13 に発行・投入済み**（`docs/リリース手順.md` §7-4）。
+残るのは **App Store Connect の App ID** → `eas.json` の `ascAppId`。
+未設定でもビルドは通るが、`eas submit` が通らない。
 
 ## 1. シミュレータで動作確認
 
