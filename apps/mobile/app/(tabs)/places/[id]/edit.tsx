@@ -4,6 +4,11 @@
  * 物理削除は「まだ 1 度も使っていない場所」だけに出す。使ったことのある場所を
  * 消すと過去の栽培から場所名が失われるため、そちらは一覧の「使わない」
  * （アーカイブ）で隠す。
+ *
+ * **id が変わったら place を null に戻してから読み直す。** 作業ログ・お知らせ・
+ * 栽培の編集画面と同じ理由。この画面は 2 回目以降の遷移で再マウントされず、
+ * PlaceForm も useState で初期値を受けるため、null を挟まないと前の場所の
+ * 内容が残ったまま次の場所を編集することになる。
  */
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Trash2 } from 'lucide-react-native';
@@ -24,14 +29,22 @@ export default function EditPlaceScreen() {
   const [place, setPlace] = useState<PlaceDetail | null>(null);
 
   useEffect(() => {
+    let cancelled = false;
+    setPlace(null);
+
     void (async () => {
       const detail = await getPlace(id);
+      if (cancelled) return;
       if (!detail) {
         router.back();
         return;
       }
       setPlace(detail);
     })();
+
+    return () => {
+      cancelled = true;
+    };
   }, [id, router]);
 
   const handleSubmit = useCallback(

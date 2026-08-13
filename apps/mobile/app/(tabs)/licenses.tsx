@@ -14,7 +14,12 @@ export default function LicensesScreen() {
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-        <Pressable style={styles.backButton} onPress={() => router.back()} hitSlop={12}>
+        <Pressable
+          style={styles.backButton}
+          onPress={() => router.back()}
+          hitSlop={12}
+          accessibilityLabel="戻る"
+        >
           <ChevronLeft size={20} color={Colors.goldDim} />
         </Pressable>
         <Text style={styles.headerTitle}>ライセンス情報</Text>
