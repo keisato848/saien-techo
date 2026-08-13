@@ -28,8 +28,14 @@ Android の再提出時に変更が混ざる。
 
 - Apple Developer Program **加入済み**（Team `VY7SNHS2BY`）。ASC API キーはだいどこと共用
   （Key ID `8C387NYC2T` / `.p8` は `C:/secure/`・リポジトリ外）
+- **EAS プロジェクトはリンク済み**（`@keisato848/saien-techo` / app.json の `extra.eas.projectId`）。
+  **Android はローカル gradle + androidpublisher API のまま**で、EAS を使うのは iOS だけ
 - Mac に **Xcode**（＋Command Line Tools）、**CocoaPods**、**Node/pnpm**、**EAS CLI**
 - **リポジトリルートで** `pnpm install`（`.npmrc` が `node-linker=hoisted`。`apps/mobile` 内では実行しない）
+
+> **`eas init` を再実行するときは `git diff app.json` を必ず見る。** 実際に
+> `android.permissions` へ `RECORD_AUDIO`（`blockedPermissions` で塞いでいる権限）が
+> 追加された。`extra.eas.projectId` 以外の差分は落とすこと。
 
 ### 着手前に埋まっている必要がある 3 つの空欄
 
