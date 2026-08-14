@@ -2,23 +2,44 @@
  * App Store 掲載用スクリーンショットを iOS シミュレータから機械的に取得する（macOS 専用）。
  *
  * 仕組み: 各ショットごとに「アプリを terminate → Expo Router のディープリンク
- * (saientecho://...) で起動 → 待機 → xcrun simctl io screenshot」。
+ * (saientecho://...) で起動 → アプリが前面に出たことを確認 → 待機 →
+ * xcrun simctl io screenshot」。
  * ステータスバーは simctl status_bar override で固定（時計 9:41・電池 100%・WiFi/電波フル）。
  * Android 版（capture-store-screenshots.mjs）の iOS 対応版。ANR/SystemUI ダイアログは
  * iOS シミュレータには無いので、そのぶん単純。
  *
+ * **iOS 17+ の URL 確認ダイアログについて（2026-08-14・iOS 18.5 実測）**
+ *   `simctl openurl` でカスタムスキームを開くと、SpringBoard が
+ *   「"さいえん手帳" で開きますか?」の確認を出す。**誰かが「開く」を押すまで
+ *   アプリは起動しない。** しかもこのダイアログは毎回出るとは限らず、
+ *   直前に確定していると一定時間は抑制される（＝出たり出なかったりする）。
+ *   `simctl` に入力注入は無く（`simctl help` の全サブコマンドを確認済み）、
+ *   AppleScript のクリックは補助アクセス許可が要るため自動化できない。
+ *
+ *   そこでこのスクリプトは **撮る前にアプリが前面に出たことを毎回確認する**。
+ *   ダイアログで止まっていれば待ち続け、操作者に「開く」を押すよう促す。
+ *   タイムアウトしたらそのショットは FAILED にして、最後に非ゼロ終了する。
+ *
+ *   これは「黙って撮れてしまう」事故への対策でもある。以前の実装は PNG として
+ *   壊れていないかしか見ておらず、7 枚とも「ホーム画面＋確認ダイアログ」を撮った
+ *   うえで captured と報告した（2026-08-14）。ストアに出す寸前まで気付けない。
+ *
  * 前提（macOS + Xcode）:
  *   - Xcode + iOS シミュレータ、Node/pnpm セットアップ済み（docs/リリース手順.md §7・ios-release Skill）
  *   - ストアショット用ビルド（サンプルデータ有効＋コーチマーク無効）をシミュレータに導入済み:
- *       EXPO_PUBLIC_ENABLE_SAMPLE_DATA=1 EXPO_PUBLIC_DISABLE_COACH_MARKS=1 \
+ *       LANG=en_US.UTF-8 EXPO_PUBLIC_ENABLE_SAMPLE_DATA=1 EXPO_PUBLIC_DISABLE_COACH_MARKS=1 \
  *         pnpm --filter mobile exec expo run:ios --configuration Release
+ *     （LANG が未設定だと CocoaPods が Encoding::CompatibilityError で落ちる）
  *     （または EAS の simulator ビルドを `xcrun simctl install booted <App.app>`）
  *   - スクショ用シミュレータを1台だけ Boot しておく（推奨: iPhone 16 Pro Max = 6.9"/1320x2868）:
  *       xcrun simctl boot "iPhone 16 Pro Max" ; open -a Simulator
+ *   - オンボーディング（地域選択）は済ませておく。未完了だとどのルートを開いても
+ *     ようこそ画面が出る
  *
  * 使い方:
  *   node scripts/release/capture-ios-screenshots.mjs [--udid <udid>] [--shots 01,02]
  *     [--out <dir>] [--planting <id>] [--keep-status-bar] [--wait <ms>]
+ *     [--dialog-timeout <ms>]
  *
  * manual 指定のショット（AI 実行結果など自動遷移できない画面）はスキップし、
  * 既存ファイルを維持する。
@@ -27,6 +48,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
+import sharp from 'sharp';
 import { appIdentity } from '../agent/lib/app-identity.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
@@ -41,6 +63,17 @@ if (process.platform !== 'darwin') {
 const args = parseArgs(process.argv.slice(2));
 /** サンプルデータの栽培 ID（src/db/seed.ts）。--planting で差し替えられる */
 const PLANTING_ID = args.planting ?? 'planting-tomato-01';
+
+/**
+ * 画面の粗い指紋（16x16 グレースケール）どうしの平均絶対差。
+ *
+ * 2026-08-14 の実測（iPhone 16 Pro Max）:
+ *   ホーム画面(SpringBoard) vs アプリの7画面 = 108〜127
+ *   アプリ画面どうしの最小 = 2.9（栽培一覧 vs 資材。どちらもリスト＋チップ）
+ * この開きを使って「アプリが前面に出たか」と「同じ画面を撮っていないか」を見る。
+ */
+const SPRINGBOARD_DISTANCE = 40; // これ以下なら「まだ SpringBoard を見ている」
+const DUPLICATE_DISTANCE = 1.0; // これ以下なら実質同じ画面
 
 /**
  * ショット定義。route は Expo Router のパス（saientecho://<route> で開く）。
@@ -62,6 +95,7 @@ const SHOTS = [
 
 const udid = args.udid ?? autoSelectBootedUdid();
 const outDir = args.out ? path.resolve(args.out) : DEFAULT_OUT;
+const tmpDir = fs.mkdtempSync(path.join(process.env.TMPDIR ?? '/tmp', 'saien-shots-'));
 fs.mkdirSync(outDir, { recursive: true });
 
 console.log(`simulator: ${udid}`);
@@ -74,57 +108,157 @@ const selected = SHOTS.filter(
 if (!args.keepStatusBar) overrideStatusBar();
 const results = [];
 try {
+  // アプリを畳んだ状態＝SpringBoard を基準として押さえる。
+  // 以降のショットがこれに近ければ「アプリが前面に出ていない」と判定できる。
+  const springboard = await captureSpringboardReference();
+
   for (const shot of selected) {
     if (shot.manual) {
       console.log(`SKIP (manual): ${shot.file} — ${shot.label}`);
       results.push({ ...shot, status: 'manual-skip' });
       continue;
     }
-    captureShot(shot);
+    await captureShot(shot, springboard);
   }
 } finally {
   if (!args.keepStatusBar) clearStatusBar();
+  fs.rmSync(tmpDir, { recursive: true, force: true });
 }
+
+await reportDuplicates();
 
 console.log('\n=== summary ===');
 for (const r of results) {
-  console.log(`${r.status.padEnd(12)} ${r.file}  ${r.size ?? ''}`);
+  console.log(
+    `${r.status.padEnd(12)} ${r.file}  ${r.size ?? ''}${r.reason ? `  ${r.reason}` : ''}`,
+  );
 }
 const failed = results.filter((r) => r.status === 'FAILED');
+if (failed.length) {
+  console.error(`\n${failed.length} 枚が撮れていません。掲載前に必ず解消すること。`);
+}
 process.exit(failed.length ? 1 : 0);
 
 // ─── capture ─────────────────────────────────────────────────────────────────
 
-function captureShot(shot) {
+async function captureSpringboardReference() {
+  simctl(['terminate', udid, BUNDLE_ID]); // 未起動でも無害（失敗は無視）
+  await sleep(2500);
+  const dest = path.join(tmpDir, 'springboard.png');
+  const cap = simctl(['io', udid, 'screenshot', '--type=png', dest]);
+  if (!cap.ok || !fs.existsSync(dest)) {
+    throw new Error(`SpringBoard の基準スクショに失敗: ${cap.output.slice(0, 200)}`);
+  }
+  return await fingerprint(dest);
+}
+
+async function captureShot(shot, springboard) {
   const url = `${SCHEME}://${shot.route}`;
   // 一度終了してからディープリンクで開くと、確実に対象画面へ遷移できる。
-  simctl(['terminate', udid, BUNDLE_ID]); // 未起動でも無害（失敗は無視）
+  simctl(['terminate', udid, BUNDLE_ID]);
+  await sleep(1200);
   const open = simctl(['openurl', udid, url]);
   if (!open.ok) {
     console.error(`FAILED to open ${url}: ${open.output.slice(0, 200)}`);
-    results.push({ ...shot, status: 'FAILED' });
+    results.push({ ...shot, status: 'FAILED', reason: 'openurl が失敗' });
     return;
   }
-  sleep(args.waitMs); // コールドスタート＋データ読込＋アニメーション静定
+
+  const foreground = await waitForForeground(springboard, shot);
+  if (!foreground) {
+    results.push({
+      ...shot,
+      status: 'FAILED',
+      reason: 'アプリが前面に出なかった（URL 確認ダイアログ？）',
+    });
+    return;
+  }
+
+  await sleep(args.waitMs); // データ読込＋アニメーション静定
 
   const dest = path.join(outDir, shot.file);
   const cap = simctl(['io', udid, 'screenshot', '--type=png', dest]);
   if (!cap.ok || !fs.existsSync(dest)) {
     console.error(`FAILED screenshot for ${shot.file}: ${cap.output.slice(0, 200)}`);
-    results.push({ ...shot, status: 'FAILED' });
+    results.push({ ...shot, status: 'FAILED', reason: 'screenshot が失敗' });
     return;
   }
   const buf = fs.readFileSync(dest);
   if (buf.length < 1000 || buf.readUInt32BE(0) !== 0x89504e47) {
     console.error(`FAILED (not a PNG) for ${shot.file}`);
-    results.push({ ...shot, status: 'FAILED' });
+    results.push({ ...shot, status: 'FAILED', reason: 'PNG になっていない' });
     return;
   }
+
+  // 撮った現物がまだ SpringBoard なら、待機中に前面へ出たあと落ちた等の異常。
+  const fp = await fingerprint(dest);
+  if (distance(fp, springboard) <= SPRINGBOARD_DISTANCE) {
+    console.error(`FAILED (SpringBoard を撮っている) for ${shot.file}`);
+    results.push({ ...shot, status: 'FAILED', reason: 'アプリではなくホーム画面が写っている' });
+    return;
+  }
+
   const w = buf.readUInt32BE(16);
   const h = buf.readUInt32BE(20);
   const size = `${w}x${h} ${Math.round(buf.length / 1024)}KB`;
   console.log(`captured: ${shot.file} (${size}) — ${shot.label}`);
-  results.push({ ...shot, status: 'captured', size });
+  results.push({ ...shot, status: 'captured', size, fingerprint: fp });
+}
+
+/**
+ * アプリが前面に出るまで待つ。URL 確認ダイアログで止まっている間は
+ * 画面が SpringBoard のままなので、それを抜けたら成功とみなす。
+ */
+async function waitForForeground(springboard, shot) {
+  const probe = path.join(tmpDir, 'probe.png');
+  const deadline = Date.now() + args.dialogTimeoutMs;
+  let hinted = false;
+  while (Date.now() < deadline) {
+    const cap = simctl(['io', udid, 'screenshot', '--type=png', probe]);
+    if (cap.ok && fs.existsSync(probe)) {
+      const d = distance(await fingerprint(probe), springboard);
+      if (d > SPRINGBOARD_DISTANCE) return true;
+    }
+    if (!hinted) {
+      hinted = true;
+      console.log(
+        `  待機中: ${shot.file} — シミュレータに「"さいえん手帳" で開きますか?」が出ていたら\n` +
+          `  「開く」を押してください（iOS 17+ の仕様。最大 ${Math.round(args.dialogTimeoutMs / 1000)} 秒待ちます）`,
+      );
+    }
+    await sleep(1000);
+  }
+  console.error(`FAILED (前面に出ない): ${shot.file}`);
+  return false;
+}
+
+/** 同じ画面を 2 枚以上撮っていないか。撮り分けの失敗を最後に必ず検出する。 */
+async function reportDuplicates() {
+  const captured = results.filter((r) => r.status === 'captured' && r.fingerprint);
+  for (let i = 0; i < captured.length; i += 1) {
+    for (let j = i + 1; j < captured.length; j += 1) {
+      if (distance(captured[i].fingerprint, captured[j].fingerprint) <= DUPLICATE_DISTANCE) {
+        captured[i].status = 'FAILED';
+        captured[j].status = 'FAILED';
+        captured[i].reason = captured[j].reason =
+          `同じ画面（${captured[i].file} と ${captured[j].file}）`;
+        console.error(`FAILED: ${captured[i].file} と ${captured[j].file} が同じ画面です`);
+      }
+    }
+  }
+}
+
+// ─── 画面の指紋 ───────────────────────────────────────────────────────────────
+
+async function fingerprint(file) {
+  const raw = await sharp(file).greyscale().resize(16, 16, { fit: 'fill' }).raw().toBuffer();
+  return Uint8Array.from(raw);
+}
+
+function distance(a, b) {
+  let sum = 0;
+  for (let i = 0; i < a.length; i += 1) sum += Math.abs(a[i] - b[i]);
+  return sum / a.length;
 }
 
 // ─── status bar override ─────────────────────────────────────────────────────
@@ -200,11 +334,13 @@ function ensureAppInstalled() {
 }
 
 function sleep(ms) {
-  spawnSync(process.execPath, ['-e', `setTimeout(()=>{}, ${ms})`]);
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
 }
 
 function parseArgs(argv) {
-  const parsed = { waitMs: 6000, keepStatusBar: false };
+  const parsed = { waitMs: 6000, keepStatusBar: false, dialogTimeoutMs: 90000 };
   for (let i = 0; i < argv.length; i += 1) {
     const t = argv[i];
     if (t === '--udid') parsed.udid = argv[++i];
@@ -212,6 +348,7 @@ function parseArgs(argv) {
     else if (t === '--planting') parsed.planting = argv[++i];
     else if (t === '--shots') parsed.shots = argv[++i].split(',').map((s) => s.trim());
     else if (t === '--wait') parsed.waitMs = Number(argv[++i]);
+    else if (t === '--dialog-timeout') parsed.dialogTimeoutMs = Number(argv[++i]);
     else if (t === '--keep-status-bar') parsed.keepStatusBar = true;
   }
   return parsed;
