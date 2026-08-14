@@ -44,6 +44,23 @@ node scripts/agent/build-android.mjs --arch x86_64   # app.json/plugins 変更�
 
 インストールは常に `adb install -r`（`-r` なしはローカルデータ消失リスクで hook が ask）。
 
+> **フラグを変えただけでは JS バンドルが作り直されない。** `EXPO_PUBLIC_*` は
+> Gradle のタスク入力として追跡されないので、環境変数だけ変えて再ビルドしても
+> **古いバンドルが黙って再利用される**。実測（2026-08-14）: `EXPO_PUBLIC_ADMOB_ENABLED=true`
+> を付けて再ビルドしたのに、APK 内の `index.android.bundle` が前回と MD5 まで一致し、
+> 広告が出ないままだった。**JS を 1 行も変えずにフラグだけ切り替えるときは、
+> 先にバンドル成果物を消す:**
+>
+> ```bash
+> rm -rf apps/mobile/android/app/build/generated/assets/createBundleReleaseJsAndAssets \
+>        apps/mobile/android/app/build/generated/res/createBundleReleaseJsAndAssets \
+>        apps/mobile/android/app/build/intermediates/assets/release
+> ```
+>
+> **APK のサイズ差では判定できない。** Metro は `false`→`!1`・`true`→`!0` と同じ
+> 文字数に最小化するため、フラグが効いてもサイズが 1 バイトも変わらないことがある
+> （実際に 33,760,738 B で完全一致した）。**バンドルの MD5 を比べること。**
+
 > **`EXPO_PUBLIC_ADMOB_ALLOW_TEST_UNITS` を本番ビルドに入れない。** ユニット ID が
 > 未設定のとき公式テスト ID へ落ちる挙動は**検証専用**。本番で落とすとテスト広告が
 > 実配信され、AdMob のポリシー違反になる。既定は「空なら広告を出さない」。
