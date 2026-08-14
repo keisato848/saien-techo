@@ -16,7 +16,7 @@
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.saientecho.app",
-      "buildNumber": "2",
+      "buildNumber": "3",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false
       }
@@ -65,8 +65,7 @@
         {
           "androidAppId": "ca-app-pub-2633806931583277~7473584300",
           "iosAppId": "ca-app-pub-2633806931583277~7215928386",
-          "delayAppMeasurementInit": true,
-          "userTrackingUsageDescription": "広告の表示回数の制御と不正防止のために利用します。"
+          "delayAppMeasurementInit": true
         }
       ],
       "@react-native-community/datetimepicker"

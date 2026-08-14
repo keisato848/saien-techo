@@ -117,8 +117,9 @@ pnpm exec eas submit -p ios --profile production --id <BUILD_ID> --non-interacti
 App Store Connect で設定するもの:
 
 - **App Privacy（栄養ラベル）**: Console UI のみ（API 非対応）。写真／その他のユーザー
-  コンテンツ = アプリの機能、デバイス ID = サードパーティ広告。**すべて「個人情報に
-  関連付けない」「トラッキングに使用しない」**（ATT 未実装・IDFA 非取得のため）
+  コンテンツ = アプリの機能、**デバイス ID・おおよその位置情報** = サードパーティ広告
+  （位置情報は Play の data-safety.md と申告を揃える — 単一ソースは data-safety.md）。
+  **すべて「個人情報に関連付けない」「トラッキングに使用しない」**（ATT 未実装・IDFA 非取得のため）
 - **配信地域 = 日本のみ**
 - スクショ（§2）・名前／サブタイトル／プロモーションテキスト／説明／キーワード／
   カテゴリ（**ライフスタイル(主) + 仕事効率化(副)**。フード＆ドリンクではない）／
@@ -130,6 +131,12 @@ App Store Connect で設定するもの:
 
 ## 既知の注意
 
+- **ads プラグインの `userTrackingUsageDescription` は ATT の plist キーを注入する。**
+  app.json の `react-native-google-mobile-ads` にこのキー（だいどこ由来）が残っていると
+  Info.plist に `NSUserTrackingUsageDescription` が入り、ASC の App Privacy ページが
+  「トラッキングするデータタイプを指定せよ」と警告して**「トラッキングなし」申告と
+  矛盾する**。ATT なし方針では**キーごと削除**する（実績: ビルド 2 で混入 →
+  ビルド 3 で除去・2026-08-14）
 - **広告ユニット ID はプラットフォームごとに別物。** Android の ID を iOS で使っても
   配信されない。`config.ts` の `platformAdUnit()` が無印 = Android・`_IOS` 付き = iOS
   として解決する
