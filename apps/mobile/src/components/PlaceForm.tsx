@@ -10,6 +10,7 @@ import { Colors, Typography } from '../constants/theme';
 import { PLACE_KINDS, PLACE_KIND_LABEL } from '../services/place.service';
 import { placeFormSchema, type PlaceFormData } from '../validation/place.schema';
 import { FormField } from './FormField';
+import { KeyboardAvoider } from './KeyboardAvoider';
 import { PressableScale } from './PressableScale';
 
 interface PlaceFormProps {
@@ -48,7 +49,7 @@ export function PlaceForm({
   });
 
   return (
-    <View style={styles.root}>
+    <KeyboardAvoider style={styles.root}>
       <View style={[styles.header, { paddingTop: insets.top + 14 }]}>
         <Pressable onPress={onCancel} hitSlop={12}>
           <Text style={styles.headerAction}>キャンセル</Text>
@@ -116,7 +117,7 @@ export function PlaceForm({
 
         {footer}
       </ScrollView>
-    </View>
+    </KeyboardAvoider>
   );
 }
 

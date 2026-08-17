@@ -25,6 +25,7 @@ import {
 } from '../validation/planting.schema';
 import { DateField, PLANTING_DATE_QUICK_PICKS } from './DateField';
 import { FormField } from './FormField';
+import { KeyboardAvoider } from './KeyboardAvoider';
 import { PhotoPickerField } from './PhotoPickerField';
 import { PressableScale } from './PressableScale';
 import { TagSelector } from './TagSelector';
@@ -105,7 +106,7 @@ export function PlantingForm({
   });
 
   return (
-    <View style={styles.root}>
+    <KeyboardAvoider style={styles.root}>
       <View style={[styles.header, { paddingTop: insets.top + 14 }]}>
         <Pressable onPress={onCancel} hitSlop={12}>
           <Text style={styles.headerAction}>キャンセル</Text>
@@ -284,7 +285,7 @@ export function PlantingForm({
           )}
         />
       </ScrollView>
-    </View>
+    </KeyboardAvoider>
   );
 }
 

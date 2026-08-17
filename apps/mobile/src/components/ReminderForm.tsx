@@ -13,6 +13,7 @@ import { Colors, Typography } from '../constants/theme';
 import { CARE_KIND_LABEL, CARE_KINDS } from '../services/care-log.service';
 import type { CareLogKind, ReminderScheduleKind } from '../services/types';
 import { WEEKDAY_SHORT } from '../utils/reminderSchedule';
+import { KeyboardAvoider } from './KeyboardAvoider';
 import { PressableScale } from './PressableScale';
 
 export interface ReminderFormValues {
@@ -82,7 +83,7 @@ export function ReminderForm({
   };
 
   return (
-    <View style={styles.root}>
+    <KeyboardAvoider style={styles.root}>
       <View style={[styles.header, { paddingTop: insets.top + 14 }]}>
         <Pressable onPress={onCancel} hitSlop={12}>
           <Text style={styles.headerAction}>キャンセル</Text>
@@ -227,7 +228,7 @@ export function ReminderForm({
 
         {footer}
       </ScrollView>
-    </View>
+    </KeyboardAvoider>
   );
 }
 

@@ -18,6 +18,7 @@ import {
   View,
 } from 'react-native';
 
+import { KeyboardAvoider } from '../../src/components/KeyboardAvoider';
 import { Colors } from '../../src/constants/theme';
 import {
   clearUserApiKey,
@@ -82,7 +83,7 @@ export default function AiKeyScreen() {
   }, []);
 
   return (
-    <View style={styles.container}>
+    <KeyboardAvoider style={styles.container}>
       <View style={styles.header}>
         <Pressable onPress={() => router.back()} hitSlop={12} accessibilityLabel="閉じる">
           <X size={20} color={Colors.muted} />
@@ -91,7 +92,7 @@ export default function AiKeyScreen() {
         <View style={styles.headerSpacer} />
       </View>
 
-      <ScrollView contentContainerStyle={styles.body}>
+      <ScrollView contentContainerStyle={styles.body} keyboardShouldPersistTaps="handled">
         <View style={styles.iconWrap}>
           <KeyRound size={34} color={Colors.gold} />
         </View>
@@ -144,7 +145,7 @@ export default function AiKeyScreen() {
           <Text style={styles.link}>キーの取得方法（Google AI Studio）</Text>
         </Pressable>
       </ScrollView>
-    </View>
+    </KeyboardAvoider>
   );
 }
 
