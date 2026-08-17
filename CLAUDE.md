@@ -57,7 +57,12 @@ v2 化した(旧 v1 形式のファイルもバックアップ画面から引き
 
 ## 4. 技術スタック(だいどこ踏襲)
 
-Expo SDK 54 / Expo Router v6 / expo-sqlite + Drizzle ORM / Zustand / TanStack Query v5 / React Hook Form + Zod / Reanimated 3。
+Expo SDK 54 / Expo Router v6 / expo-sqlite + Drizzle ORM / Zustand / TanStack Query v5 / React Hook Form + Zod。
+
+**アニメーションのネイティブ依存は持っていない**(2026-08-18 確認)。だいどこにある
+Reanimated / Worklets は移植していない — `PressableScale` は `Animated`(RN 標準)で足りている。
+**入れると 3 つ(reanimated・worklets・keyboard-controller)まとめて増える**ので、
+「Reanimated があるから安い」という前提で見積もらないこと。
 サーバーは Hono(AI Vision 推論のみ・ステートレス)。詳細はだいどこの `docs/アーキテクチャ設計.md` を参照し、fork 時に必要な設計書を本リポジトリへ移植すること。
 
 ## 4b. 完了条件(DoD) — WBS 2.4 以降
