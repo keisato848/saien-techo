@@ -59,6 +59,29 @@ const cases = [
     command: 'gh pr list --state open',
     expectOk: true,
   },
+  {
+    // 2026-08-17 に実際に踏んだ誤ブロック。引用符の対応で本文を切り出していたため、
+    // 本文中のコード片の " で打ち切られ、末尾の Closes まで読めていなかった。
+    name: '本文に ASCII の " が混じっても末尾の Closes を読める',
+    command: create(
+      'fix(ui): キーボードが下部ボタンを覆う (WBS T4)',
+      '`behavior="padding"` を指定した。\n\nCloses #133',
+    ),
+    expectOk: true,
+  },
+  {
+    name: 'ヒアドキュメントで渡した本文でも読める',
+    command:
+      'gh pr create --base develop --title "fix: 直した (WBS 3.9)" ' +
+      `--body "$(cat <<'EOF'\n概要。 style={{ flex: 1 }} のような "引用符" も含む。\n\nCloses #26\nEOF\n)"`,
+    expectOk: true,
+  },
+  {
+    name: '本文に " があっても、紐付けが無ければちゃんと弾く（緩めすぎていない）',
+    command: create('fix: 直した (WBS 3.9)', '`behavior="padding"` を指定した。それだけ。'),
+    expectOk: false,
+    expectWbs: '3.9',
+  },
 ];
 
 let failed = 0;

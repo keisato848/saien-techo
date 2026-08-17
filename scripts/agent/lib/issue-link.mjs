@@ -37,7 +37,7 @@ export function inspectPrCreate(commandText) {
   if (!/\bgh\s+pr\s+create\b/i.test(commandText)) return { ok: true };
 
   const title = extractFlag(commandText, 'title') ?? '';
-  const body = extractFlag(commandText, 'body') ?? '';
+  const body = extractBody(commandText) ?? '';
   const haystack = `${title}\n${body}`;
 
   const wbsMatch = WBS_IN_TITLE.exec(title);
@@ -63,15 +63,39 @@ export function inspectPrCreate(commandText) {
 }
 
 /**
- * `--title` / `--body` の値を取り出す。
- * ヒアドキュメント・引用符・改行を含む本文に耐える必要があるため、
- * 単純な \S+ ではなく引用符の対応を見る。
+ * `--title` の値を取り出す。引用符の対応を見る（タイトルは 1 行で短い）。
  */
 function extractFlag(commandText, flag) {
   const pattern = new RegExp(`--${flag}\\s+(?:"((?:[^"\\\\]|\\\\.)*)"|'([^']*)'|(\\S+))`, 's');
   const match = pattern.exec(commandText);
   if (!match) return null;
   return match[1] ?? match[2] ?? match[3] ?? null;
+}
+
+/**
+ * `--body` 以降をまるごと本文として扱う。
+ *
+ * **引用符の対応を見る `extractFlag` を本文に使ってはいけない。** 本文は
+ * ヒアドキュメント（`--body "$(cat <<'EOF' … EOF)"`）で渡すのが常で、
+ * その中には **ASCII の `"` が普通に出てくる**（`behavior="padding"` のような
+ * コード片）。すると `[^"]*` が最初の `"` で止まり、末尾に書いた `Closes #N` まで
+ * 読めずに**正しい PR を誤って弾く**（2026-08-17 に実際に踏んだ）。
+ *
+ * 誤ブロックは「守られない規約」より質が悪い — 通すために本文の日本語を
+ * 書き換える羽目になり、ガードを迂回する動機を作る。`--body` は
+ * `gh pr create` で最後に置くのが通例なので、**以降を全部**見れば足りる。
+ * 後ろに別のフラグが続いても、キーワード検索なので害はない。
+ */
+function extractBody(commandText) {
+  const match = /--body\s+/.exec(commandText);
+  if (!match) return null; // --body-file はここでは読めない。従来どおり deny になる
+  let body = commandText.slice(match.index + match[0].length);
+
+  // `Issue: なし` の判定は行頭アンカー。開きの引用符とヒアドキュメントの
+  // 前置き（`$(cat <<'EOF'`）が残ると 1 行目が行頭でなくなるので剥がす。
+  body = body.replace(/^["']/, '');
+  if (body.startsWith('$(')) body = body.replace(/^[^\n]*\n/, '');
+  return body;
 }
 
 /** PR 番号を `gh pr merge <N>` から取り出す（PostToolUse 検証用） */
