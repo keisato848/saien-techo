@@ -14,6 +14,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Colors, Typography } from '../constants/theme';
 import { DEFAULT_REGION, type Region } from '../services/region.service';
+import { KeyboardAvoider } from './KeyboardAvoider';
 import { PressableScale } from './PressableScale';
 import { RegionOptions } from './RegionOptions';
 
@@ -38,7 +39,7 @@ export function OnboardingSheet({ onDone }: OnboardingSheetProps) {
   };
 
   return (
-    <View style={styles.root} testID="onboarding-sheet">
+    <KeyboardAvoider style={styles.root} testID="onboarding-sheet">
       <ScrollView
         contentContainerStyle={[
           styles.body,
@@ -82,7 +83,7 @@ export function OnboardingSheet({ onDone }: OnboardingSheetProps) {
           <Text style={styles.submitText}>{saving ? '準備中…' : 'はじめる'}</Text>
         </PressableScale>
       </ScrollView>
-    </View>
+    </KeyboardAvoider>
   );
 }
 

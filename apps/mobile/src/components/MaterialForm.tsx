@@ -13,6 +13,7 @@ import { Colors, Typography } from '../constants/theme';
 import { MATERIAL_CATEGORIES, MATERIAL_CATEGORY_LABEL } from '../services/material.service';
 import type { MaterialCategory } from '../services/types';
 import { FormField } from './FormField';
+import { KeyboardAvoider } from './KeyboardAvoider';
 import { PressableScale } from './PressableScale';
 
 export interface MaterialFormValues {
@@ -87,7 +88,7 @@ export function MaterialForm({
   };
 
   return (
-    <View style={styles.root}>
+    <KeyboardAvoider style={styles.root}>
       <View style={[styles.header, { paddingTop: insets.top + 14 }]}>
         <Pressable onPress={onCancel} hitSlop={12}>
           <Text style={styles.headerAction}>キャンセル</Text>
@@ -201,7 +202,7 @@ export function MaterialForm({
 
         {footer}
       </ScrollView>
-    </View>
+    </KeyboardAvoider>
   );
 }
 

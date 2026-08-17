@@ -27,6 +27,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { FormField } from '../../../../src/components/FormField';
+import { KeyboardAvoider } from '../../../../src/components/KeyboardAvoider';
 import { PressableScale } from '../../../../src/components/PressableScale';
 import { Colors, Typography } from '../../../../src/constants/theme';
 import { expoImagePickerPhotoCaptureAdapter } from '../../../../src/services/expo-photo-capture.adapter';
@@ -142,7 +143,7 @@ export default function GardenConsultScreen() {
   const quotaExhausted = status !== null && !status.canInfer;
 
   return (
-    <View style={styles.root}>
+    <KeyboardAvoider style={styles.root}>
       <View style={[styles.header, { paddingTop: insets.top + 10 }]}>
         <Pressable onPress={() => router.back()} hitSlop={12} accessibilityLabel="戻る">
           <ChevronLeft size={24} color={Colors.ink} />
@@ -341,7 +342,7 @@ export default function GardenConsultScreen() {
 
         <Text style={styles.disclaimer}>{CONSULT_DISCLAIMER}</Text>
       </ScrollView>
-    </View>
+    </KeyboardAvoider>
   );
 }
 

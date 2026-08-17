@@ -13,6 +13,7 @@ import { CARE_KIND_LABEL, CARE_KINDS } from '../services/care-log.service';
 import type { CareLogKind } from '../services/types';
 import { CARE_LOG_DATE_QUICK_PICKS, DateField } from './DateField';
 import { FormField } from './FormField';
+import { KeyboardAvoider } from './KeyboardAvoider';
 import { PhotoGridField } from './PhotoGridField';
 import { PressableScale } from './PressableScale';
 
@@ -58,7 +59,7 @@ export function CareLogForm({
   };
 
   return (
-    <View style={styles.root}>
+    <KeyboardAvoider style={styles.root}>
       <View style={[styles.header, { paddingTop: insets.top + 14 }]}>
         <Pressable onPress={onCancel} hitSlop={12}>
           <Text style={styles.headerAction}>キャンセル</Text>
@@ -120,7 +121,7 @@ export function CareLogForm({
 
         {footer}
       </ScrollView>
-    </View>
+    </KeyboardAvoider>
   );
 }
 

@@ -20,6 +20,7 @@ import { persistGardenPhotos } from '../services/photo-storage.service';
 import type { HarvestUnit } from '../services/types';
 import { CARE_LOG_DATE_QUICK_PICKS, DateField } from './DateField';
 import { FormField } from './FormField';
+import { KeyboardAvoider } from './KeyboardAvoider';
 import { PhotoGridField } from './PhotoGridField';
 import { PressableScale } from './PressableScale';
 
@@ -93,7 +94,7 @@ export function HarvestForm({
   };
 
   return (
-    <View style={styles.root}>
+    <KeyboardAvoider style={styles.root}>
       <View style={[styles.header, { paddingTop: insets.top + 14 }]}>
         <Pressable onPress={onCancel} hitSlop={12}>
           <Text style={styles.headerAction}>キャンセル</Text>
@@ -168,7 +169,7 @@ export function HarvestForm({
 
         {footer}
       </ScrollView>
-    </View>
+    </KeyboardAvoider>
   );
 }
 
