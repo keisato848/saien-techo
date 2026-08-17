@@ -16,7 +16,7 @@
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.saientecho.app",
-      "buildNumber": "3",
+      "buildNumber": "4",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false
       }
@@ -57,7 +57,8 @@
         "expo-image-picker",
         {
           "photosPermission": "栽培や収穫の写真を選択するために写真ライブラリへのアクセスを使用します。",
-          "cameraPermission": "栽培や収穫の写真を撮影するためにカメラを使用します。"
+          "cameraPermission": "栽培や収穫の写真を撮影するためにカメラを使用します。",
+          "microphonePermission": false
         }
       ],
       [

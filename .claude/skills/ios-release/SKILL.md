@@ -48,8 +48,10 @@ Android の再提出時に変更が混ざる。
 | バンドル ID の Developer Portal 登録 | `com.saientecho.app` 登録済み          |
 | iOS 署名クレデンシャル               | 構築済み（有効期限 2027-08-13）        |
 
-**I1〜I7 すべて完了（2026-08-15）。** 1.0（ビルド 3）を App Store 審査へ提出済み。
-このスキルの手順は次回リリース（1.1 以降）で再利用する。
+**I1〜I7 すべて完了（2026-08-15）。** ただし 1.0（ビルド 3）は **2026-08-15 に却下**
+（マイクの purpose string — 下の「既知の注意」）。修正して**ビルド 4 で再提出**。
+掲載物・年齢レーティング・App Privacy は却下後も保持されるので、**やり直すのは
+ビルドの差し替えと再提出だけ**。
 
 > **配布証明書はだいどこと共有。** 失効・再生成すると**両アプリのビルドが通らなくなる**。
 > 片方の都合で作り直さないこと（プロファイルはアプリごとに別）。
@@ -142,6 +144,28 @@ App Store Connect で設定するもの:
   **コンテンツ配信権**（アプリ情報ページ。栽培暦は公的資料ベースの自作データなので
   「サードパーティ製コンテンツを含まない」）と、**バージョンページ側のサインイン情報**
   （テスト情報側とは**別フィールド**。アカウント不要のアプリなので両方ともチェックを外す）
+
+- **使わない権限の purpose string を既定のまま残すと審査で自動却下される。**
+  Apple は提出バイナリを自動解析し、プレースホルダーめいた purpose string を見つけると
+  **人間のレビューに入る前に却下する**（実績: 1.0 ビルド 3 が
+  `NSMicrophoneUsageDescription: "Allow app to access your microphone"` で却下・2026-08-15）。
+  出どころは `expo-image-picker` — **写真とカメラの文言だけ書くと、マイクは既定の英語文言が
+  黙って入る**（`withImagePicker.js` の `MICROPHONE_USAGE`）。さいえん手帳は静止画のみ
+  （`mediaTypes: ['images']`）でマイクを使わないので、**キーごと消す**のが正解:
+
+  ```json
+  [
+    "expo-image-picker",
+    { "photosPermission": "…", "cameraPermission": "…", "microphonePermission": false }
+  ]
+  ```
+
+  `false` はプラグインの `applyPermissions` が `delete infoPlist[key]` する合図で、
+  空文字や無難な文言で埋めるのとは別物（**使わない権限は申告ごと消す**）。
+  Android 側では同時に `RECORD_AUDIO` が `blockedPermissions` に入る（app.json の手動 block と重複するだけで無害）。
+  **Windows から検証できる:** `npx expo prebuild -p ios` は macOS/Linux が要るが、
+  `npx expo config --type introspect --json` はプラグイン適用後の `ios.infoPlist` を出すので、
+  **提出前に `*UsageDescription` を全部読んで、使わないキーが無いことを確認する。**
 
 - **ads プラグインの `userTrackingUsageDescription` は ATT の plist キーを注入する。**
   app.json の `react-native-google-mobile-ads` にこのキー（だいどこ由来）が残っていると
