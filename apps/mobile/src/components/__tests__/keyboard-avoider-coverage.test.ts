@@ -14,6 +14,11 @@
  * `<TextInput` だけを見ると 3 ファイルしか引っかからない。そこで
  * **入力部品（`INPUT_PARTS`）を経由した間接的な入力も「入力欄あり」と数える。**
  *
+ * **import の有無だけでは足りない。** だいどこは「包んでいるか」を import で見ていて、
+ * **モーダルの内側だけを包んだ画面が素通りしていた**（daidoko f17b1ce で発覚）。
+ * ここでは `<Modal>` の内と外を切り分けて別々に検査する。さいえん手帳は今のところ
+ * モーダル内に入力欄が無いが、`BottomSheet` が `Modal` なので置いた瞬間に効く。
+ *
  * 落ちたときは、まず**包む**こと。包まないと決めたなら EXEMPT に理由を書く。
  */
 import { readdirSync, readFileSync } from 'node:fs';
@@ -67,10 +72,40 @@ function fileKey(fullPath: string): string {
     .join('/');
 }
 
-const files = SCAN_DIRS.flatMap((dir) => collectFiles(dir)).map((path) => ({
-  key: fileKey(path),
-  source: readFileSync(path, 'utf8'),
-}));
+/**
+ * `<Modal ...>` 〜 `</Modal>` を落として、モーダル**外**のツリーだけを残す。
+ *
+ * import の有無だけを見ていると、**モーダルの内側だけを包んだ画面が素通りする**
+ * （だいどこで実際に起きた — `import-photo` が検査をすり抜けていた・daidoko f17b1ce）。
+ * さいえん手帳は `BottomSheet` が `Modal` を使っているので、そこへ入力欄を
+ * 置いた瞬間に同じ穴が開く。**外側と内側を別々に検査する。**
+ */
+function stripModalBlocks(source: string): string {
+  let result = '';
+  let rest = source;
+  for (;;) {
+    const start = rest.indexOf('<Modal');
+    if (start < 0) return result + rest;
+    const end = rest.indexOf('</Modal>', start);
+    if (end < 0) return result + rest.slice(0, start); // 閉じが無ければ以降は捨てる
+    result += rest.slice(0, start);
+    rest = rest.slice(end + '</Modal>'.length);
+  }
+}
+
+/** `<Modal ...>` 〜 `</Modal>` の中身だけを取り出す（複数あればすべて）。 */
+function modalBlocks(source: string): string[] {
+  const blocks: string[] = [];
+  let rest = source;
+  for (;;) {
+    const start = rest.indexOf('<Modal');
+    if (start < 0) return blocks;
+    const end = rest.indexOf('</Modal>', start);
+    if (end < 0) return blocks;
+    blocks.push(rest.slice(start, end));
+    rest = rest.slice(end + '</Modal>'.length);
+  }
+}
 
 /** 直接の `<TextInput`、または入力部品を描画しているか */
 function hasInput(source: string): boolean {
@@ -78,7 +113,20 @@ function hasInput(source: string): boolean {
   return INPUT_PARTS.some((part) => source.includes(`<${part}`));
 }
 
-const withInput = files.filter((file) => hasInput(file.source));
+const files = SCAN_DIRS.flatMap((dir) => collectFiles(dir)).map((path) => {
+  const source = readFileSync(path, 'utf8');
+  return { key: fileKey(path), source, outer: stripModalBlocks(source) };
+});
+
+/** モーダルの**外**に入力欄がある = 画面本体を包む必要がある */
+const withInput = files.filter((file) => hasInput(file.outer));
+
+/** モーダルの**中**に入力欄がある = モーダルの内側にも包む必要がある */
+const withModalInput = files.flatMap((file) =>
+  modalBlocks(file.source)
+    .filter(hasInput)
+    .map((block, index) => ({ key: `${file.key} の Modal#${index + 1}`, block })),
+);
 
 describe('KeyboardAvoider coverage', () => {
   it('走査対象を実際に見つけている（パス解決が壊れたら気づく）', () => {
@@ -94,6 +142,32 @@ describe('KeyboardAvoider coverage', () => {
       expect(file?.source).toMatch(/from '.*KeyboardAvoider'/);
     },
   );
+
+  it('モーダルの内外を切り分ける仕組み自体が動く（対象ゼロで素通りしていないこと）', () => {
+    // 現状さいえん手帳にはモーダル内の入力欄が無く、上の検査は「対象ゼロ」で通る。
+    // 仕組みが壊れても気づけないので、合成した入力で内外の切り分けを直接確かめる。
+    const synthetic = [
+      '<View>',
+      '  <Modal visible={x}>',
+      '    <TextInput value={a} />',
+      '  </Modal>',
+      '</View>',
+    ].join('\n');
+
+    expect(hasInput(synthetic)).toBe(true); // 全体で見れば入力欄はある
+    expect(hasInput(stripModalBlocks(synthetic))).toBe(false); // モーダル外には無い
+    expect(modalBlocks(synthetic)).toHaveLength(1);
+    expect(hasInput(modalBlocks(synthetic)[0])).toBe(true); // モーダル内にはある
+  });
+
+  it('Modal の中に入力欄がある画面は、モーダルの内側にも KeyboardAvoider を置いている', () => {
+    // 画面全体を包んでも Modal の中身は別ツリーなので効かない。
+    // 現状さいえん手帳に該当は無いが、BottomSheet が Modal なので置いた瞬間に効く。
+    const missing = withModalInput
+      .filter((entry) => !entry.block.includes('<KeyboardAvoider'))
+      .map((entry) => entry.key);
+    expect(missing).toEqual([]);
+  });
 
   it.each(INPUT_PARTS)('INPUT_PARTS の %s は実際に入力欄を持つ', (part) => {
     const file = files.find((candidate) => candidate.key.endsWith(`components/${part}.tsx`));
