@@ -12,6 +12,11 @@ import { and, desc, eq, inArray } from 'drizzle-orm';
 import { getDb, isNativePlatform } from '../db/client';
 import * as schema from '../db/schema';
 import { generateId } from '../utils/id';
+import {
+  deleteReadForHarvest,
+  dismissReadForManualQuantity,
+  enqueueHarvestRead,
+} from './harvest-read.service';
 import { deleteGardenPhotoFiles, MAX_GARDEN_PHOTOS } from './photo-storage.service';
 import type {
   HarvestItem,
@@ -195,6 +200,13 @@ export async function createHarvest(input: SaveHarvestInput): Promise<string> {
   });
 
   await replacePhotos(db, id, input.photoUris ?? []);
+
+  // 写真があって数量が空なら「写真から記録」の読み取り待ちに積む（#143）。
+  // 数量を打ってあるなら読むものがない。積むだけで、送信は無料枠か
+  // リワードの通行権が付くまで起きない（harvest-read.service）
+  if ((input.photoUris?.length ?? 0) > 0 && input.quantity == null) {
+    await enqueueHarvestRead(id);
+  }
   return id;
 }
 
@@ -217,6 +229,11 @@ export async function updateHarvest(
     .where(eq(schema.harvests.id, harvestId));
 
   await replacePhotos(db, harvestId, input.photoUris ?? []);
+
+  // 手で数量を入れたら読み取り待ちから外す。入れずに保存し直しただけなら残す
+  if (input.quantity != null) {
+    await dismissReadForManualQuantity(harvestId);
+  }
 }
 
 export async function deleteHarvest(harvestId: string): Promise<void> {
@@ -229,6 +246,8 @@ export async function deleteHarvest(harvestId: string): Promise<void> {
   await db
     .delete(schema.photos)
     .where(and(eq(schema.photos.ownerType, PHOTO_OWNER), eq(schema.photos.ownerId, harvestId)));
+  // 読み取り待ちの行が先（harvests への FK 参照を持つため）
+  await deleteReadForHarvest(harvestId);
   await db.delete(schema.harvests).where(eq(schema.harvests.id, harvestId));
 }
 

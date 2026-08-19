@@ -1,5 +1,12 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 
+// 読み取りボタンは HarvestFormRead.test が担保。実サービス（usage → 広告 SDK）を
+// 読み込ませない
+jest.mock('../../services/harvest-read.service', () => ({
+  HarvestReadError: class extends Error {},
+  readPhotoDirect: jest.fn(),
+}));
+
 import { HarvestForm } from '../HarvestForm';
 
 jest.mock('@react-native-community/datetimepicker', () => 'DateTimePicker');

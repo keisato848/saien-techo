@@ -20,11 +20,18 @@ import {
   getHarvest,
   updateHarvest,
 } from '../../../../../src/services/harvest.service';
+import { getPlantingDetail } from '../../../../../src/services/planting.service';
 
 export default function EditHarvestScreen() {
-  const { harvestId } = useLocalSearchParams<{ id: string; harvestId: string }>();
+  const { id, harvestId } = useLocalSearchParams<{ id: string; harvestId: string }>();
   const router = useRouter();
   const [initialValues, setInitialValues] = useState<HarvestFormValues | null>(null);
+  const [cropName, setCropName] = useState<string | undefined>(undefined);
+
+  // 「写真から数量を読み取る」のヒント（#143）。取れなくても編集はできる
+  useEffect(() => {
+    void getPlantingDetail(id).then((planting) => setCropName(planting?.cropName));
+  }, [id]);
 
   useEffect(() => {
     let cancelled = false;
@@ -86,6 +93,7 @@ export default function EditHarvestScreen() {
       onSubmit={handleSubmit}
       onCancel={() => router.back()}
       title="収穫を編集"
+      readCropName={cropName}
       footer={
         <PressableScale style={styles.deleteButton} onPress={handleDelete}>
           <Trash2 size={16} color={Colors.danger} />

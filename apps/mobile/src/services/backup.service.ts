@@ -147,6 +147,23 @@ const BACKUP_TABLES = [
     ],
   },
   {
+    // 「写真から記録」の読み取り状態（#143）。復元先で読み取り待ちが消えないよう含める
+    name: 'harvest_photo_reads',
+    columns: [
+      'harvest_id',
+      'state',
+      'paid',
+      'attempts',
+      'crop_guess',
+      'crop_confidence',
+      'count',
+      'count_confidence',
+      'read_note',
+      'created_at',
+      'updated_at',
+    ],
+  },
+  {
     name: 'photos',
     columns: [
       'id',

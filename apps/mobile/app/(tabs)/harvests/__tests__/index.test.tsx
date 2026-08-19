@@ -22,6 +22,11 @@ jest.mock('expo-router', () => ({
   },
 }));
 
+// 画面に埋めた「写真の読み取り」カードが実 DB を叩かないように
+jest.mock('../../../../src/services/harvest-read.service', () => ({
+  getOpenReadCount: () => Promise.resolve(0),
+}));
+
 const mockGetHarvestAlbum = jest.fn();
 const mockGetHarvestCropNames = jest.fn();
 jest.mock('../../../../src/services/harvest.service', () => ({

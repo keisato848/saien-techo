@@ -9,11 +9,20 @@
  * 撮影を取り消してもフォームには留まるので、ギャラリーにも切り替えられる。
  */
 import { useEffect, useRef, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import {
+  ActivityIndicator,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Colors, Typography } from '../constants/theme';
 import { expoImagePickerPhotoCaptureAdapter } from '../services/expo-photo-capture.adapter';
+import { HarvestReadError, readPhotoDirect } from '../services/harvest-read.service';
 import { HARVEST_UNIT_LABEL, HARVEST_UNITS } from '../services/harvest.service';
 import { capturePhoto } from '../services/photo-capture.service';
 import { persistGardenPhotos } from '../services/photo-storage.service';
@@ -40,6 +49,11 @@ interface HarvestFormProps {
   submitLabel?: string;
   /** 開いた直後にカメラを出す（新規記録のとき） */
   autoCapture?: boolean;
+  /**
+   * 「写真から数量を読み取る」を出す（#143）。値は栽培の作物名で、
+   * 読み取りのヒントとしてサーバーへ渡す。未指定なら導線ごと出さない。
+   */
+  readCropName?: string;
   footer?: React.ReactNode;
 }
 
@@ -50,6 +64,7 @@ export function HarvestForm({
   title,
   submitLabel = '保存',
   autoCapture = false,
+  readCropName,
   footer,
 }: HarvestFormProps) {
   const insets = useSafeAreaInsets();
@@ -63,6 +78,51 @@ export function HarvestForm({
   const [note, setNote] = useState(initialValues?.note ?? '');
   const [photoUris, setPhotoUris] = useState<string[]>(initialValues?.photoUris ?? []);
   const [saving, setSaving] = useState(false);
+  const [reading, setReading] = useState(false);
+  const [readMessage, setReadMessage] = useState<string | null>(null);
+
+  /**
+   * 写真から数量を読み取る（#143）。**正はユーザーの確定** — 結果は数量欄に
+   * 入れるだけで、保存するかどうか・直すかどうかはユーザーが決める。
+   * 撮り損じ（収穫物が写っていない）は無料枠を消費しない（service 側）。
+   */
+  const handleRead = async () => {
+    if (reading || photoUris.length === 0) return;
+    setReading(true);
+    setReadMessage(null);
+    try {
+      const data = await readPhotoDirect(photoUris[0], readCropName);
+      if (!data.isHarvest) {
+        setReadMessage(
+          data.note ?? '収穫物が写っていないようです。採ったあとの写真だと読み取れます。',
+        );
+        return;
+      }
+      if (data.count != null) {
+        setQuantityText(String(data.count));
+        setUnit((current) => current ?? 'piece');
+        const mismatch =
+          data.cropGuess && readCropName && data.cropGuess !== readCropName
+            ? `写真は「${data.cropGuess}」に見えます。`
+            : '';
+        setReadMessage(
+          [`${data.count} 個と読み取りました。違っていたら直してください。`, mismatch]
+            .filter(Boolean)
+            .join(' '),
+        );
+      } else {
+        setReadMessage(data.note ?? '数えられませんでした。数量は手で入力できます。');
+      }
+    } catch (err) {
+      setReadMessage(
+        err instanceof HarvestReadError
+          ? err.message
+          : '読み取れませんでした。数量は手で入力できます。',
+      );
+    } finally {
+      setReading(false);
+    }
+  };
 
   // 二重起動を防ぐ。再レンダリングのたびにカメラが出ると操作できなくなる
   const capturedOnce = useRef(false);
@@ -111,6 +171,26 @@ export function HarvestForm({
         <View style={styles.group}>
           <Text style={styles.groupLabel}>写真</Text>
           <PhotoGridField value={photoUris} onChange={setPhotoUris} />
+
+          {readCropName && photoUris.length > 0 ? (
+            <View style={styles.readBlock}>
+              <PressableScale
+                style={[styles.readButton, reading && styles.readButtonDisabled]}
+                onPress={() => void handleRead()}
+                disabled={reading}
+                accessibilityLabel="写真から数量を読み取る"
+              >
+                {reading ? (
+                  <ActivityIndicator size="small" color={Colors.accentInk} />
+                ) : (
+                  <Text style={styles.readButtonText}>写真から数量を読み取る</Text>
+                )}
+              </PressableScale>
+              {/* 外へ出る操作は黙らない（ローカルファーストの例外 — #143） */}
+              <Text style={styles.readCaption}>写真を送って読み取ります</Text>
+              {readMessage ? <Text style={styles.readMessage}>{readMessage}</Text> : null}
+            </View>
+          ) : null}
         </View>
 
         {/* 採った日にさかのぼれるように。アルバム（R07）は収穫日で月ごとに
@@ -225,4 +305,24 @@ const styles = StyleSheet.create({
   hint: { fontSize: Typography.size.xs, color: Colors.inkDim, marginTop: 8 },
   // FormField が枠込みの高さとして扱う（3 行ぶん）
   noteInput: { minHeight: 98, textAlignVertical: 'top' },
+  readBlock: { marginTop: 10, gap: 6 },
+  readButton: {
+    alignSelf: 'flex-start',
+    minHeight: 38,
+    justifyContent: 'center',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: Colors.accent,
+    backgroundColor: Colors.surfaceInput,
+  },
+  readButtonDisabled: { opacity: 0.6, borderRadius: 10 },
+  readButtonText: {
+    fontSize: Typography.size.sm,
+    fontWeight: Typography.weight.medium,
+    color: Colors.accentInk,
+  },
+  readCaption: { fontSize: Typography.size.xs, color: Colors.inkDim },
+  readMessage: { fontSize: Typography.size.sm, color: Colors.ink, lineHeight: 20 },
 });

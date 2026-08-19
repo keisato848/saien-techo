@@ -12,18 +12,26 @@ import {
   createHarvest,
   getDefaultUnitForPlanting,
 } from '../../../../../src/services/harvest.service';
+import { getPlantingDetail } from '../../../../../src/services/planting.service';
 import type { HarvestUnit } from '../../../../../src/services/types';
 
 export default function NewHarvestScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const [defaultUnit, setDefaultUnit] = useState<HarvestUnit | null>(null);
+  const [cropName, setCropName] = useState<string | undefined>(undefined);
   const [ready, setReady] = useState(false);
 
-  // 作物ごとの既定単位（R06）。トマトなら「個」を選んだ状態で開く
+  // 作物ごとの既定単位（R06）。トマトなら「個」を選んだ状態で開く。
+  // 作物名は「写真から数量を読み取る」のヒントに渡す（#143）
   useEffect(() => {
     void (async () => {
-      setDefaultUnit(await getDefaultUnitForPlanting(id));
+      const [unit, planting] = await Promise.all([
+        getDefaultUnitForPlanting(id),
+        getPlantingDetail(id),
+      ]);
+      setDefaultUnit(unit);
+      setCropName(planting?.cropName);
       setReady(true);
     })();
   }, [id]);
@@ -54,6 +62,7 @@ export default function NewHarvestScreen() {
       title="収穫を記録"
       submitLabel="記録"
       autoCapture
+      readCropName={cropName}
     />
   );
 }

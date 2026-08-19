@@ -47,6 +47,19 @@ jest.mock('../../../../src/services/harvest.service', () => ({
   getDefaultUnitForPlanting: (...args: unknown[]) => mockGetDefaultUnitForPlanting(...args),
 }));
 
+const mockGetPlantingDetail = jest.fn();
+jest.mock('../../../../src/services/planting.service', () => ({
+  ...jest.requireActual('../../../../src/services/planting.service'),
+  getPlantingDetail: (...args: unknown[]) => mockGetPlantingDetail(...args),
+}));
+
+// フォーム内の読み取りボタンはここでは押さない（HarvestFormRead.test が担保）。
+// 実サービスを読み込ませない（usage → 広告 SDK の連鎖を避ける）
+jest.mock('../../../../src/services/harvest-read.service', () => ({
+  HarvestReadError: class extends Error {},
+  readPhotoDirect: jest.fn(),
+}));
+
 import NewHarvestScreen from '../[id]/harvests/new';
 import EditHarvestScreen from '../[id]/harvests/[harvestId]';
 
@@ -82,6 +95,7 @@ beforeEach(() => {
   mockGetHarvest.mockReset().mockResolvedValue(harvest({ id: 'h1' }));
   mockDeleteHarvest.mockReset().mockResolvedValue(undefined);
   mockGetDefaultUnitForPlanting.mockReset().mockResolvedValue('piece');
+  mockGetPlantingDetail.mockReset().mockResolvedValue({ cropName: 'トマト' });
   jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
 });
 

@@ -16,6 +16,7 @@ import {
   seedCropGuides,
   seedCrops,
   seedFamilies,
+  seedHarvestPhotoReads,
   seedHarvests,
   seedMaterials,
   seedPlaces,
@@ -31,7 +32,8 @@ type DB = ExpoSQLiteDatabase<typeof schema>;
 // v10: crop_calendars の一意インデックスに start_month を追加（WBS 3.1。
 //      同じ kind でも春秋 2 つの窓を持てるように）
 // v11: だいどこ由来テーブルを DROP（WBS 2.9e。処分表は docs/WBS.md §2.9）
-export const CURRENT_SCHEMA_VERSION = 11;
+// v12: harvest_photo_reads（「写真から記録」の読み取り状態 — #143）
+export const CURRENT_SCHEMA_VERSION = 12;
 
 const DEFAULT_USER_ID = 'user-kei';
 const DEFAULT_FAMILY_ID = 'family-001';
@@ -42,7 +44,7 @@ const DEFAULT_INVITE_CODE = 'DK0001';
 
 // サンプルデータの中身を変えたら必ず上げる。据え置くと、既にシード済みの端末は
 // appMeta のマーカーが一致して seedDatabase() が即 return し、新しい行が入らない。
-const SAMPLE_DATA_VERSION = '6';
+const SAMPLE_DATA_VERSION = '7';
 const SAMPLE_DATA_META_KEY = 'sample_data_version';
 
 export interface SeedSnapshot {
@@ -239,6 +241,23 @@ const CREATE_TABLES_SQL = `
 
   CREATE INDEX IF NOT EXISTS idx_harvests_planting_date ON harvests(planting_id, harvested_at);
   CREATE INDEX IF NOT EXISTS idx_harvests_date ON harvests(harvested_at);
+
+  -- 「写真から記録」の読み取り状態（#143 / v12）。詳細は schema.ts のコメント
+  CREATE TABLE IF NOT EXISTS harvest_photo_reads (
+    harvest_id TEXT PRIMARY KEY REFERENCES harvests(id),
+    state TEXT NOT NULL DEFAULT 'pending',
+    paid INTEGER NOT NULL DEFAULT 0,
+    attempts INTEGER NOT NULL DEFAULT 0,
+    crop_guess TEXT,
+    crop_confidence TEXT,
+    count INTEGER,
+    count_confidence TEXT,
+    read_note TEXT,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_harvest_photo_reads_state ON harvest_photo_reads(state);
 
   CREATE TABLE IF NOT EXISTS photos (
     id TEXT PRIMARY KEY,
@@ -637,6 +656,10 @@ export async function seedDatabase(database: DB): Promise<void> {
   await database
     .insert(schema.harvests)
     .values([...seedHarvests])
+    .onConflictDoNothing();
+  await database
+    .insert(schema.harvestPhotoReads)
+    .values([...seedHarvestPhotoReads])
     .onConflictDoNothing();
   await database
     .insert(schema.materials)
