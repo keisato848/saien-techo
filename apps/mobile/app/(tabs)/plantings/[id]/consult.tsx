@@ -215,8 +215,8 @@ export default function GardenConsultScreen() {
           <View style={styles.quotaCard}>
             <Text style={styles.quotaText}>
               {status?.canWatchAdForMore
-                ? '本日の無料回数を使い切りました。短い動画を見ると、今日もう 1 回相談できます。'
-                : '本日の相談回数を使い切りました。また明日お試しください。'}
+                ? '無料の相談は使い切りました。短い動画を見ると、もう 1 回相談できます。'
+                : '今日の相談はここまでです。また明日お試しください。'}
             </Text>
             {status?.canWatchAdForMore ? (
               <PressableScale
@@ -237,7 +237,12 @@ export default function GardenConsultScreen() {
             ) : null}
           </View>
         ) : status && Number.isFinite(status.remaining) ? (
-          <Text style={styles.quotaLine}>今日はあと {status.remaining} 回相談できます</Text>
+          // 無料ぶんは生涯 1 回なので「今日は」と言わない（明日戻ると誤解させる）
+          <Text style={styles.quotaLine}>
+            {status.hasFreeLeft
+              ? '最初の 1 回は無料で相談できます'
+              : `今日はあと ${status.remaining} 回相談できます`}
+          </Text>
         ) : null}
 
         <PressableScale

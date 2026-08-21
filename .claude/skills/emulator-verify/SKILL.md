@@ -35,7 +35,7 @@ preflight で検出して即止める（気づかずに 1 分半を捨てた実�
 EXPO_PUBLIC_ENABLE_SAMPLE_DATA=1     # サンプルシード（場所・栽培・作業ログ・収穫・資材 + 写真 4 枚）
 EXPO_PUBLIC_DISABLE_COACH_MARKS=1    # コーチマーク非表示（スクショ・回帰確認用）
 EXPO_PUBLIC_PALETTE=naedoko          # 配色の実機比較（既定は「若葉」。CLAUDE.md §7）
-EXPO_PUBLIC_FREE_DAILY_LIMIT=0       # 無料枠0=常時ペイウォール（リワード広告フローの E2E 用）
+EXPO_PUBLIC_FREE_LIFETIME_LIMIT=0    # 無料枠0=常時ペイウォール（リワード広告フローの E2E 用。旧名 _FREE_DAILY_LIMIT も可）
 EXPO_PUBLIC_ADMOB_ENABLED=true       # 広告有効
 EXPO_PUBLIC_ADMOB_ALLOW_TEST_UNITS=1 # ユニット未設定のとき公式テスト広告を出す（**検証専用**）
 EXPO_PUBLIC_ADMOB_IGNORE_FREQUENCY=1 # 起動広告の頻度制限を外す（毎回出したいとき）

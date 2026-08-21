@@ -148,7 +148,7 @@ describe('AI 相談画面', () => {
     });
 
     render(<GardenConsultScreen />);
-    await screen.findByText(/本日の相談回数を使い切りました/);
+    await screen.findByText(/今日の相談はここまでです/);
     await pickPhoto();
 
     fireEvent.press(screen.getByLabelText('AI に相談する'));

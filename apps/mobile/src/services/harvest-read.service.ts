@@ -31,7 +31,7 @@ import { and, asc, eq, inArray, sql } from 'drizzle-orm';
 import * as schema from '../db/schema';
 import { getDb, isNativePlatform } from '../db/client';
 import { API_V1 } from '../config';
-import { getFreemiumStatus, incrementDailyUsage } from './usage.service';
+import { getFreemiumStatus, incrementUsage } from './usage.service';
 import { expoUploadImageAdapter, type UploadImageAdapter } from './upload-image';
 
 // ─── 定数（#144 で決定） ─────────────────────────────────────────────────────
@@ -158,13 +158,13 @@ export async function readPhotoDirect(
   const status = await getFreemiumStatus();
   if (!status.canInfer) {
     throw new HarvestReadError(
-      '今日の読み取りぶんは使い切りました。保存しておくと、あとで「まとめて読み取る」から読めます。',
+      '無料の読み取りは使い切りました。保存しておくと、あとで「まとめて読み取る」から読めます。',
       'quota',
     );
   }
   const data = await requestHarvestRead(imageUri, cropName, deps?.imageAdapter, deps?.fetchFn);
   if (data.isHarvest) {
-    await incrementDailyUsage();
+    await incrementUsage();
   }
   return data;
 }
@@ -360,7 +360,7 @@ export async function grantFreeRead(): Promise<string | null> {
   // 無料枠ぶんは共用の日次カウンタを 1 消費する（キーは AI 相談と共用 — #144 決定）。
   // paid 印を付けた時点で消費する — 成功時消費にすると、途中でアプリを閉じて
   // 再開するたびに「無料のまま何度でも」になってしまう（印は残るため）。
-  await incrementDailyUsage();
+  await incrementUsage();
   return harvestId;
 }
 

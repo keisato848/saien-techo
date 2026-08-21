@@ -90,7 +90,7 @@ export default function HarvestReadsScreen() {
     setMessage(null);
     const granted = await grantFreeRead();
     if (!granted) {
-      setMessage('今日の無料ぶんは使い切りました。');
+      setMessage('無料の読み取りは使い切りました。');
       await load();
       return;
     }
@@ -144,10 +144,10 @@ export default function HarvestReadsScreen() {
               <PressableScale
                 style={styles.primaryButton}
                 onPress={() => void handleFree()}
-                accessibilityLabel="今日のぶんを 1 枚読み取る"
+                accessibilityLabel="無料で 1 枚読み取る"
               >
                 <Camera size={16} color={Colors.onAccent} />
-                <Text style={styles.primaryButtonText}>今日のぶんを 1 枚読み取る（無料）</Text>
+                <Text style={styles.primaryButtonText}>無料で 1 枚読み取る</Text>
               </PressableScale>
             ) : null}
 
