@@ -54,6 +54,12 @@ interface HarvestFormProps {
    * 読み取りのヒントとしてサーバーへ渡す。未指定なら導線ごと出さない。
    */
   readCropName?: string;
+  /**
+   * 読み取り済みの下書きについての一言（#143）。「直す」「数量を入力」で
+   * ここへ来たとき、**何を直しているのかが分かるように**出す。
+   * この場で読み直したら、その結果に置き換わる。
+   */
+  readHint?: string;
   footer?: React.ReactNode;
 }
 
@@ -65,6 +71,7 @@ export function HarvestForm({
   submitLabel = '保存',
   autoCapture = false,
   readCropName,
+  readHint,
   footer,
 }: HarvestFormProps) {
   const insets = useSafeAreaInsets();
@@ -123,6 +130,9 @@ export function HarvestForm({
       setReading(false);
     }
   };
+
+  // この場で読み直したら、渡された下書きの説明より新しい結果を優先する
+  const shownReadMessage = readMessage ?? readHint;
 
   // 二重起動を防ぐ。再レンダリングのたびにカメラが出ると操作できなくなる
   const capturedOnce = useRef(false);
@@ -188,7 +198,7 @@ export function HarvestForm({
               </PressableScale>
               {/* 外へ出る操作は黙らない（ローカルファーストの例外 — #143） */}
               <Text style={styles.readCaption}>写真を送って読み取ります</Text>
-              {readMessage ? <Text style={styles.readMessage}>{readMessage}</Text> : null}
+              {shownReadMessage ? <Text style={styles.readMessage}>{shownReadMessage}</Text> : null}
             </View>
           ) : null}
         </View>

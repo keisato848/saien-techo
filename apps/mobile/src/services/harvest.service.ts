@@ -230,9 +230,10 @@ export async function updateHarvest(
 
   await replacePhotos(db, harvestId, input.photoUris ?? []);
 
-  // 手で数量を入れたら読み取り待ちから外す。入れずに保存し直しただけなら残す
+  // 数量が入ったら読み取り待ちから外す。入れずに保存し直しただけなら残す
+  // （読み取った数のまま保存されたかどうかは呼び先で判定する）
   if (input.quantity != null) {
-    await dismissReadForManualQuantity(harvestId);
+    await dismissReadForManualQuantity(harvestId, input.quantity);
   }
 }
 

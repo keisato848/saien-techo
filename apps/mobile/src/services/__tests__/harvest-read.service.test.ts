@@ -44,6 +44,7 @@ import {
   dismissRead,
   enqueueHarvestRead,
   getOpenReadCount,
+  getReadDraft,
   getReadQueue,
   grantFreeRead,
   HarvestReadError,
@@ -98,6 +99,17 @@ async function makeQueuedHarvest(plantingId: string, photo = '/photos/a.jpg'): P
     note: '',
     photoUris: [photo],
   });
+}
+
+/** 読み取り済み（analyzed）まで進めた収穫を作る */
+async function analyzedHarvest(count = 8): Promise<{ plantingId: string; harvestId: string }> {
+  const plantingId = await makePlanting('トマト');
+  const harvestId = await makeQueuedHarvest(plantingId);
+  await grantFreeRead();
+  await processPaidReads(undefined, {
+    fetchFn: okFetch({ isHarvest: true, cropGuess: 'ミニトマト', count }) as never,
+  });
+  return { plantingId, harvestId };
 }
 
 const describeIfSqlite = isSqliteAvailable ? describe : describe.skip;
@@ -296,16 +308,6 @@ describeIfSqlite('harvest-read.service', () => {
   });
 
   describe('確認（下書き → 台帳）', () => {
-    async function analyzedHarvest(count = 8): Promise<{ plantingId: string; harvestId: string }> {
-      const plantingId = await makePlanting('トマト');
-      const harvestId = await makeQueuedHarvest(plantingId);
-      await grantFreeRead();
-      await processPaidReads(undefined, {
-        fetchFn: okFetch({ isHarvest: true, cropGuess: 'ミニトマト', count }) as never,
-      });
-      return { plantingId, harvestId };
-    }
-
     it('applyRead は数量を書き込み、単位が空なら「個」を入れる', async () => {
       const { harvestId } = await analyzedHarvest(8);
       await applyRead(harvestId);
@@ -340,6 +342,49 @@ describeIfSqlite('harvest-read.service', () => {
     });
   });
 
+  /**
+   * 「直す」「数量を入力」の着地点（編集画面）へ渡す下書き。
+   * これが無いと、9 個と読めていても数量欄が空で開き、直す対象が無くなる。
+   */
+  describe('getReadDraft', () => {
+    it('確定前の読み取りを下書きとして返す', async () => {
+      const { harvestId } = await analyzedHarvest(8);
+      expect(await getReadDraft(harvestId)).toEqual({
+        count: 8,
+        cropGuess: 'ミニトマト',
+        readNote: null,
+      });
+    });
+
+    it('数えられなかった結果は理由だけ返す（count は null）', async () => {
+      const plantingId = await makePlanting();
+      const harvestId = await makeQueuedHarvest(plantingId);
+      await grantFreeRead();
+      await processPaidReads(undefined, {
+        fetchFn: okFetch({ isHarvest: true, note: '重なっていて数えられませんでした' }) as never,
+      });
+
+      expect(await getReadDraft(harvestId)).toMatchObject({
+        count: null,
+        readNote: '重なっていて数えられませんでした',
+      });
+    });
+
+    it('まだ読んでいない・確定済み・取り下げ済みには下書きが無い', async () => {
+      const plantingId = await makePlanting();
+      const pendingId = await makeQueuedHarvest(plantingId);
+      expect(await getReadDraft(pendingId)).toBeNull();
+
+      const applied = await analyzedHarvest(3);
+      await applyRead(applied.harvestId);
+      expect(await getReadDraft(applied.harvestId)).toBeNull();
+
+      const declined = await analyzedHarvest(4);
+      await dismissRead(declined.harvestId);
+      expect(await getReadDraft(declined.harvestId)).toBeNull();
+    });
+  });
+
   describe('収穫レコード側との整合', () => {
     it('手で数量を入れて保存したら読み取り待ちから外れる', async () => {
       const plantingId = await makePlanting();
@@ -353,6 +398,44 @@ describeIfSqlite('harvest-read.service', () => {
         photoUris: ['/photos/a.jpg'],
       });
       expect(await getReadQueue()).toEqual([]);
+    });
+
+    it('読み取った数のまま保存したら「使った」扱いになる', async () => {
+      const { harvestId } = await analyzedHarvest(8);
+
+      // 編集画面は下書き 8 を入れて開く。そのまま保存 = 読み取りの採用
+      await updateHarvest(harvestId, {
+        harvestedAt: new Date().toISOString(),
+        quantity: 8,
+        unit: 'piece',
+        note: '',
+        photoUris: ['/photos/a.jpg'],
+      });
+
+      expect(await getReadQueue()).toEqual([]);
+      const rows = mockHandles.expoDb.getAllSync(
+        'SELECT state FROM harvest_photo_reads WHERE harvest_id = ?',
+        [harvestId],
+      ) as Array<{ state: string }>;
+      expect(rows[0]?.state).toBe('applied');
+    });
+
+    it('数を直して保存したら「使わなかった」扱いになる', async () => {
+      const { harvestId } = await analyzedHarvest(8);
+
+      await updateHarvest(harvestId, {
+        harvestedAt: new Date().toISOString(),
+        quantity: 7,
+        unit: 'piece',
+        note: '',
+        photoUris: ['/photos/a.jpg'],
+      });
+
+      const rows = mockHandles.expoDb.getAllSync(
+        'SELECT state FROM harvest_photo_reads WHERE harvest_id = ?',
+        [harvestId],
+      ) as Array<{ state: string }>;
+      expect(rows[0]?.state).toBe('dismissed');
     });
 
     it('収穫を削除したら読み取り行も消える', async () => {

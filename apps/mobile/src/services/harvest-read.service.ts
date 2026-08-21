@@ -187,13 +187,37 @@ export async function enqueueHarvestRead(harvestId: string): Promise<void> {
     .onConflictDoNothing();
 }
 
-/** 手で数量を入れた収穫の読み取りを取り下げる（`updateHarvest` から） */
-export async function dismissReadForManualQuantity(harvestId: string): Promise<void> {
+/**
+ * 数量が入った収穫の読み取りを閉じる（`updateHarvest` から）。
+ *
+ * **読み取った数のまま保存されたなら「使った（applied）」。** 編集画面は
+ * 読み取り結果を下書きとして入れて開くので（`getReadDraft`）、そこで
+ * そのまま保存したのは「手入力」ではなく「読み取りの採用」にあたる。
+ * 一律 dismissed にすると、実際には使われた読み取りが使われなかったことに
+ * なってしまう。数が違えばユーザーが直したということなので dismissed。
+ */
+export async function dismissReadForManualQuantity(
+  harvestId: string,
+  savedQuantity?: number | null,
+): Promise<void> {
   if (!isNativePlatform) return;
   const db = getDb();
+  const rows = await db
+    .select({ count: schema.harvestPhotoReads.count })
+    .from(schema.harvestPhotoReads)
+    .where(
+      and(
+        eq(schema.harvestPhotoReads.harvestId, harvestId),
+        inArray(schema.harvestPhotoReads.state, ['pending', 'analyzed', 'failed']),
+      ),
+    );
+  const row = rows[0];
+  if (!row) return;
+
+  const usedTheRead = savedQuantity != null && row.count != null && row.count === savedQuantity;
   await db
     .update(schema.harvestPhotoReads)
-    .set({ state: 'dismissed', updatedAt: nowIso() })
+    .set({ state: usedTheRead ? 'applied' : 'dismissed', updatedAt: nowIso() })
     .where(
       and(
         eq(schema.harvestPhotoReads.harvestId, harvestId),
@@ -457,6 +481,53 @@ export async function applyRead(harvestId: string): Promise<void> {
     .update(schema.harvestPhotoReads)
     .set({ state: 'applied', updatedAt: nowIso() })
     .where(eq(schema.harvestPhotoReads.harvestId, harvestId));
+}
+
+/**
+ * 編集画面へ渡す下書き（「直す」「数量を入力」の着地点）。
+ *
+ * **`applyRead` を通っていない結果は収穫レコードに入っていない。** 編集画面が
+ * 収穫レコードだけを見ると、9 個と読めていても数量欄が空で開き、「直す」なのに
+ * 直す対象が無い状態になる（しかも編集画面には読み取りボタンがあるので、
+ * もう一度枠を消費する誤った回復手段が目の前にある）。
+ *
+ * まだ確定していない結果（analyzed / failed）だけを返す。applied は既に
+ * 収穫レコードへ入っているので下書きは要らないし、dismissed は
+ * 「使わない」と決めたものなので蒸し返さない。
+ */
+export interface HarvestReadDraft {
+  /** 読み取れた個数。数えられなかったときは null */
+  count: number | null;
+  /** 写真から見えた作物。栽培と食い違うことがある */
+  cropGuess: string | null;
+  /** 数えられなかった理由など、ユーザーへ見せる一言 */
+  readNote: string | null;
+}
+
+export async function getReadDraft(harvestId: string): Promise<HarvestReadDraft | null> {
+  if (!isNativePlatform) return null;
+  const db = getDb();
+  const rows = await db
+    .select({
+      state: schema.harvestPhotoReads.state,
+      count: schema.harvestPhotoReads.count,
+      cropGuess: schema.harvestPhotoReads.cropGuess,
+      readNote: schema.harvestPhotoReads.readNote,
+    })
+    .from(schema.harvestPhotoReads)
+    .where(
+      and(
+        eq(schema.harvestPhotoReads.harvestId, harvestId),
+        inArray(schema.harvestPhotoReads.state, ['analyzed', 'failed']),
+      ),
+    );
+  const row = rows[0];
+  if (!row) return null;
+  return {
+    count: row.count ?? null,
+    cropGuess: row.cropGuess ?? null,
+    readNote: row.readNote ?? null,
+  };
 }
 
 /** 読み取りを使わない（「しない」）。記録はそのまま、キューから消えるだけ */
