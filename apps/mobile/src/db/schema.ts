@@ -271,6 +271,42 @@ export const harvests = sqliteTable(
   }),
 );
 
+// ─── HarvestPhotoRead（収穫写真の読み取り）───────────────────────────────
+// 「写真から記録」（#143）のワークフロー状態。収穫 1 件につき最大 1 行。
+// 収穫のドメインデータ（quantity 等）とは分ける — こちらは読み取りの進行状態で、
+// 適用（applied）か却下（dismissed）で役目を終える。
+//
+// state の遷移:
+//   pending →(読み取り成功)→ analyzed →(記録する)→ applied
+//                                      →(しない)→ dismissed
+//          →(3 回失敗)→ failed
+//   編集画面で数量を入れて保存 → 読み取った数と同じなら applied（編集画面は
+//   結果を下書きとして入れて開くので、そのまま保存＝採用）、違えば dismissed
+//
+// paid = 「サーバーへ送ってよい」印。**これが立っているものだけが処理される**
+// （無料枠の 1 枚か、リワード視聴完了で立つ。順序の不変条件 — #144）。
+export const harvestPhotoReads = sqliteTable(
+  'harvest_photo_reads',
+  {
+    harvestId: text('harvest_id')
+      .primaryKey()
+      .references(() => harvests.id),
+    state: text('state').notNull().default('pending'),
+    paid: integer('paid').notNull().default(0),
+    attempts: integer('attempts').notNull().default(0),
+    cropGuess: text('crop_guess'),
+    cropConfidence: text('crop_confidence'),
+    count: integer('count'),
+    countConfidence: text('count_confidence'),
+    readNote: text('read_note'),
+    createdAt: text('created_at').notNull(),
+    updatedAt: text('updated_at').notNull(),
+  },
+  (table) => ({
+    stateIdx: index('idx_harvest_photo_reads_state').on(table.state),
+  }),
+);
+
 // ─── Photo（写真）────────────────────────────────────────────────────────
 // 作業ログ・収穫・栽培のいずれにも付くポリモーフィック参照。
 // 分けるとギャラリー（R05/R07）が 3 テーブルの UNION になるため 1 つにまとめる。

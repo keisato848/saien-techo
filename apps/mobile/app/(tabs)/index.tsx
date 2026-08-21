@@ -33,6 +33,7 @@ import { Loading } from '../../src/components/Loading';
 import { MonthlyWorkCard } from '../../src/components/MonthlyWorkCard';
 import { NextActionCard } from '../../src/components/NextActionCard';
 import { PressableScale } from '../../src/components/PressableScale';
+import { HarvestReadCard } from '../../src/components/HarvestReadCard';
 import { TodayReminderCard } from '../../src/components/TodayReminderCard';
 import { Colors, Typography } from '../../src/constants/theme';
 import { CARE_KIND_LABEL } from '../../src/services/care-log.service';
@@ -136,7 +137,8 @@ export default function HomeScreen() {
         </ScrollView>
       ) : (
         <ScrollView contentContainerStyle={styles.body}>
-          {/* 予定（自分で決めたもの）→ 提案（アプリが出すもの）の順（画面設計 S01） */}
+          {/* 撮り溜めの回収 → 予定 → 提案 の順。読み取りは帰宅直後の一手なので最上段 */}
+          <HarvestReadCard />
           <TodayReminderCard />
           <NextActionCard />
 

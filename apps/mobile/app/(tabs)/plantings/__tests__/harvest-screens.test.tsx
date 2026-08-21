@@ -47,6 +47,21 @@ jest.mock('../../../../src/services/harvest.service', () => ({
   getDefaultUnitForPlanting: (...args: unknown[]) => mockGetDefaultUnitForPlanting(...args),
 }));
 
+const mockGetPlantingDetail = jest.fn();
+jest.mock('../../../../src/services/planting.service', () => ({
+  ...jest.requireActual('../../../../src/services/planting.service'),
+  getPlantingDetail: (...args: unknown[]) => mockGetPlantingDetail(...args),
+}));
+
+// フォーム内の読み取りボタンはここでは押さない（HarvestFormRead.test が担保）。
+// 実サービスを読み込ませない（usage → 広告 SDK の連鎖を避ける）
+const mockGetReadDraft = jest.fn();
+jest.mock('../../../../src/services/harvest-read.service', () => ({
+  HarvestReadError: class extends Error {},
+  readPhotoDirect: jest.fn(),
+  getReadDraft: (...args: unknown[]) => mockGetReadDraft(...args),
+}));
+
 import NewHarvestScreen from '../[id]/harvests/new';
 import EditHarvestScreen from '../[id]/harvests/[harvestId]';
 
@@ -82,6 +97,8 @@ beforeEach(() => {
   mockGetHarvest.mockReset().mockResolvedValue(harvest({ id: 'h1' }));
   mockDeleteHarvest.mockReset().mockResolvedValue(undefined);
   mockGetDefaultUnitForPlanting.mockReset().mockResolvedValue('piece');
+  mockGetPlantingDetail.mockReset().mockResolvedValue({ cropName: 'トマト' });
+  mockGetReadDraft.mockReset().mockResolvedValue(null);
   jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
 });
 
@@ -161,6 +178,53 @@ describe('収穫を編集', () => {
     render(<EditHarvestScreen />);
 
     await waitFor(() => expect(mockBack).toHaveBeenCalled());
+  });
+
+  /**
+   * 「直す」の着地点（#143）。読み取り結果を持って来ないと、9 個と読めていても
+   * 数量欄が空で開き、直す対象が無い＝ゼロから入力し直すことになる。
+   */
+  describe('読み取りの下書き', () => {
+    it('確定前の読み取りがあれば数量に入れて開き、何を直すのか伝える', async () => {
+      mockParams = { id: 'p1', harvestId: 'h1' };
+      // 読み取り行は写真つきの収穫にしか作られない
+      mockGetHarvest.mockResolvedValue(
+        harvest({ id: 'h1', quantity: null, unit: null, photoUris: ['/photos/a.jpg'] }),
+      );
+      mockGetReadDraft.mockResolvedValue({ count: 9, cropGuess: 'ミニトマト', readNote: null });
+      render(<EditHarvestScreen />);
+
+      await waitFor(() => expect(screen.getByDisplayValue('9')).toBeTruthy());
+      expect(screen.getByText(/9 個と読み取りました/)).toBeTruthy();
+      // 栽培（トマト）と写真（ミニトマト）の食い違いも添える
+      expect(screen.getByText(/ミニトマト/)).toBeTruthy();
+    });
+
+    it('数えられなかった読み取りは理由だけ出す（数量は空のまま）', async () => {
+      mockParams = { id: 'p1', harvestId: 'h1' };
+      mockGetHarvest.mockResolvedValue(
+        harvest({ id: 'h1', quantity: null, unit: null, photoUris: ['/photos/a.jpg'] }),
+      );
+      mockGetReadDraft.mockResolvedValue({
+        count: null,
+        cropGuess: null,
+        readNote: '収穫物が写っていないようです。採ったあとの写真だと読み取れます。',
+      });
+      render(<EditHarvestScreen />);
+
+      await waitFor(() => expect(screen.getByText(/収穫物が写っていないようです/)).toBeTruthy());
+      expect(screen.getByLabelText('とれた量').props.value).toBe('');
+    });
+
+    // ユーザーが確定した値のほうが強い。下書きで上書きしない
+    it('すでに数量が入っている収穫には下書きを当てない', async () => {
+      mockParams = { id: 'p1', harvestId: 'h1' };
+      mockGetReadDraft.mockResolvedValue({ count: 9, cropGuess: null, readNote: null });
+      render(<EditHarvestScreen />);
+
+      await waitFor(() => expect(screen.getByDisplayValue('3')).toBeTruthy());
+      expect(mockGetReadDraft).not.toHaveBeenCalled();
+    });
   });
 
   // 続けて別の収穫を開いたときに前の内容を持ち越さない

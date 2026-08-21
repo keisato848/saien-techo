@@ -42,6 +42,9 @@ function mockMarkerCard(label: string) {
   };
 }
 
+jest.mock('../../../src/components/HarvestReadCard', () => ({
+  HarvestReadCard: mockMarkerCard('＝写真の読み取り＝'),
+}));
 jest.mock('../../../src/components/TodayReminderCard', () => ({
   TodayReminderCard: mockMarkerCard('＝今日のリマインダー＝'),
 }));
@@ -136,6 +139,8 @@ describe('ホーム（S01 / WBS 3.5）', () => {
       await waitFor(() => expect(screen.getByText('育てているもの')).toBeTruthy());
 
       const positions = orderOf(
+        // 撮り溜めの回収は帰宅直後の一手なので、予定より前（#143）
+        '写真の読み取り',
         '今日のリマインダー',
         'つぎの作業',
         '育てているもの',

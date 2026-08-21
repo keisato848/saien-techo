@@ -9,7 +9,7 @@
  * だいどこのようなモック実装を並走させると実 SQL との乖離が入り込むため
  * （テストは実 SQLite に対して実行する — src/test-support/sqlite-test-db.ts）。
  */
-import { and, asc, desc, eq, isNotNull, isNull } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, isNotNull, isNull } from 'drizzle-orm';
 
 import { getDb, isNativePlatform } from '../db/client';
 import * as schema from '../db/schema';
@@ -381,6 +381,12 @@ export async function deletePlanting(plantingId: string): Promise<void> {
   }
 
   await db.delete(schema.reminders).where(eq(schema.reminders.plantingId, plantingId));
+  // 読み取り待ち（#143）は harvests への FK を持つので、harvests より先に消す
+  if (harvestIds.length > 0) {
+    await db
+      .delete(schema.harvestPhotoReads)
+      .where(inArray(schema.harvestPhotoReads.harvestId, harvestIds));
+  }
   await db.delete(schema.harvests).where(eq(schema.harvests.plantingId, plantingId));
   await db.delete(schema.careLogs).where(eq(schema.careLogs.plantingId, plantingId));
   await db.delete(schema.plantingTags).where(eq(schema.plantingTags.plantingId, plantingId));
