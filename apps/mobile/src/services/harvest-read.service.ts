@@ -21,7 +21,10 @@
  *   pending →(読み取り成功)→ analyzed →(記録する)→ applied
  *                                     →(しない)→ dismissed
  *          →(MAX_ATTEMPTS 回失敗)→ failed
- *   手で数量を入れたら → dismissed（キューから消える）
+ *
+ *   編集画面で数量を入れて保存したときは、**読み取った数と同じなら applied**
+ *   （編集画面は結果を下書きとして入れて開くので、そのまま保存＝採用）、
+ *   違う数・読み取り結果が無いなら dismissed。どちらもキューから消える。
  */
 import { and, asc, eq, inArray, sql } from 'drizzle-orm';
 

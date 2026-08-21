@@ -280,7 +280,8 @@ export const harvests = sqliteTable(
 //   pending →(読み取り成功)→ analyzed →(記録する)→ applied
 //                                      →(しない)→ dismissed
 //          →(3 回失敗)→ failed
-//   手で数量を入れたら pending/analyzed/failed → dismissed（キューから消える）
+//   編集画面で数量を入れて保存 → 読み取った数と同じなら applied（編集画面は
+//   結果を下書きとして入れて開くので、そのまま保存＝採用）、違えば dismissed
 //
 // paid = 「サーバーへ送ってよい」印。**これが立っているものだけが処理される**
 // （無料枠の 1 枚か、リワード視聴完了で立つ。順序の不変条件 — #144）。
