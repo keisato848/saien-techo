@@ -9,7 +9,7 @@
  *   記録に残したければ作業ログ（写真つき）を使う — 導線は結果画面の下に置く。
  * - 無料枠は usage.service を共有（既定 1 回/日・ビルド時変更可）。
  *   **植物が写っていない判定（isPlant=false）は枠を消費しない** — 撮り損じで
- *   1 日 1 回の枠が飛ぶのは理不尽（だいどこの not_a_dish と同じ扱い）。
+ *   一度きりの無料枠が飛ぶのは理不尽（だいどこの not_a_dish と同じ扱い）。
  * - 免責（Q5）は結果の有無に関係なく常に画面下部に出す。
  */
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';

@@ -363,7 +363,8 @@ export const seedHarvests = [
   },
   {
     // 「写真の読み取り」の読み取り待ち（#143 のスクショ用）。数量なし・写真なしで
-    // キューに乗る形（写真の実体はサンプルに増やさない — 配布サイズを膨らませない）
+    // キューに乗る形。**キュウリの同梱写真が無いので写真は付けない** —
+    // トマトの写真を流用すると掲載スクショで作物と中身が食い違う
     id: 'harvest-05',
     plantingId: 'planting-cucumber-01',
     harvestedAt: daysAgoIso(0),
@@ -382,6 +383,7 @@ export const seedHarvests = [
 export const seedHarvestPhotoReads = [
   {
     // harvest-02（数量なしのトマト・写真つき）: 読み取り済み・確認待ち
+    // 写真は seed-photos.ts の sample-photo-harvest-02（掲載スクショ 08 のヒーロー）
     harvestId: 'harvest-02',
     state: 'analyzed',
     paid: 1,

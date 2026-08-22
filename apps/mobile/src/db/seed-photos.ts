@@ -58,6 +58,15 @@ const SAMPLE_PHOTOS: SamplePhoto[] = [
     ownerId: 'harvest-01',
   },
   {
+    // 「写真の読み取り」の確認カード（#148・ストア掲載スクショ 08）。
+    // **同じアセットを使い回す** — harvest-01 と同じ require なので APK は増えない。
+    // ここが空だと、写真が主役の機能なのに掲載物では灰色の枠しか写らない。
+    id: 'sample-photo-harvest-02',
+    module: require('../../assets/sample-photos/harvest-tomato.jpg'),
+    ownerType: 'harvest',
+    ownerId: 'harvest-02',
+  },
+  {
     id: 'sample-photo-planting-01',
     module: require('../../assets/sample-photos/planting-tomato.jpg'),
     ownerType: 'planting',
