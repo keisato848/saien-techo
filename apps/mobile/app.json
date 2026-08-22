@@ -1,0 +1,87 @@
+{
+  "expo": {
+    "name": "さいえん手帳",
+    "slug": "saien-techo",
+    "version": "1.1.0",
+    "orientation": "default",
+    "scheme": "saientecho",
+    "userInterfaceStyle": "light",
+    "backgroundColor": "#F6F8F1",
+    "icon": "./assets/icon.png",
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#F6F8F1"
+    },
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.saientecho.app",
+      "buildNumber": "5",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
+    },
+    "android": {
+      "package": "com.saientecho.app",
+      "versionCode": 3,
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#F6F8F1"
+      },
+      "blockedPermissions": [
+        "android.permission.RECORD_AUDIO",
+        "android.permission.SYSTEM_ALERT_WINDOW",
+        "com.android.vending.BILLING"
+      ]
+    },
+    "web": {
+      "bundler": "metro",
+      "output": "single",
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      "expo-router",
+      "./plugins/withSaienUploadSigning.js",
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "kotlinVersion": "2.2.20",
+            "enableMinifyInReleaseBuilds": true,
+            "enableShrinkResourcesInReleaseBuilds": true
+          }
+        }
+      ],
+      "./plugins/withKotlinMetadataSkip",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "栽培や収穫の写真を選択するために写真ライブラリへのアクセスを使用します。",
+          "cameraPermission": "栽培や収穫の写真を撮影するためにカメラを使用します。",
+          "microphonePermission": false
+        }
+      ],
+      [
+        "react-native-google-mobile-ads",
+        {
+          "androidAppId": "ca-app-pub-2633806931583277~7473584300",
+          "iosAppId": "ca-app-pub-2633806931583277~7215928386",
+          "delayAppMeasurementInit": true
+        }
+      ],
+      "@react-native-community/datetimepicker"
+    ],
+    "experiments": {
+      "typedRoutes": true
+    },
+    "extra": {
+      "router": {
+        "origin": false
+      },
+      "eas": {
+        "projectId": "6728a865-8df2-49e0-a39d-d55ed99a1872"
+      }
+    },
+    "owner": "keisato848"
+  }
+}

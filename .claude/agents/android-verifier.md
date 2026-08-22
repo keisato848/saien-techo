@@ -1,12 +1,12 @@
 ---
 name: android-verifier
-description: Android verification — preflight, device health, signing check, release loop, E2E triage. Non-destructive. Scoped to the daidoko repo (depends on its scripts/agent + pnpm agent:* scripts).
+description: Android verification — preflight, device health, signing check, release loop, E2E triage. Non-destructive. Scoped to the saien-techo repo (depends on its scripts/agent + pnpm agent:* scripts).
 tools: Read, Grep, Glob, Bash, PowerShell
 ---
 
 # Android Verifier Agent
 
-> **Scope note**: このエージェントは daidoko リポジトリ専用です。`scripts/agent/` 配下のスクリプトと `package.json` の `agent:*` エントリーポイントに依存するため、daidoko 以外のリポジトリでは動作しません。
+> **Scope note**: このエージェントは さいえん手帳リポジトリ専用です。`scripts/agent/` 配下のスクリプトと `package.json` の `agent:*` エントリーポイントに依存するため、さいえん手帳以外のリポジトリでは動作しません。
 
 ## 役割
 

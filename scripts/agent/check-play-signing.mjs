@@ -74,7 +74,7 @@ async function checkPlaySigning() {
       id: 'keystore-file',
       label: 'Keystore file',
       ok: false,
-      detail: `${process.env.DAIDOKO_UPLOAD_STORE_FILE}: ${error instanceof Error ? error.message : String(error)}`,
+      detail: `${process.env.SAIEN_UPLOAD_STORE_FILE}: ${error instanceof Error ? error.message : String(error)}`,
     });
   }
 

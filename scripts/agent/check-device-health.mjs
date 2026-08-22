@@ -4,7 +4,8 @@ import { SIGNAL_CODES, createSignal } from './lib/android-signals.mjs';
 
 const jsonMode = process.argv.includes('--json');
 const deviceIdx = process.argv.indexOf('--device');
-const targetSerial = deviceIdx !== -1 && process.argv[deviceIdx + 1] ? process.argv[deviceIdx + 1] : null;
+const targetSerial =
+  deviceIdx !== -1 && process.argv[deviceIdx + 1] ? process.argv[deviceIdx + 1] : null;
 
 const result = await checkDeviceHealth();
 
@@ -15,7 +16,9 @@ if (jsonMode) {
   if (result.error) {
     console.log(`Error: ${result.error}`);
     if (result.signal) {
-      console.log(`Signal: ${result.signal.code} (retryable: ${result.signal.retryable}, stopLoop: ${result.signal.stopLoop})`);
+      console.log(
+        `Signal: ${result.signal.code} (retryable: ${result.signal.retryable}, stopLoop: ${result.signal.stopLoop})`,
+      );
     }
   }
   for (const entry of result.checks) {
@@ -48,7 +51,12 @@ async function checkDeviceHealth() {
       ok: false,
       detail: `ADB not found: ${error.message}`,
     });
-    return { ok: false, error: 'ADB is not available', signal: createSignal(SIGNAL_CODES.ADB_UNAVAILABLE, error.message), checks };
+    return {
+      ok: false,
+      error: 'ADB is not available',
+      signal: createSignal(SIGNAL_CODES.ADB_UNAVAILABLE, error.message),
+      checks,
+    };
   }
 
   // 2. Determine target device
@@ -65,7 +73,15 @@ async function checkDeviceHealth() {
           ok: false,
           detail: `Specified device '${targetSerial}' not found in connected devices.`,
         });
-        return { ok: false, error: `Device '${targetSerial}' not found`, signal: createSignal(SIGNAL_CODES.NO_CONNECTED_DEVICE, `Device ${targetSerial} not found`), checks };
+        return {
+          ok: false,
+          error: `Device '${targetSerial}' not found`,
+          signal: createSignal(
+            SIGNAL_CODES.NO_CONNECTED_DEVICE,
+            `Device ${targetSerial} not found`,
+          ),
+          checks,
+        };
       }
       if (matched.status !== 'device') {
         checks.push({
@@ -74,8 +90,16 @@ async function checkDeviceHealth() {
           ok: false,
           detail: `Specified device '${targetSerial}' is offline or unauthorized (status: ${matched.status}).`,
         });
-        const sigCode = matched.status === 'unauthorized' ? SIGNAL_CODES.DEVICE_UNAUTHORIZED : SIGNAL_CODES.DEVICE_OFFLINE;
-        return { ok: false, error: `Device '${targetSerial}' is ${matched.status}`, signal: createSignal(sigCode, matched.status), checks };
+        const sigCode =
+          matched.status === 'unauthorized'
+            ? SIGNAL_CODES.DEVICE_UNAUTHORIZED
+            : SIGNAL_CODES.DEVICE_OFFLINE;
+        return {
+          ok: false,
+          error: `Device '${targetSerial}' is ${matched.status}`,
+          signal: createSignal(sigCode, matched.status),
+          checks,
+        };
       }
       serial = targetSerial;
     } else {
@@ -87,11 +111,16 @@ async function checkDeviceHealth() {
           ok: false,
           detail: 'No connected devices found (zero devices).',
         });
-        return { ok: false, error: 'No connected devices found', signal: createSignal(SIGNAL_CODES.NO_CONNECTED_DEVICE), checks };
+        return {
+          ok: false,
+          error: 'No connected devices found',
+          signal: createSignal(SIGNAL_CODES.NO_CONNECTED_DEVICE),
+          checks,
+        };
       }
 
       const activeDevices = devices.filter((d) => d.status === 'device');
-      
+
       if (activeDevices.length === 0) {
         const statusSummary = devices.map((d) => `${d.serial} (${d.status})`).join(', ');
         checks.push({
@@ -100,7 +129,12 @@ async function checkDeviceHealth() {
           ok: false,
           detail: `No authorized devices found. Connected devices: ${statusSummary}.`,
         });
-        return { ok: false, error: 'No authorized devices found', signal: createSignal(SIGNAL_CODES.NO_AUTHORIZED_DEVICE, statusSummary), checks };
+        return {
+          ok: false,
+          error: 'No authorized devices found',
+          signal: createSignal(SIGNAL_CODES.NO_AUTHORIZED_DEVICE, statusSummary),
+          checks,
+        };
       }
 
       if (activeDevices.length > 1) {
@@ -111,7 +145,12 @@ async function checkDeviceHealth() {
           ok: false,
           detail: `Multiple active devices found: ${serials.join(', ')}. Use --device <serial> to target one.`,
         });
-        return { ok: false, error: 'Multiple active devices found', signal: createSignal(SIGNAL_CODES.MULTIPLE_AUTHORIZED_DEVICES, serials.join(', ')), checks };
+        return {
+          ok: false,
+          error: 'Multiple active devices found',
+          signal: createSignal(SIGNAL_CODES.MULTIPLE_AUTHORIZED_DEVICES, serials.join(', ')),
+          checks,
+        };
       }
 
       serial = activeDevices[0].serial;
@@ -130,7 +169,12 @@ async function checkDeviceHealth() {
       ok: false,
       detail: `Error resolving target device: ${error.message}`,
     });
-    return { ok: false, error: 'Failed to resolve target device', signal: createSignal(SIGNAL_CODES.ADB_UNAVAILABLE, error.message), checks };
+    return {
+      ok: false,
+      error: 'Failed to resolve target device',
+      signal: createSignal(SIGNAL_CODES.ADB_UNAVAILABLE, error.message),
+      checks,
+    };
   }
 
   // 3. Boot completion check
@@ -162,7 +206,9 @@ async function checkDeviceHealth() {
 
       if (!prop.expected.includes(val)) {
         bootOk = false;
-        failures.push(`${prop.name} is '${val}' (expected: ${prop.expected.map((e) => `'${e}'`).join(' or ')})`);
+        failures.push(
+          `${prop.name} is '${val}' (expected: ${prop.expected.map((e) => `'${e}'`).join(' or ')})`,
+        );
       }
     }
 
@@ -180,7 +226,12 @@ async function checkDeviceHealth() {
         ok: false,
         detail: `Boot incomplete: ${failures.join(', ')}`,
       });
-      return { ok: false, error: 'Android boot is not completed', signal: createSignal(SIGNAL_CODES.DEVICE_BOOT_INCOMPLETE, failures.join(', ')), checks };
+      return {
+        ok: false,
+        error: 'Android boot is not completed',
+        signal: createSignal(SIGNAL_CODES.DEVICE_BOOT_INCOMPLETE, failures.join(', ')),
+        checks,
+      };
     }
   } catch (error) {
     checks.push({
@@ -189,7 +240,12 @@ async function checkDeviceHealth() {
       ok: false,
       detail: `Boot check error: ${error.message}`,
     });
-    return { ok: false, error: 'Failed to check boot status', signal: createSignal(SIGNAL_CODES.DEVICE_BOOT_INCOMPLETE, error.message), checks };
+    return {
+      ok: false,
+      error: 'Failed to check boot status',
+      signal: createSignal(SIGNAL_CODES.DEVICE_BOOT_INCOMPLETE, error.message),
+      checks,
+    };
   }
 
   // 4. Android services verification
@@ -206,7 +262,15 @@ async function checkDeviceHealth() {
         ok: false,
         detail: `Failed to list services: ${res.error?.message || res.stderr.trim()}`,
       });
-      return { ok: false, error: 'Failed to list services', signal: createSignal(SIGNAL_CODES.MISSING_ANDROID_SERVICE, res.error?.message || res.stderr.trim()), checks };
+      return {
+        ok: false,
+        error: 'Failed to list services',
+        signal: createSignal(
+          SIGNAL_CODES.MISSING_ANDROID_SERVICE,
+          res.error?.message || res.stderr.trim(),
+        ),
+        checks,
+      };
     }
 
     const output = res.stdout;
@@ -234,7 +298,12 @@ async function checkDeviceHealth() {
         ok: false,
         detail: `Missing required services: ${missing.join(', ')}`,
       });
-      return { ok: false, error: `Missing system services: ${missing.join(', ')}`, signal: createSignal(SIGNAL_CODES.MISSING_ANDROID_SERVICE, missing.join(', ')), checks };
+      return {
+        ok: false,
+        error: `Missing system services: ${missing.join(', ')}`,
+        signal: createSignal(SIGNAL_CODES.MISSING_ANDROID_SERVICE, missing.join(', ')),
+        checks,
+      };
     }
   } catch (error) {
     checks.push({
@@ -243,7 +312,12 @@ async function checkDeviceHealth() {
       ok: false,
       detail: `Services check error: ${error.message}`,
     });
-    return { ok: false, error: 'Failed to check system services', signal: createSignal(SIGNAL_CODES.MISSING_ANDROID_SERVICE, error.message), checks };
+    return {
+      ok: false,
+      error: 'Failed to check system services',
+      signal: createSignal(SIGNAL_CODES.MISSING_ANDROID_SERVICE, error.message),
+      checks,
+    };
   }
 
   return {

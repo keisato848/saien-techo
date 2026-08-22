@@ -4,16 +4,23 @@
  */
 import { runCommand } from './lib/runtime.mjs';
 
-const EXTENSIONS = /\.(ts|tsx|js|jsx|mjs|cjs|json|md)$/i;
+// html を含めるのは validate-changed-slice が mockup/ を docs 扱いで prettier check
+// するため。ここで整形しないと、自動整形されないファイルを検査する状態になり
+// コミットが止まる（実際に mockup/palette-compare.html で踏んだ）。
+const EXTENSIONS = /\.(ts|tsx|js|jsx|mjs|cjs|json|md|html)$/i;
 
-const diff = runCommand('git', ['diff', '--cached', '--name-only', '--diff-filter=ACMR']);
+// -z は必須。既定(core.quotepath=true)では非 ASCII のパスが
+// "docs/\343\202\244..." のようにエスケープされて返り、そのまま prettier に
+// 渡すと --ignore-unknown が存在しないファイルとして黙って読み飛ばす。
+// 日本語ファイル名の docs が整形されないまま CI の Format check で落ちていた。
+const diff = runCommand('git', ['diff', '--cached', '--name-only', '-z', '--diff-filter=ACMR']);
 if (!diff.ok) {
   console.error('format-staged: git diff failed');
   process.exit(1);
 }
 
 const files = diff.stdout
-  .split(/\r?\n/)
+  .split('\0')
   .map((line) => line.trim())
   .filter((line) => line && EXTENSIONS.test(line));
 
@@ -21,18 +28,38 @@ if (files.length === 0) {
   process.exit(0);
 }
 
-const pnpmCmd = process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm';
-const prettier = runCommand(pnpmCmd, ['exec', 'prettier', '--write', '--ignore-unknown', ...files]);
-if (!prettier.ok) {
-  console.error('format-staged: prettier failed');
-  console.error(prettier.combinedOutput?.slice(0, 1000) ?? '');
-  process.exit(1);
+// Windows のコマンドライン長制限(約 8KB)を超えないようチャンクで実行する
+function* chunks(list, size) {
+  for (let i = 0; i < list.length; i += size) yield list.slice(i, i + size);
 }
 
-const add = runCommand('git', ['add', '--', ...files]);
-if (!add.ok) {
-  console.error('format-staged: git add failed');
-  process.exit(1);
+const pnpmCmd = process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm';
+for (const batch of chunks(files, 40)) {
+  const prettier = runCommand(pnpmCmd, [
+    'exec',
+    'prettier',
+    '--write',
+    '--ignore-unknown',
+    ...batch,
+  ]);
+  if (!prettier.ok) {
+    console.error('format-staged: prettier failed');
+    console.error(prettier.combinedOutput?.slice(0, 1000) ?? '');
+    process.exit(1);
+  }
+}
+
+for (const batch of chunks(files, 40)) {
+  // -f は必須。gitignore 対象だが追跡済みのファイル（例: .claude/workflows/*）が
+  // ステージにあると、素の git add がそれを拒否してバッチ全体を失敗させ、
+  // コミットが一切通らなくなる。ここで扱うのは git 自身がステージ済みと報告した
+  // ファイルだけなので、強制追加しても新規に無視対象を取り込むことはない。
+  const add = runCommand('git', ['add', '-f', '--', ...batch]);
+  if (!add.ok) {
+    console.error('format-staged: git add failed');
+    console.error(add.combinedOutput?.slice(0, 1000) ?? '');
+    process.exit(1);
+  }
 }
 
 console.log(`[OK] prettier auto-format: ${files.length} file(s)`);

@@ -1,86 +1,187 @@
 ---
 name: ios-release
-description: iOS（App Store）リリース一式（macOS で実行）。Xcode/シミュレータのセットアップ → シミュレータでの動作確認 → iOS用スクショ取得 → EAS iOS ビルド → TestFlight → App Store Connect 提出。方針=無料・広告なし・非取引者。
+description: iOS（App Store）リリース一式（macOS で実行）。シミュレータでの動作確認 → 掲載スクショ取得 → EAS iOS ビルド → TestFlight → App Store Connect 提出。方針=広告あり・日本のみ配信・ATT なし。
 ---
 
 # iOS（App Store）リリースパイプライン（macOS 専用）
 
-このスキルは **Mac 上の Claude / 開発者** 向け。Windows 環境では iOS シミュレータ・Xcode が使えないため、
-iOS 固有の作業（シミュレータ動作確認・iOS スクショ・ローカル iOS ビルド）はすべて Mac 側で行う。
-背景と全体像は `docs/リリース手順.md` §7、機能パリティ・方針は `docs/フリーミアム設計.md`。
+このスキルは **Mac 上の Claude / 開発者** 向け。Windows では iOS シミュレータ・Xcode が
+使えないため、iOS 固有の作業（シミュレータ動作確認・スクショ取得）は Mac 側で行う。
+**EAS ビルドと提出自体はクラウドなので Windows からでも回せる。**
 
-**方針（確定 2026-07-06）**: iOS 初回は **無料・広告なし・非取引者(non-trader)**。
-iOS の AI は「無料枠1日1回 ＋ BYOK」。広告/課金の導線は iOS では非表示。
+全体像は `docs/リリース手順.md` §7、作業分解は `docs/WBS.md` §I。
 
-## 0. 前提（初回のみ・ユーザー作業）
+## 方針（判断ポイント⑩・2026-08-13 確定）
 
-- **Apple Developer Program 登録**（年 $99）。App Store Connect でアプリ枠を作成（bundle id `com.daidoko.app`）。
-- Mac に **Xcode**（＋Command Line Tools）、**CocoaPods**、**Node/pnpm**、**EAS CLI**（`npm i -g eas-cli`）。
-- リポジトリを clone し、**リポジトリルートで** `pnpm install`（`.npmrc` が `node-linker=hoisted`。
-  `apps/mobile` 内では実行しない）。
+| 項目     | 決定                                                                 |
+| -------- | -------------------------------------------------------------------- |
+| 広告     | **あり**。起動・リワード・バナーの 3 形式（Android と同一）          |
+| 配信地域 | **日本のみ**（栽培暦が日本の気候区分前提）                           |
+| 取引者   | EU/英国を含まないので **DSA 取引者申告が発生しない**（住所は非公開） |
+| ATT      | **実装しない**。App Privacy は「トラッキングに使用しない」で申告     |
+| 課金     | なし（freemium は v1.5 へ据え置き）                                  |
 
-## 1. シミュレータで動作確認（Windows で未確認の iOS 描画をここで検証）
+**着手は Android 公開後。** app.json / eas.json を共有するため、審査中に触ると
+Android の再提出時に変更が混ざる。
+
+## 0. 前提
+
+- Apple Developer Program **加入済み**（Team `VY7SNHS2BY`）。ASC API キーはだいどこと共用
+  （Key ID `8C387NYC2T` / `.p8` は `C:/secure/`・リポジトリ外）
+- **EAS プロジェクトはリンク済み**（`@keisato848/saien-techo` / app.json の `extra.eas.projectId`）。
+  **Android はローカル gradle + androidpublisher API のまま**で、EAS を使うのは iOS だけ
+- Mac に **Xcode**（＋Command Line Tools）、**CocoaPods**、**Node/pnpm**、**EAS CLI**
+- **リポジトリルートで** `pnpm install`（`.npmrc` が `node-linker=hoisted`。`apps/mobile` 内では実行しない）
+
+> **`eas init` を再実行するときは `git diff app.json` を必ず見る。** 実際に
+> `android.permissions` へ `RECORD_AUDIO`（`blockedPermissions` で塞いでいる権限）が
+> 追加された。`extra.eas.projectId` 以外の差分は落とすこと。
+
+### 外部で発行する値（すべて 2026-08-13 に取得・投入済み）
+
+`docs/リリース手順.md` §7-4 / §7-4b が単一ソース。
+
+| 値                                   | 状態                                   |
+| ------------------------------------ | -------------------------------------- |
+| AdMob iOS アプリ + ユニット 3 種     | 投入済み（app.json / eas.json）        |
+| App Store Connect App ID             | `6801141151`（eas.json の `ascAppId`） |
+| バンドル ID の Developer Portal 登録 | `com.saientecho.app` 登録済み          |
+| iOS 署名クレデンシャル               | 構築済み（有効期限 2027-08-13）        |
+
+**I1〜I7 すべて完了（2026-08-15）。** ただし 1.0（ビルド 3）は **2026-08-15 に却下**
+（マイクの purpose string — 下の「既知の注意」）。修正して**ビルド 4 で再提出**。
+掲載物・年齢レーティング・App Privacy は却下後も保持されるので、**やり直すのは
+ビルドの差し替えと再提出だけ**。
+
+> **配布証明書はだいどこと共有。** 失効・再生成すると**両アプリのビルドが通らなくなる**。
+> 片方の都合で作り直さないこと（プロファイルはアプリごとに別）。
+
+## 1. シミュレータで動作確認
 
 ```bash
 xcrun simctl boot "iPhone 16 Pro Max" ; open -a Simulator
 pnpm --filter mobile exec expo run:ios          # dev クライアントで起動
 ```
 
-確認ポイント（iOS で有効化した機能）:
+**機能パリティの心配は無い。** ML Kit・OCR・expo-camera は WBS 2.9d で機能ごと
+削除済みで、Android 専用のネイティブ依存が残っていない。AI 相談はサーバー経由
+（決定⑨）なので iOS でもそのまま動く。**iOS で隠す画面は無い。**
 
-- **写真からレシピ**（AI）が表示・動作する（サーバー/BYOK 経由）。端末内ラベリングは iOS では効かないが
-  サーバー推論にフォールバックする。
-- **文字入り画像OCR / レシート** の入口が **表示されない**（add / 在庫画面。Android 専用のため iOS で非表示）。
-- ローカル機能（レシピ/買い物/在庫/調理記録/家族）・バーコード・URL/手動/テキストが動作する。
-- **iCloud バックアップ包含の確認**（#79）: Documents（DB・写真）をバックアップ除外して**いない**こと
-  — コードベースに `isExcludedFromBackup` / `NSURLIsExcludedFromBackupKey` が無いことを確認
-  （既定で iCloud デバイスバックアップに含まれる。バックアップ画面の iOS 案内カードと整合）。
+重点的に見るのは **Windows で検証できなかった描画**:
 
-## 2. App Store 用スクリーンショット（自動取得）
+- セーフエリア（ノッチ・ホームインジケータ）に文字やボタンが潜り込まないか
+- `borderRadius` が効いているか（Android では四角に落ちる不具合を踏んでいる）
+- ボトムシートがジェスチャーバーに飲まれないか
+- 横スクロール帯（収穫アルバムの作物フィルタ）が縦に伸びないか
+- 通知の許可ダイアログとリマインダーの発火（`expo-notifications`・iOS は channelId 不要）
+- バックアップ・復元（`documentDirectory`。iCloud バックアップに**含まれる**のが正）
+
+## 2. 掲載スクリーンショット（自動取得）
 
 ```bash
-# ストアショット用ビルド（サンプルデータ有効＋コーチマーク無効）をシミュレータへ
 EXPO_PUBLIC_ENABLE_SAMPLE_DATA=1 EXPO_PUBLIC_DISABLE_COACH_MARKS=1 \
   pnpm --filter mobile exec expo run:ios --configuration Release
 node scripts/release/capture-ios-screenshots.mjs     # 9:41・満充電に固定して取得
 ```
 
-- 出力 = `docs/store/app-store/phone-screenshots/`（順序・サイズは同 README）。
-- 主サイズ = 6.9"（iPhone 16 Pro Max = 1320×2868）。`08`/`10` は manual（既存維持）。
-- **ストア公開物なのでユーザーに提示して承認を得る**。アップロードは App Store Connect Web UI か fastlane deliver
-  （Play のような API 一括スクリプトは未整備）。
+- 出力 = `docs/store/app-store/phone-screenshots/`
+- 主サイズ = 6.9"（iPhone 16 Pro Max = 1320×2868）
+- **画面構成と順序は Android と揃える**（ホーム → 栽培一覧 → 栽培詳細 → 収穫アルバム →
+  作物ガイド → カレンダー → 資材）。正は `docs/store/google-play/README.md` と
+  `update-play-screenshots.mjs` の ORDER 配列。ずらすと 2 ストアで別の顔ができる
+- **ストア公開物なのでユーザーに提示して承認を得る**
+- アップロードは ASC API で自動化できる（**Windows からで良い**）。取得だけが macOS 必須
 
-## 3. EAS iOS 本番ビルド（クラウド・Mac のローカルビルド不要）
+## 3. EAS iOS ビルド（クラウド）
 
 ```bash
-git checkout main && git pull            # EAS はローカル作業ディレクトリをアップロードするため main を使う
 cd apps/mobile
-pnpm exec eas build -p ios --profile production --non-interactive --no-wait
-pnpm exec eas build:view <BUILD_ID> --json   # status FINISHED / artifacts
+pnpm exec eas build -p ios --profile production
 ```
 
-- 初回は EAS が Apple ログインを求め、**配布証明書・プロビジョニングプロファイルを自動生成・管理**する。
-- `eas.json` の `build.production` は platform 共有（top-level の env/autoIncrement）なので **iOS ビルドにそのまま使える**。
-  CLI 提出する場合のみ `submit.production.ios`（appleId / ascAppId / appleTeamId）を追加。`appVersionSource: local`
-  なので app.json の `version` を上げる。
-- `ITSAppUsesNonExemptEncryption: false` は設定済み（輸出コンプライアンス質問を回避）。
+- `appVersionSource: local` なので `app.json` の `version` を上げる
+- **`ios.buildNumber` は同一バージョン内で一意かつ増加。** `android.versionCode` と
+  揃える運用（app.json）。上げ忘れると提出が弾かれる
+- `ITSAppUsesNonExemptEncryption: false` 設定済み（輸出コンプライアンス質問を回避）
 
 ## 4. TestFlight → 提出（外向きアクション — ユーザー承認を確認）
 
-1. `pnpm exec eas submit -p ios --profile production --latest`（または App Store Connect にアップロード）。
-2. **TestFlight** で実機インストールし、写真レシピ・ローカル機能を最終確認。
-3. App Store Connect でメタデータを設定:
-   - **App Privacy（栄養ラベル）**: AI 機能利用時に写真・食材名をサーバー送信する旨を申告（Play のデータセーフティ相当）。
-     端末内 OCR は無効化済みなので申告不要。
-   - **DSA 取引者ステータス = 非取引者**（無料・広告なし）。将来広告を入れる場合は取引者だが Apple は個人でも
-     **P.O. Box 可**（自宅住所は不要）。
-   - スクショ（§2）・説明文（`docs/store/` を iOS 向けに流用）・年齢レーティング・カテゴリ（フード＆ドリンク）。
-4. 審査提出（~1〜3日）。
+```bash
+pnpm exec eas submit -p ios --profile production --id <BUILD_ID> --non-interactive
+```
+
+> **「Something went wrong」を信じない。** だいどこでは失敗表示のまま
+> アップロードが成功していた（2026-08-13）。**必ず App Store Connect の
+> TestFlight 画面で実物を確認する。** 失敗と誤認して再実行すると、
+> 2 回目はビルド番号重複で本当に落ちる。詳細ログは
+> `https://expo.dev/accounts/keisato848/projects/saien-techo/submissions/<id>`
+> の「Upload to App Store Connect」を展開すると読める（CLI には出ない）。
+
+App Store Connect で設定するもの:
+
+- **App Privacy（栄養ラベル）**: Console UI のみ（API 非対応）。写真／その他のユーザー
+  コンテンツ = アプリの機能、**デバイス ID・おおよその位置情報** = サードパーティ広告
+  （位置情報は Play の data-safety.md と申告を揃える — 単一ソースは data-safety.md）。
+  **すべて「個人情報に関連付けない」「トラッキングに使用しない」**（ATT 未実装・IDFA 非取得のため）
+- **配信地域 = 日本のみ**
+- スクショ（§2）・名前／サブタイトル／プロモーションテキスト／説明／キーワード／
+  カテゴリ（**ライフスタイル(主) + 仕事効率化(副)**。フード＆ドリンクではない）／
+  サポート URL は `docs/store/app-store/listing-ja.md` が単一ソース
+  （ドラフト済み・2026-08-13。サポート URL はサポート専用 Gist を新設して解決済み）
+- 年齢レーティングの質問票（Play の回答をそのまま転記できない。別質問票）。
+  **回答方針は `docs/store/app-store/listing-ja.md` §8 にドラフト済み**（想定 4+）。
+  ただし **AI 生成コンテンツ系の設問は実フォームを見てから答える** — 推測で埋めない
 
 ## 既知の注意
 
-- **広告 SDK**: iOS は広告なしだが `react-native-google-mobile-ads` の iosAppId はテスト ID のまま同梱される。
-  App Privacy を簡素化したいなら iOS 向けに ads プラグインを app.config.js の条件分岐で除外する検討余地あり。
-- **スクショの iOS サイズ**は Android と別物（6.9"）。`docs/store/app-store/` に iOS 専用で保管し、Play の
-  `docs/store/google-play/` とは混ぜない。
-- iOS のローカル release ビルドは Android の `build-android.mjs` のような特別扱いは不要（`expo run:ios` / EAS で足りる）。
+- **メディアマネージャーへ複数枚を一括アップロードすると順序が崩れる。** 並列アップロードの
+  完了順に並ぶため（実績: 01→07 を一括で入れたら カレンダー→資材→ホーム… になった）。
+  **1 枚ずつ、前の 1 枚の処理を待ってからアップロードする**（投入順が保たれる）
+- **バージョンページの 6.5 型枠は 6.9 型（1320×2868）を弾く。** 受理は 1242×2688 /
+  2688×1242 / 1284×2778 / 2778×1284 のみ。6.9 型は**メディアマネージャーの
+  「6.9インチディスプレイ」枠**へ入れる（6.5 枠は「6.9インチディスプレイを使用」に自動フォールバック）
+- **提出前チェックで落ちやすい 2 項目**（1.0 提出時に実際に落ちた）:
+  **コンテンツ配信権**（アプリ情報ページ。栽培暦は公的資料ベースの自作データなので
+  「サードパーティ製コンテンツを含まない」）と、**バージョンページ側のサインイン情報**
+  （テスト情報側とは**別フィールド**。アカウント不要のアプリなので両方ともチェックを外す）
+
+- **使わない権限の purpose string を既定のまま残すと審査で自動却下される。**
+  Apple は提出バイナリを自動解析し、プレースホルダーめいた purpose string を見つけると
+  **人間のレビューに入る前に却下する**（実績: 1.0 ビルド 3 が
+  `NSMicrophoneUsageDescription: "Allow app to access your microphone"` で却下・2026-08-15）。
+  出どころは `expo-image-picker` — **写真とカメラの文言だけ書くと、マイクは既定の英語文言が
+  黙って入る**（`withImagePicker.js` の `MICROPHONE_USAGE`）。さいえん手帳は静止画のみ
+  （`mediaTypes: ['images']`）でマイクを使わないので、**キーごと消す**のが正解:
+
+  ```json
+  [
+    "expo-image-picker",
+    { "photosPermission": "…", "cameraPermission": "…", "microphonePermission": false }
+  ]
+  ```
+
+  `false` はプラグインの `applyPermissions` が `delete infoPlist[key]` する合図で、
+  空文字や無難な文言で埋めるのとは別物（**使わない権限は申告ごと消す**）。
+  Android 側では同時に `RECORD_AUDIO` が `blockedPermissions` に入る（app.json の手動 block と重複するだけで無害）。
+  **Windows から検証できる:** `npx expo prebuild -p ios` は macOS/Linux が要るが、
+  `npx expo config --type introspect --json` はプラグイン適用後の `ios.infoPlist` を出すので、
+  **提出前に `*UsageDescription` を全部読んで、使わないキーが無いことを確認する。**
+
+- **ads プラグインの `userTrackingUsageDescription` は ATT の plist キーを注入する。**
+  app.json の `react-native-google-mobile-ads` にこのキー（だいどこ由来）が残っていると
+  Info.plist に `NSUserTrackingUsageDescription` が入り、ASC の App Privacy ページが
+  「トラッキングするデータタイプを指定せよ」と警告して**「トラッキングなし」申告と
+  矛盾する**。ATT なし方針では**キーごと削除**する（実績: ビルド 2 で混入 →
+  ビルド 3 で除去・2026-08-14）
+- **広告ユニット ID はプラットフォームごとに別物。** Android の ID を iOS で使っても
+  配信されない。`config.ts` の `platformAdUnit()` が無印 = Android・`_IOS` 付き = iOS
+  として解決する
+- **未設定のユニットを公式テスト ID へ落とすと本番にテスト広告が出る**（AdMob ポリシー
+  違反）。既定は「空なら出さない」。検証で見たいときだけ
+  `EXPO_PUBLIC_ADMOB_ALLOW_TEST_UNITS=true` を付ける
+- **Apple はアプリアイコンに透過・アルファチャンネルを認めない。**
+  `pnpm assets:brand` が `icon.png` を flatten して RGB で書き出す（透過が要る
+  アダプティブアイコン前景・スプラッシュは対象外）
+- **スクショの iOS サイズは Android と別物**（6.9"）。`docs/store/app-store/` に
+  iOS 専用で保管し、`docs/store/google-play/` とは混ぜない
+- iOS のローカル release ビルドに Android の `build-android.mjs` のような特別扱いは不要

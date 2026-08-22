@@ -10,7 +10,9 @@ const options = parseArgs(process.argv.slice(2));
 const steps = [];
 const recoveryAttempts = [];
 
-steps.push(runStepWithRecovery('preflight', [process.execPath, 'scripts/agent/preflight.mjs', '--json']));
+steps.push(
+  runStepWithRecovery('preflight', [process.execPath, 'scripts/agent/preflight.mjs', '--json']),
+);
 
 const needsDevice = !options.skipInstall || !options.skipE2e;
 let healthOk = true;
@@ -29,13 +31,12 @@ if (needsDevice) {
 
 if (!options.skipBuild && healthOk) {
   steps.push(
-    runStepWithRecovery('build', [
-      process.execPath,
-      'scripts/agent/build-android.mjs',
-      '--arch',
-      options.arch,
-      '--json',
-    ], undefined, options.device),
+    runStepWithRecovery(
+      'build',
+      [process.execPath, 'scripts/agent/build-android.mjs', '--arch', options.arch, '--json'],
+      undefined,
+      options.device,
+    ),
   );
 }
 
@@ -49,7 +50,9 @@ if (!options.skipInstall && healthOk) {
 
 if (!options.skipE2e && healthOk) {
   for (const suite of resolveSuites(options.suite)) {
-    steps.push(runStepWithRecovery(suite, suiteCommand(suite), buildSuiteEnv(options.device), options.device));
+    steps.push(
+      runStepWithRecovery(suite, suiteCommand(), buildSuiteEnv(options.device), options.device),
+    );
   }
 }
 
@@ -139,20 +142,23 @@ function parseArgs(argv) {
   return parsed;
 }
 
+/**
+ * さいえん手帳の E2E は base の 1 本だけ。だいどこ由来の ocr / photo は
+ * WBS 2.9d で機能ごと消えたため、スイートも削除した（'all' も base に落ちる）。
+ *
+ * 知らない名前は**黙って base に落とさず止める**。落とすと `--suite ocr` が
+ * base を回して 'ocr' という名前で PASS を記録し、走っていないものが
+ * 走ったことになる。
+ */
 function resolveSuites(suite) {
-  if (suite === 'all') {
-    return ['base', 'ocr', 'photo'];
+  if (suite === 'all' || suite === 'base') {
+    return ['base'];
   }
-  return [suite];
+  console.error(`[NG] 知らない E2E スイート: ${suite}（使えるのは base / all）`);
+  process.exit(1);
 }
 
-function suiteCommand(suite) {
-  if (suite === 'ocr') {
-    return [process.execPath, 'e2e/android-ocr-e2e.mjs'];
-  }
-  if (suite === 'photo') {
-    return [process.execPath, 'e2e/android-photo-recipe-e2e.mjs'];
-  }
+function suiteCommand() {
   return [process.execPath, 'e2e/android-e2e.mjs'];
 }
 
@@ -166,7 +172,11 @@ function buildSuiteEnv(device) {
 function runStepWithRecovery(id, [command, ...args], env = undefined, device = null) {
   let stepResult = runStep(id, [command, ...args], env);
 
-  if (!stepResult.ok && stepResult.signal && stepResult.retryPolicy?.strategy === 'retry_candidate') {
+  if (
+    !stepResult.ok &&
+    stepResult.signal &&
+    stepResult.retryPolicy?.strategy === 'retry_candidate'
+  ) {
     const recoveryRes = executeRecovery(stepResult.signal.code, device, 'adb', { id });
     recoveryRes.stepId = id;
     recoveryAttempts.push(recoveryRes);

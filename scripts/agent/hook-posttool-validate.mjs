@@ -74,7 +74,11 @@ function extractFiles(value) {
   ].filter((entry) => typeof entry === 'string' && entry.trim());
 
   const patchText =
-    value?.toolInput?.input ?? value?.input?.input ?? value?.arguments?.input ?? value?.command ?? '';
+    value?.toolInput?.input ??
+    value?.input?.input ??
+    value?.arguments?.input ??
+    value?.command ??
+    '';
   const fromPatch =
     typeof patchText === 'string'
       ? [...patchText.matchAll(/^\*\*\* (?:Add|Update|Delete) File: (.+)$/gm)].map((match) =>
@@ -82,5 +86,7 @@ function extractFiles(value) {
         )
       : [];
 
-  return [...explicit, ...explicitMany, ...fromPatch].map((filePath) => filePath.replaceAll('\\', '/'));
+  return [...explicit, ...explicitMany, ...fromPatch].map((filePath) =>
+    filePath.replaceAll('\\', '/'),
+  );
 }

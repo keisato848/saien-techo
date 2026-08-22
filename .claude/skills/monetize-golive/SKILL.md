@@ -5,7 +5,9 @@ description: 広告有効化リリース（収益化方針A）の実行手順。
 
 # 広告有効化リリース（方針A: 広告のみ・課金なし）
 
-背景と依存表は `docs/リリース手順.md` §6-0。前提 = **AdMob アプリ確認の承認**（要審査のうちは配信制限、
+> **停止**: だいどこの値またはプレースホルダが残っている。WBS 3.7〜3.9 で さいえん手帳用に差し替えるまで実行しないこと。
+
+背景と依存表は `docs/リリース手順.md`（未整備 — WBS 3.9 で作成） §6-0。前提 = **AdMob アプリ確認の承認**（要審査のうちは配信制限、
 未承認のまま本番リリースするとポリシーリスク）。
 
 ## 0. 大原則
@@ -17,12 +19,12 @@ description: 広告有効化リリース（収益化方針A）の実行手順。
 ## 1. 事前確認
 
 1. AdMob コンソールでだいどこの承認ステータス = 準備完了（console-browser-ops Skill §4）
-2. app-ads.txt が配信中: `curl -s https://keisato848.github.io/app-ads.txt` に pub-2633806931583277 行
+2. app-ads.txt が配信中: `curl -s https://<さいえん手帳の app-ads.txt 配信ドメイン — 未作成>/app-ads.txt` に <さいえん手帳の AdMob パブリッシャー ID — 未作成> 行
 
 ## 2. 設定切替（コード側・リリース手順 §6-2）
 
 1. `apps/mobile/eas.json` build.production.env に `"EXPO_PUBLIC_ADMOB_ENABLED": "true"` を追加
-   （ユニット ID は配線済み: ca-app-pub-2633806931583277/2276751496）
+   （ユニット ID は配線済み: <さいえん手帳の AdMob リワードユニット ID — 未作成>）
 2. `apps/mobile/app.json` の `android.blockedPermissions` から `com.google.android.gms.permission.AD_ID` を**削除**
 3. **AD_ID トリプルチェック**: (a) blockedPermissions 削除 ↔ (b) Play 広告申告=はい ↔ (c) データセーフティ広告ID申告
    — 3点が揃わないと提出拒否（実績あり）

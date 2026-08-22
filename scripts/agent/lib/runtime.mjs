@@ -19,6 +19,8 @@ export function runCommand(command, args = [], options = {}) {
     encoding: 'utf8',
     env: { ...process.env, ...(options.env ?? {}) },
     shell,
+    // 既定 1MB では初回移植コミット等の巨大 diff で ENOBUFS になる
+    maxBuffer: options.maxBuffer ?? 64 * 1024 * 1024,
   });
 
   const stdout = result.stdout ?? '';
@@ -36,11 +38,7 @@ export function runCommand(command, args = [], options = {}) {
 }
 
 export function tail(text, lines = 20) {
-  return String(text)
-    .split(/\r?\n/)
-    .filter(Boolean)
-    .slice(-lines)
-    .join('\n');
+  return String(text).split(/\r?\n/).filter(Boolean).slice(-lines).join('\n');
 }
 
 export async function readJsonFile(filePath) {

@@ -27,7 +27,10 @@ const summary = {
 };
 
 if (!result.ok) {
-  summary.signal = createSignal(SIGNAL_CODES.APK_INSTALL_FAILED, result.combinedOutput || 'APK install failed');
+  summary.signal = createSignal(
+    SIGNAL_CODES.APK_INSTALL_FAILED,
+    result.combinedOutput || 'APK install failed',
+  );
 }
 
 if (options.json) {
@@ -78,8 +81,10 @@ function resolveAdb() {
   const candidates = [
     process.env.ADB_PATH,
     process.env.ANDROID_HOME && join(process.env.ANDROID_HOME, 'platform-tools', adbBinary()),
-    process.env.ANDROID_SDK_ROOT && join(process.env.ANDROID_SDK_ROOT, 'platform-tools', adbBinary()),
-    process.env.LOCALAPPDATA && join(process.env.LOCALAPPDATA, 'Android', 'Sdk', 'platform-tools', adbBinary()),
+    process.env.ANDROID_SDK_ROOT &&
+      join(process.env.ANDROID_SDK_ROOT, 'platform-tools', adbBinary()),
+    process.env.LOCALAPPDATA &&
+      join(process.env.LOCALAPPDATA, 'Android', 'Sdk', 'platform-tools', adbBinary()),
     adbBinary(),
   ].filter(Boolean);
 

@@ -1,0 +1,48 @@
+{
+  "cli": {
+    "version": ">= 12.0.0",
+    "appVersionSource": "local"
+  },
+  "build": {
+    "development": {
+      "developmentClient": true,
+      "distribution": "internal",
+      "ios": {
+        "simulator": true
+      }
+    },
+    "preview": {
+      "distribution": "internal",
+      "android": {
+        "buildType": "apk"
+      }
+    },
+    "production": {
+      "autoIncrement": false,
+      "env": {
+        "EXPO_PUBLIC_ADMOB_ENABLED": "true",
+        "EXPO_PUBLIC_ADMOB_APP_OPEN_UNIT_ID": "ca-app-pub-2633806931583277/3771122951",
+        "EXPO_PUBLIC_ADMOB_REWARDED_UNIT_ID": "ca-app-pub-2633806931583277/3132828705",
+        "EXPO_PUBLIC_ADMOB_BANNER_UNIT_ID": "ca-app-pub-2633806931583277/6932472912",
+        "EXPO_PUBLIC_ADMOB_APP_OPEN_UNIT_ID_IOS": "ca-app-pub-2633806931583277/9406339426",
+        "EXPO_PUBLIC_ADMOB_REWARDED_UNIT_ID_IOS": "ca-app-pub-2633806931583277/3032502766",
+        "EXPO_PUBLIC_ADMOB_BANNER_UNIT_ID_IOS": "ca-app-pub-2633806931583277/3088343081"
+      }
+    }
+  },
+  "submit": {
+    "production": {
+      "android": {
+        "serviceAccountKeyPath": "C:/secure/saien-techo-play-service-account.json",
+        "track": "production"
+      },
+      "ios": {
+        "ascApiKeyPath": "C:/secure/AuthKey_8C387NYC2T.p8",
+        "ascApiKeyIssuerId": "5390b406-7460-49b7-8436-f6ce2b281a13",
+        "ascApiKeyId": "8C387NYC2T",
+        "ascAppId": "6801141151",
+        "appleTeamId": "VY7SNHS2BY"
+      }
+    }
+  }
+}

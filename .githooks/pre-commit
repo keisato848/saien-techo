@@ -1,0 +1,27 @@
+#!/bin/sh
+
+# 1) シークレットスキャン（秘密鍵・API キーの混入を遮断）
+node scripts/agent/scan-staged-secrets.mjs || exit 1
+
+# 2) ステージ済みファイルを Prettier で自動整形して再ステージ
+node scripts/agent/format-staged.mjs || exit 1
+
+# 3) 変更スライス検証（prettier check / lint / typecheck）
+node scripts/agent/validate-changed-slice.mjs --staged
+status=$?
+if [ "$status" -ne 0 ]; then
+  exit "$status"
+fi
+
+# 4) .claude カスタマイズの仕様準拠検証（test-customizations は .github しか見ない）
+node scripts/agent/validate-claude-customizations.mjs || exit 1
+
+# 5) ブランド素材（アイコン・スプラッシュ）が mark.svg と一致しているか
+#    PNG は生成物。SVG を直したまま書き出し忘れると、リポジトリと実機がずれる
+node scripts/assets/generate-brand-assets.mjs --check || exit 1
+
+# 6) レビュー記録の書式検証
+node scripts/agent/review-log.mjs check || exit 1
+
+# 7) .github カスタマイズの検証
+node scripts/agent/test-customizations.mjs

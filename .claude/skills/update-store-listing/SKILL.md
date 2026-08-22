@@ -5,7 +5,7 @@ description: Google Play ストア掲載（ja-JP のアプリ名・説明文・�
 
 # Play ストア掲載の CLI 更新
 
-詳細は `docs/リリース手順.md` §3。プライバシーポリシーの公開反映は §4（公開 URL は gist — 更新時は同期コマンドを実行）。
+詳細は `docs/リリース手順.md` §3。プライバシーポリシーの公開 URL は gist（リリース手順 §3 に記載 — 更新時は `gh gist edit` で同期）。さいえん手帳の実値への差し替えは 2026-08-11 完了（説明文・スクショ・フィーチャーグラフィック・アイコンとも API 反映済み。フィーチャーグラフィックとアイコンは `update-play-graphics.mjs` に統合）。
 
 ## アプリ名・説明文（短い説明・詳しい説明）
 
@@ -39,12 +39,19 @@ description: Google Play ストア掲載（ja-JP のアプリ名・説明文・�
 
 1. ストアショット用リリース APK をビルド（サンプルデータ有効＋コーチマーク無効。エミュレータは x86_64）:
    `EXPO_PUBLIC_ENABLE_SAMPLE_DATA=1 EXPO_PUBLIC_DISABLE_COACH_MARKS=1 node scripts/agent/build-android.mjs --arch x86_64`
-2. クリーンなエミュレータを起動（**1080x2400 の `daidoko_e2e_fresh_api36` を使う** — 既存掲載と同解像度）:
-   `emulator -avd daidoko_e2e_fresh_api36 -wipe-data -no-snapshot`
+2. クリーンなエミュレータを起動（**1080x2400 の `saien_e2e_api36` を使う** — 既存掲載と同解像度）:
+   `emulator -avd saien_e2e_api36 -wipe-data -no-snapshot`
    ※ wipe 直後の SystemUI ANR ダイアログは capture スクリプトが dumpsys で検出して自動で閉じる
 3. `adb install -r apps/mobile/android/app/build/outputs/apk/release/app-release.apk`
+   3.5. **サンプルデータが本当に入ったか、撮る前に目で見る。**
+   `adb shell pm clear com.saientecho.app` → 起動 → ホームに
+   キュウリ/トマト/アオジソと「写真の読み取りが 2 枚 待っています」が出ること。
+   **`EXPO_PUBLIC_*` を付けたのにバンドルへ焼き込まれなかった実績がある**
+   （2026-08-21・原因未特定。直前の別ビルドの env が残ったバンドルが使われた疑い）。
+   空だったら `apps/mobile/android/app/build/generated/assets/` を消して 1 に戻る。
+   **ここを飛ばすと、空の画面を 7 枚撮ってストアに上げることになる**
 4. 取得: `node scripts/release/capture-store-screenshots.mjs`
-   - ショットごとに force-stop → `daidoko://` ディープリンクでコールドスタート → screencap
+   - ショットごとに force-stop → `saientecho://` ディープリンクでコールドスタート → screencap
    - ステータスバーは SystemUI デモモードで固定（09:00・電池100%・通知なし）
    - `manual` 指定のショット（AI 結果画面など）はスキップして既存ファイルを維持
    - 部分再取得: `--shots 01,04` / 対象レシピ変更: `--recipe recipe-3`
@@ -55,15 +62,18 @@ description: Google Play ストア掲載（ja-JP のアプリ名・説明文・�
 
 ## フィーチャーグラフィック（1024x500）
 
-1. 意匠は `scripts/generate-play-promos.mjs`（`buildFeatureGraphicSvg()` のテキスト・
-   `renderFeatureGraphic()` の参照スクショパスを編集。アイコンは `apps/mobile/assets/icon.png`
-   を都度リサイズする単一ソース — `docs/store/google-play/icons/icon-play-512.png` は副産物なので直接編集しない）
+1. 意匠は **`scripts/release/generate-feature-graphic.mjs`**（若葉パレット・
+   ブランドマーク `apps/mobile/assets/brand/mark.svg` が単一ソース）
 2. **公開のブランド資産なのでユーザーに画像を提示して承認を得る**
-3. 生成: `node scripts/generate-play-promos.mjs`（フィーチャーグラフィック＋販促スクショ6枚を再生成）
+3. 生成: `node scripts/release/generate-feature-graphic.mjs`
 4. Play へ反映: `node scripts/release/update-play-feature-graphic.mjs --dry-run` →
    `node scripts/release/update-play-feature-graphic.mjs`
    - **アイコンと同様 Play の審査を経てから公開される**（Console に「審査中の変更」表示）
 5. `docs/store/google-play/graphics/*.png` 等の変更を PR でマージ
+
+> `scripts/generate-play-promos.mjs` は**だいどこのまま**（暗色×金の意匠・レシピ画面前提の
+> 販促スライド 6 枚）。フィーチャーグラフィックだけ上記へ切り出したので、
+> 販促スライドが要るときに残りを差し替える。
 
 ## プロモーション動画（YouTube 埋め込み）
 
