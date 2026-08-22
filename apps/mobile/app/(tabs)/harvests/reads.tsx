@@ -5,7 +5,7 @@
  *
  * - **記録はもう保存済み。** ここで読めるのは「数量の下書き」だけで、
  *   読めなくても失われるものは無い
- * - 通行権は 2 つ: 無料枠（その日の初回 1 枚）と、動画リワード（1 本 = 最大
+ * - 通行権は 2 つ: 無料枠（インストールごとに 1 枚）と、動画リワード（1 本 = 最大
  *   READS_PER_REWARD 枚）。**視聴完了（rewarded）を確認してから**印を付けて送る
  * - paid 印が残っていれば開いた時に自動で再開する（リワードの履行 — 途中で
  *   通信が切れても、約束した枚数は広告なしで読み切る）
@@ -90,7 +90,7 @@ export default function HarvestReadsScreen() {
     setMessage(null);
     const granted = await grantFreeRead();
     if (!granted) {
-      setMessage('今日の無料ぶんは使い切りました。');
+      setMessage('無料の読み取りは使い切りました。');
       await load();
       return;
     }
@@ -144,10 +144,10 @@ export default function HarvestReadsScreen() {
               <PressableScale
                 style={styles.primaryButton}
                 onPress={() => void handleFree()}
-                accessibilityLabel="今日のぶんを 1 枚読み取る"
+                accessibilityLabel="無料で 1 枚読み取る"
               >
                 <Camera size={16} color={Colors.onAccent} />
-                <Text style={styles.primaryButtonText}>今日のぶんを 1 枚読み取る（無料）</Text>
+                <Text style={styles.primaryButtonText}>無料で 1 枚読み取る</Text>
               </PressableScale>
             ) : null}
 

@@ -133,13 +133,13 @@ describe('HarvestReadsScreen', () => {
     mockGetReadQueue.mockResolvedValue([item({ harvestId: 'h1' })]);
     render(<HarvestReadsScreen />);
     await screen.findByText('読み取り待ち');
-    expect(screen.queryByText(/今日のぶんを 1 枚読み取る/)).toBeNull();
+    expect(screen.queryByText(/無料で 1 枚読み取る/)).toBeNull();
   });
 
   it('無料ボタンは grantFreeRead → processPaidReads の順に動く', async () => {
     mockGetReadQueue.mockResolvedValue([item({ harvestId: 'h1' })]);
     render(<HarvestReadsScreen />);
-    fireEvent.press(await screen.findByText(/今日のぶんを 1 枚読み取る/));
+    fireEvent.press(await screen.findByText(/無料で 1 枚読み取る/));
 
     await waitFor(() => expect(mockProcessPaidReads).toHaveBeenCalled());
     expect(mockGrantFreeRead).toHaveBeenCalledTimes(1);

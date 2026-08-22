@@ -12,7 +12,6 @@ import type { PlantingListItem } from '../../../src/services/types';
 // 並走すると 1 件あたり数秒かかり、`getPlantingList` の解決が間に合わず
 // 「先に栽培を追加すると」が消えないまま落ちる（2026-08-22 に pre-commit で 5 件失敗）。
 // 落ちる/通るがマシンの負荷で決まるので、待ち時間を伸ばして安定させる。
-// **同じ修正が PR #151 にもある**（develop に未マージのため、こちらにも当てた）。
 configure({ asyncUtilTimeout: 10_000 });
 
 const mockPush = jest.fn();

@@ -33,10 +33,10 @@ jest.mock('../upload-image', () => ({
 
 // 無料枠は usage.service 側のテストが担保。ここでは canInfer と消費だけ見る
 let mockCanInfer = true;
-const mockIncrementDailyUsage = jest.fn();
+const mockIncrementUsage = jest.fn();
 jest.mock('../usage.service', () => ({
   getFreemiumStatus: () => Promise.resolve({ canInfer: mockCanInfer }),
-  incrementDailyUsage: (...args: unknown[]) => mockIncrementDailyUsage(...args),
+  incrementUsage: (...args: unknown[]) => mockIncrementUsage(...args),
 }));
 
 import {
@@ -118,7 +118,7 @@ describeIfSqlite('harvest-read.service', () => {
   beforeEach(() => {
     mockHandles = createTestDb();
     mockCanInfer = true;
-    mockIncrementDailyUsage.mockClear();
+    mockIncrementUsage.mockClear();
     seedFamily();
   });
 
@@ -225,13 +225,13 @@ describeIfSqlite('harvest-read.service', () => {
   });
 
   describe('無料枠', () => {
-    it('grantFreeRead は先頭 1 件に印を付け、日次カウンタを 1 消費する', async () => {
+    it('grantFreeRead は先頭 1 件に印を付け、無料枠を 1 消費する', async () => {
       const plantingId = await makePlanting();
       const harvestId = await makeQueuedHarvest(plantingId);
 
       const granted = await grantFreeRead();
       expect(granted).toBe(harvestId);
-      expect(mockIncrementDailyUsage).toHaveBeenCalledTimes(1);
+      expect(mockIncrementUsage).toHaveBeenCalledTimes(1);
 
       const fetchFn = okFetch({ isHarvest: true, count: 2 });
       await processPaidReads(undefined, { fetchFn: fetchFn as never });
@@ -244,7 +244,7 @@ describeIfSqlite('harvest-read.service', () => {
       await makeQueuedHarvest(plantingId);
 
       expect(await grantFreeRead()).toBeNull();
-      expect(mockIncrementDailyUsage).not.toHaveBeenCalled();
+      expect(mockIncrementUsage).not.toHaveBeenCalled();
     });
 
     it('readPhotoDirect は枠が無ければ送信せずに quota エラー', async () => {
@@ -262,13 +262,13 @@ describeIfSqlite('harvest-read.service', () => {
         fetchFn: okFetch({ isHarvest: true, count: 3 }) as never,
       });
       expect(hit.count).toBe(3);
-      expect(mockIncrementDailyUsage).toHaveBeenCalledTimes(1);
+      expect(mockIncrementUsage).toHaveBeenCalledTimes(1);
 
       // 撮り損じ（isHarvest: false）は消費しない
       await readPhotoDirect('/photos/a.jpg', 'キュウリ', {
         fetchFn: okFetch({ isHarvest: false }) as never,
       });
-      expect(mockIncrementDailyUsage).toHaveBeenCalledTimes(1);
+      expect(mockIncrementUsage).toHaveBeenCalledTimes(1);
     });
   });
 
