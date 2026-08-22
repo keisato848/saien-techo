@@ -28,6 +28,15 @@ export const DOC_RULES = [
     pattern: /^\.claude\/(agents|skills)\//,
     target: 'docs/開発ハーネス.md §1 構成マップ',
   },
+  {
+    // 推論・無料枠・広告・サーバー接続先に触る変更は「誰がいくら払うか」が変わる。
+    // 設計時・実装時・提出前に 3 つの数字（1 回 / 1 人・月 / 天井・月）を出して
+    // §5 に追記する（.claude/skills/cost-impact）。1.1 提出直前に初めて分析した反省（#157）。
+    pattern:
+      /^(apps\/mobile\/src\/services\/(garden-consult|harvest-read|planting-identify|usage|identify-credit|ad-reward)[^/]*\.ts|apps\/mobile\/src\/config\.ts|apps\/mobile\/eas\.json|apps\/server\/src\/lib\/rate-limit\.ts)$/,
+    target:
+      'docs/インフラ・NW構成設計.md §5（コスト試算）— .claude/skills/cost-impact の手順で分析・報告',
+  },
   // NOTE: apps/server/src/routes/ → docs/アーキテクチャ設計.md と
   // apps/mobile/src/db/(schema|migrate).ts → docs/データ設計.md の 2 件は
   // 督促先が存在しないため外してある（実体は移植元の docs/参考-daidoko/ 配下で、
