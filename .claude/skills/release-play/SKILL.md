@@ -42,8 +42,16 @@ AI 相談のサーバーはだいどこの Railway を共用している（決�
 6. **本番構成の実機 E2E**（マージ前検証の原則・省略しない）:
    - `adb reverse --remove-all` で localhost ブリッジを排除（API 既定 = だいどこ Railway 本番）
    - 実機で AI 相談を通し、応答が返ることを確認
-   - **release ビルドは平文 HTTP を遮断する。** ローカルサーバー相手の E2E はできない
-     （`EXPO_PUBLIC_SERVER_URL=http://localhost:3000` で焼いても届かない）
+   - **本番構成の E2E では localhost へ向けない**（既定の Railway 本番を見る）。
+     これは「向けられない」からではなく、**本番と同じ経路を通すため**
+
+   > **「release ビルドは平文 HTTP を遮断するのでローカル E2E はできない」は誤り**
+   > （2026-08-22 に実測で否定）。release ビルドに
+   > `EXPO_PUBLIC_SERVER_URL=http://localhost:3000` を焼き、`adb reverse tcp:3000 tcp:<port>`
+   > を張った状態で、Pixel 9a（Android 17）から**ローカルサーバーへ届いた**
+   > （サーバーログに `POST /api/v1/garden/identify 200`、応答もアプリ側で解析できた）。
+   > **loopback は平文遮断の対象外**。未デプロイのサーバー相手に機能検証したいときは使える
+
 7. **提出**（外向きアクション — ユーザーの明示承認を確認してから）:
    ```bash
    node scripts/release/submit-play-release.mjs --dry-run

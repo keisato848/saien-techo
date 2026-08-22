@@ -83,6 +83,9 @@ const DUPLICATE_DISTANCE = 1.0; // これ以下なら実質同じ画面
  * `scripts/release/update-play-screenshots.mjs` の ORDER 配列。
  * ずらすと 2 ストアで「同じアプリの別の顔」ができてしまう。
  */
+// **撮れたかはファイルサイズで判断する。** 中身が出ていれば 100KB 前後〜、
+// **20KB 前後ならローディングのスピナーしか写っていない**
+// （Android 側で 2026-08-22 に 8 枚全滅。既定の待ちが短かった）。
 const SHOTS = [
   { file: '01-home.png', route: '', label: 'ホーム（今日の菜園）' },
   { file: '02-plantings.png', route: 'plantings', label: '栽培一覧' },
@@ -91,6 +94,8 @@ const SHOTS = [
   { file: '05-crop-guide.png', route: 'crops', label: '作物ガイド' },
   { file: '06-calendar.png', route: 'calendar', label: 'カレンダー' },
   { file: '07-materials.png', route: 'materials', label: '資材の在庫' },
+  // 1.1 の目玉（#148）。シードが「読み取り済み 1・待ち 1」を用意している（I8 §2）
+  { file: '08-harvest-reads.png', route: 'harvests/reads', label: '写真から記録（読み取り待ち）' },
 ];
 
 const udid = args.udid ?? autoSelectBootedUdid();
@@ -340,7 +345,7 @@ function sleep(ms) {
 }
 
 function parseArgs(argv) {
-  const parsed = { waitMs: 6000, keepStatusBar: false, dialogTimeoutMs: 90000 };
+  const parsed = { waitMs: 12000, keepStatusBar: false, dialogTimeoutMs: 90000 };
   for (let i = 0; i < argv.length; i += 1) {
     const t = argv[i];
     if (t === '--udid') parsed.udid = argv[++i];
