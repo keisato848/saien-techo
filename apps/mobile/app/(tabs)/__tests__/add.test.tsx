@@ -4,9 +4,16 @@
  * 見るのは**遷移先の分岐**: 栽培 0 件で無効になるか、1 件で直行するか、
  * 複数で選択に入るか。フォームそのものは各フォームのテストで担保している。
  */
-import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+import { configure, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 
 import type { PlantingListItem } from '../../../src/services/types';
+
+// **`waitFor` の既定 1 秒では足りない。** このスイートは全体実行やビルドと
+// 並走すると 1 件あたり数秒かかり、`getPlantingList` の解決が間に合わず
+// 「先に栽培を追加すると」が消えないまま落ちる（2026-08-22 に pre-commit で 5 件失敗）。
+// 落ちる/通るがマシンの負荷で決まるので、待ち時間を伸ばして安定させる。
+// **同じ修正が PR #151 にもある**（develop に未マージのため、こちらにも当てた）。
+configure({ asyncUtilTimeout: 10_000 });
 
 const mockPush = jest.fn();
 jest.mock('expo-router', () => ({
