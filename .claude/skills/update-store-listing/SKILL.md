@@ -27,7 +27,9 @@ description: Google Play ストア掲載（ja-JP のアプリ名・説明文・�
    細い線画の付け足しは縮小で消える。既存要素と同等の太さ・面積で置き換える方が安全）
 3. 生成: `node scripts/generate-icons.mjs`
 4. Play ストア掲載アイコンへ反映（512x512 に自動リサイズ）:
-   `node scripts/release/update-play-icon.mjs --dry-run` → `node scripts/release/update-play-icon.mjs`
+   `node scripts/release/update-play-graphics.mjs --dry-run` → `node scripts/release/update-play-graphics.mjs`
+   （**さいえん手帳はアイコンとフィーチャーグラフィックを 1 本に統合してある。**
+   だいどこの `update-play-icon.mjs` / `update-play-feature-graphic.mjs` は**ここには無い**）
    - **アイコン変更は Play の審査を経てから公開される**（説明文より慎重な扱い — Console に「審査中の変更」表示）
    - アプリ本体（起動アイコン）は次回ビルドで自動的に同じ意匠になる（1024px 版を bundle）
 5. `apps/mobile/assets/*.png` と `scripts/generate-icons.mjs` の変更を PR でマージ
@@ -66,8 +68,8 @@ description: Google Play ストア掲載（ja-JP のアプリ名・説明文・�
    ブランドマーク `apps/mobile/assets/brand/mark.svg` が単一ソース）
 2. **公開のブランド資産なのでユーザーに画像を提示して承認を得る**
 3. 生成: `node scripts/release/generate-feature-graphic.mjs`
-4. Play へ反映: `node scripts/release/update-play-feature-graphic.mjs --dry-run` →
-   `node scripts/release/update-play-feature-graphic.mjs`
+4. Play へ反映: `node scripts/release/update-play-graphics.mjs --dry-run` →
+   `node scripts/release/update-play-graphics.mjs`（アイコンと共通）
    - **アイコンと同様 Play の審査を経てから公開される**（Console に「審査中の変更」表示）
 5. `docs/store/google-play/graphics/*.png` 等の変更を PR でマージ
 
