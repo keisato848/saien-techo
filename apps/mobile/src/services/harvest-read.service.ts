@@ -9,7 +9,7 @@
  * - **記録そのものは常に無料。** 読み取れなくても収穫記録と写真は保存済みで、
  *   数量が空なだけ。この前提が崩れる実装をしないこと
  * - **順序の不変条件（#144）**: サーバーへ送ってよいのは
- *   (a) 無料枠（`usage.service` の共用日次カウンタ・その日の初回）か
+ *   (a) 無料枠（`usage.service` の共用カウンタ・インストールごとに 1 回）か
  *   (b) リワード視聴完了（`rewarded === true`）で付いた `paid` 印
  *   のどちらかだけ。**楽観的に先へ送らない** — 広告が見られなかったときに
  *   リクエストが 1 本も出ないことをテストが見張る
@@ -31,7 +31,7 @@ import { and, asc, eq, inArray, sql } from 'drizzle-orm';
 import * as schema from '../db/schema';
 import { getDb, isNativePlatform } from '../db/client';
 import { API_V1 } from '../config';
-import { getFreemiumStatus, incrementDailyUsage } from './usage.service';
+import { getFreemiumStatus, incrementUsage } from './usage.service';
 import { expoUploadImageAdapter, type UploadImageAdapter } from './upload-image';
 
 // ─── 定数（#144 で決定） ─────────────────────────────────────────────────────
@@ -148,7 +148,7 @@ export async function requestHarvestRead(
 /**
  * フォーム内の直接読み取り（保存前・レコード未作成）。
  * **無料枠を通ってから**サーバーへ送る。成功（収穫物が写っていた）ときだけ
- * 枠を消費する — 撮り損じで 1 日 1 回の枠が飛ぶのは理不尽（AI 相談と同じ扱い）。
+ * 枠を消費する — 撮り損じで一度きりの無料枠が飛ぶのは理不尽（AI 相談と同じ扱い）。
  */
 export async function readPhotoDirect(
   imageUri: string,
@@ -158,13 +158,13 @@ export async function readPhotoDirect(
   const status = await getFreemiumStatus();
   if (!status.canInfer) {
     throw new HarvestReadError(
-      '今日の読み取りぶんは使い切りました。保存しておくと、あとで「まとめて読み取る」から読めます。',
+      '無料の読み取りは使い切りました。保存しておくと、あとで「まとめて読み取る」から読めます。',
       'quota',
     );
   }
   const data = await requestHarvestRead(imageUri, cropName, deps?.imageAdapter, deps?.fetchFn);
   if (data.isHarvest) {
-    await incrementDailyUsage();
+    await incrementUsage();
   }
   return data;
 }
@@ -337,7 +337,7 @@ export async function markPaidForReward(): Promise<string[]> {
 }
 
 /**
- * 無料枠（その日の初回）で先頭の 1 枚に paid 印を付ける。
+ * 無料枠（インストールごとに 1 回）で先頭の 1 枚に paid 印を付ける。
  * 枠が無い・待ちが無いときは null。**枠の消費は読み取り成功時**（processPaidReads 内）。
  */
 export async function grantFreeRead(): Promise<string | null> {
@@ -357,10 +357,10 @@ export async function grantFreeRead(): Promise<string | null> {
     .update(schema.harvestPhotoReads)
     .set({ paid: 1, updatedAt: nowIso() })
     .where(eq(schema.harvestPhotoReads.harvestId, harvestId));
-  // 無料枠ぶんは共用の日次カウンタを 1 消費する（キーは AI 相談と共用 — #144 決定）。
+  // 無料枠ぶんは共用の生涯カウンタを 1 消費する（キーは AI 相談と共用 — #144 決定）。
   // paid 印を付けた時点で消費する — 成功時消費にすると、途中でアプリを閉じて
   // 再開するたびに「無料のまま何度でも」になってしまう（印は残るため）。
-  await incrementDailyUsage();
+  await incrementUsage();
   return harvestId;
 }
 
