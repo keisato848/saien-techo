@@ -148,7 +148,8 @@ describe('AI 相談画面', () => {
     });
 
     render(<GardenConsultScreen />);
-    await screen.findByText(/今日の相談はここまでです/);
+    // 広告が出せない（adBonusGranted 0 < 上限）ときは明日を約束しない
+    await screen.findByText(/いまは動画を読み込めません/);
     await pickPhoto();
 
     fireEvent.press(screen.getByLabelText('AI に相談する'));
@@ -230,8 +231,42 @@ describe('AI 相談画面', () => {
     });
 
     render(<GardenConsultScreen />);
-    await screen.findByText(/また明日お試しください/);
+    await screen.findByText(/いまは動画を読み込めません/);
     expect(screen.queryByLabelText('動画を見てもう1回相談する')).toBeNull();
+  });
+
+  // 無料ぶんは生涯 1 回になった（2026-08-21）。「また明日」が正しいのは
+  // **その日のボーナス上限に当たったとき**だけで、広告が出せないだけのときに
+  // 明日を約束すると嘘になる（明日も残数は 0 のまま）。
+  it('広告が出せないだけのときは「また明日」と言わない', async () => {
+    mockGetFreemiumStatus.mockResolvedValue({
+      ...STATUS_OK,
+      used: 1,
+      remaining: 0,
+      canInfer: false,
+      canWatchAdForMore: false,
+      adBonusGranted: 0,
+      adBonusLimit: 3,
+    });
+
+    render(<GardenConsultScreen />);
+    await screen.findByText(/いまは動画を読み込めません/);
+    expect(screen.queryByText(/また明日お試しください/)).toBeNull();
+  });
+
+  it('その日のリワード上限に当たったときだけ「また明日」と言う', async () => {
+    mockGetFreemiumStatus.mockResolvedValue({
+      ...STATUS_OK,
+      used: 4,
+      remaining: 0,
+      canInfer: false,
+      canWatchAdForMore: false,
+      adBonusGranted: 3,
+      adBonusLimit: 3,
+    });
+
+    render(<GardenConsultScreen />);
+    await screen.findByText(/また明日お試しください/);
   });
 
   it('結果から作業ログの記録へ進める', async () => {

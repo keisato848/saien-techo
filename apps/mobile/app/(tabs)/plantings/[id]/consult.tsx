@@ -213,10 +213,18 @@ export default function GardenConsultScreen() {
         {/* 無料枠。使い切りは submit を殺し、広告が出せるなら +1 回の導線を添える */}
         {quotaExhausted ? (
           <View style={styles.quotaCard}>
+            {/*
+              「また明日」と言えるのは**その日のボーナス上限に当たったとき**だけ。
+              無料ぶんは生涯 1 回なので、広告が出せないだけのときに明日を約束すると嘘になる
+              （明日も残数は 0 のまま）。広告が出せない状態は珍しくない —
+              未読み込み・在庫なし・オフライン・広告無効ビルドのすべてで `adAvailable` は false。
+            */}
             <Text style={styles.quotaText}>
               {status?.canWatchAdForMore
                 ? '無料の相談は使い切りました。短い動画を見ると、もう 1 回相談できます。'
-                : '今日の相談はここまでです。また明日お試しください。'}
+                : status && status.adBonusGranted >= status.adBonusLimit
+                  ? '今日の相談はここまでです。また明日お試しください。'
+                  : '無料の相談は使い切りました。いまは動画を読み込めません。時間をおいてお試しください。'}
             </Text>
             {status?.canWatchAdForMore ? (
               <PressableScale
