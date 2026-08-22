@@ -37,10 +37,17 @@ EXPO_PUBLIC_DISABLE_COACH_MARKS=1    # コーチマーク非表示（スクシ�
 EXPO_PUBLIC_PALETTE=naedoko          # 配色の実機比較（既定は「若葉」。CLAUDE.md §7）
 EXPO_PUBLIC_FREE_LIFETIME_LIMIT=0    # 無料枠0=常時ペイウォール（リワード広告フローの E2E 用。旧名 _FREE_DAILY_LIMIT も可）
 EXPO_PUBLIC_ADMOB_ENABLED=true       # 広告有効
-EXPO_PUBLIC_ADMOB_ALLOW_TEST_UNITS=1 # ユニット未設定のとき公式テスト広告を出す（**検証専用**）
-EXPO_PUBLIC_ADMOB_IGNORE_FREQUENCY=1 # 起動広告の頻度制限を外す（毎回出したいとき）
+EXPO_PUBLIC_ADMOB_ALLOW_TEST_UNITS=true # ユニット未設定のとき公式テスト広告を出す（**検証専用**）
+EXPO_PUBLIC_ADMOB_IGNORE_FREQUENCY=true # 起動広告の頻度制限を外す（毎回出したいとき）
 node scripts/agent/build-android.mjs --arch x86_64   # app.json/plugins 変更時は --prebuild 必須
 ```
+
+> **`ADMOB_*` の 3 つは `true` 以外を受け取らない。** `config.ts` が
+> `=== 'true'` で見ているため、`=1` と書くと**黙って無効**になる
+> （`ADMOB_ENABLED` / `ADMOB_ALLOW_TEST_UNITS` / `ADMOB_IGNORE_FREQUENCY`）。
+> `ENABLE_SAMPLE_DATA` と `DISABLE_COACH_MARKS` は `1` でも `true` でも効くので、
+> **同じ書き方が全部に通ると思わないこと**。実績: `ALLOW_TEST_UNITS=1` で
+> ビルドしてリワードが出ず、広告側を疑って 1 ビルド分を捨てた（2026-08-22）。
 
 インストールは常に `adb install -r`（`-r` なしはローカルデータ消失リスクで hook が ask）。
 
