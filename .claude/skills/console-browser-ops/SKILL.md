@@ -139,9 +139,23 @@ Claude in Chrome（mcp\_\_claude-in-chrome\_\_\*）でメインループが実�
       **審査中（WAITING_FOR_REVIEW）のバージョンでも PATCH できる**が、
       公開済み版は 409 STATE_ERROR → **次版の公開まで反映されない**
    3. そのドメインの**ルート**に `app-ads.txt`（`pub-<ID>` が一致）
-      リンク保存直後は「app-ads.txt …一致しません」と出るが、**クロール待ち**のことが多い
-      （数分〜24 時間）。「アップデートを確認」で再クロールを依頼できる。
-      だいどこ Android は同じドメイン・同じファイルで準備完了になっている
+      リンク保存直後は「app-ads.txt ファイルが設定されている可能性がありますが、
+      お客様の詳細情報が AdMob アカウントの情報と一致しません」と出るが、これは
+      **まだクロールされていないときの定型文**。「アップデートを確認」を押しても
+      クロール前は同じ文が出る。
+      **実際のクロール状況は「アプリ → app-ads.txt」タブ**（`/v2/apps/appadstxt`）の
+      「前回のクロール」「ステータスの詳細」で見る。**タブに行が無い = まだクロールされていない**
+      （「広告リクエストが少ないと表示されないことがある」と注記あり）。
+      待ち時間はヘルプの公称で「最大 24 時間」、**リクエストが少ないと数日〜最長 1 か月**
+      （support.google.com/admob/answer/9679128）。
+
+      **`*.github.io` は使える（2026-08-23 実証）**: だいどこ Android の行が
+      `https://keisato848.github.io/app-ads.txt` を「1 時間前」にクロールして
+      「見つかり、確認されました」になっている。「github.io は Public Suffix List 上の
+      共有ドメインだからクローラが `github.io/app-ads.txt` を読んで失敗する」という説は
+      この実データと矛盾する（IAB 仕様もルートドメインを public suffix +1 で定義しており、
+      `keisato848.github.io` がルート）。**独自ドメインは要らない。** 失敗の原因は
+      「未クロール」か「ストア掲載にデベロッパー ウェブサイトが無い」のどちらか
 
    > **Chrome 拡張（Claude in Chrome）が無いセッションでも操作できる。**
    > `chrome.exe --remote-debugging-port=9333 --user-data-dir=C:	mp\chrome-saien-profile` で
