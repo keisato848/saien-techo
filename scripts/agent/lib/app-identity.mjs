@@ -27,6 +27,7 @@ let cached = null;
  *   scheme: string,
  *   version: string,
  *   versionCode: number,
+ *   iosBuildNumber: string,
  *   slug: string,
  * }}
  */
@@ -48,6 +49,8 @@ export function appIdentity() {
     scheme,
     version: expo.version ?? '0.0.0',
     versionCode: expo.android?.versionCode ?? 0,
+    // iOS の buildNumber は文字列（ASC の builds.version と同じ型で比較する）
+    iosBuildNumber: String(expo.ios?.buildNumber ?? ''),
     slug: expo.slug ?? '',
   };
   return cached;
