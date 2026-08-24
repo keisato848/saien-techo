@@ -40,4 +40,18 @@ export const expoImagePickerPhotoCaptureAdapter: PhotoCaptureAdapter = {
     });
     return result.canceled ? null : toCapturedPhoto(result.assets[0]);
   },
+  async pickManyFromGallery(limit) {
+    // 一括登録（#139 / #149）。システムの Photo Picker が複数選択に対応している。
+    const result = await ImagePicker.launchImageLibraryAsync({
+      allowsEditing: false,
+      allowsMultipleSelection: true,
+      selectionLimit: limit,
+      mediaTypes: ['images'],
+      quality: 1,
+    });
+    if (result.canceled) return null;
+    return result.assets
+      .map((asset) => toCapturedPhoto(asset))
+      .filter((photo): photo is RawCapturedPhoto => photo !== null);
+  },
 };
