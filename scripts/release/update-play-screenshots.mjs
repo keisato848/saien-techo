@@ -1,8 +1,12 @@
 /**
  * Google Play のスマホ用スクリーンショット（ja-JP / phoneScreenshots）を
- * docs/store/google-play/phone-screenshots/ の内容で差し替える。
+ * docs/store/google-play/store-slides/ の内容で差し替える。
  *
- * - 表示順 = ORDER 配列（README.md の表と一致させる）
+ * **上げるのは素のキャプチャではなく、キャプション入りのスライド**
+ * （`compose-store-slides.mjs` の出力）。一覧で見えるのは 1 枚目の上半分だけなので、
+ * そこに「解決される困りごと」を載せる。素のキャプチャは `phone-screenshots/`。
+ *
+ * - 表示順 = ORDER 配列（compose-store-slides.mjs の SLIDES と同じ順にする）
  * - 既存を全削除してから順番にアップロード（アップロード順が表示順になる）
  * - 認証は lib/play-api.mjs（サービスアカウント）
  *
@@ -15,23 +19,25 @@ import { fileURLToPath } from 'node:url';
 import { createEditsClient, getAccessToken } from './lib/play-api.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
-const SHOTS_DIR = path.join(ROOT, 'docs/store/google-play/phone-screenshots');
+const SHOTS_DIR = path.join(ROOT, 'docs/store/google-play/store-slides');
 const LANG = 'ja-JP';
 const IMAGE_TYPE = 'phoneScreenshots';
 const DRY_RUN = process.argv.includes('--dry-run');
 
-/** アップロード順（= Play の表示順）。README.md の表と同期すること。 */
+/**
+ * アップロード順（= Play の表示順）。**compose-store-slides.mjs の SLIDES と同じ順**。
+ * ファイル名の番号は撮影時の通し番号で、表示順とは一致しない
+ * （「写真から記録」は訴求が強いので 5 番目に上げている）。
+ */
 const ORDER = [
   '01-home.png',
   '02-plantings.png',
   '03-planting-detail.png',
   '04-harvests.png',
+  '08-harvest-reads.png',
   '05-crop-guide.png',
   '06-calendar.png',
   '07-materials.png',
-  // 1.1 で追加（#148 の「写真から記録」）。**撮影スクリプト側に足すだけでは
-  // ここに載らず、7 枚のまま上書きされる**（2026-08-22 に dry-run で検出）。
-  '08-harvest-reads.png',
 ];
 
 // ─── 検証（存在・PNG・寸法・8枚以内） ────────────────────────────────────────

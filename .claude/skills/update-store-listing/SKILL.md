@@ -1,6 +1,6 @@
 ---
 name: update-store-listing
-description: Google Play ストア掲載（ja-JP のアプリ名・説明文・スマホ用スクリーンショット・アイコン・フィーチャーグラフィック・タグ）を CLI で更新する。listing-ja.md / phone-screenshots/ / generate-icons.mjs / generate-play-promos.mjs を単一ソースとして androidpublisher API で反映。スクショはエミュレータから機械的に再取得できる。
+description: Google Play ストア掲載（ja-JP のアプリ名・説明文・スマホ用スクリーンショット・アイコン・フィーチャーグラフィック・タグ）を CLI で更新する。listing-ja.md / store-slides（compose-store-slides.mjs でキャプション合成）/ generate-icons.mjs / generate-play-promos.mjs を単一ソースとして androidpublisher API で反映。スクショはエミュレータから機械的に再取得できる。
 ---
 
 # Play ストア掲載の CLI 更新
@@ -36,8 +36,12 @@ description: Google Play ストア掲載（ja-JP のアプリ名・説明文・�
 
 ## スクリーンショット（スマホ用・機械的に再取得）
 
-単一ソース = `docs/store/google-play/phone-screenshots/`（表示順は README.md の表 =
-`update-play-screenshots.mjs` の ORDER 配列。変えるときは両方更新）。
+**上げるのは素のキャプチャではない。** 生キャプチャ = `phone-screenshots/`、
+**ストアに上げるのはキャプションを載せた `store-slides/`**（`compose-store-slides.mjs` の出力）。
+一覧で人が見るのは 1 枚目の上半分だけなので、そこに「解決される困りごと」を置く
+（見出しは機能名にしない。改行は `SLIDES` の配列で手で決める）。
+文言は Play と App Store で共通。表示順は `SLIDES` の順 = `update-play-screenshots.mjs` の
+ORDER 配列（**ファイル名の番号は撮影順で、表示順とは一致しない**。変えるときは両方更新）。
 
 1. ストアショット用リリース APK をビルド（サンプルデータ有効＋コーチマーク無効。エミュレータは x86_64）:
    `EXPO_PUBLIC_ENABLE_SAMPLE_DATA=1 EXPO_PUBLIC_DISABLE_COACH_MARKS=1 node scripts/agent/build-android.mjs --arch x86_64`
