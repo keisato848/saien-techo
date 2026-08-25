@@ -293,17 +293,17 @@ export default function PlantingDetailScreen() {
           </View>
         </PressableScale>
 
-        {/* 成長の見比べ（R16 / WBS 4.4）。AI は使わない — 2 枚並べて目で見るだけ */}
+        {/* 成長記録（R16 / WBS 4.4）。AI は使わない — 2 枚並べて目で見るだけ */}
         <PressableScale
           style={styles.consultCard}
           onPress={() => router.push(`/plantings/${planting.id}/compare`)}
-          accessibilityLabel="成長を見比べる"
+          accessibilityLabel="成長記録をみる"
         >
           <Images size={17} color={Colors.accentInk} />
           <View style={styles.consultBody}>
-            <Text style={styles.consultTitle}>成長を見比べる</Text>
+            <Text style={styles.consultTitle}>成長記録</Text>
             <Text style={styles.consultHint}>
-              この栽培の写真を 2 枚並べて、何日目かを添えて見る
+              2 枚並べて、何日でここまで育ったかを見る（終わった栽培も）
             </Text>
           </View>
         </PressableScale>

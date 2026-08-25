@@ -1,5 +1,5 @@
 /**
- * 成長の見比べ（R16 / WBS 4.4）
+ * 成長記録（R16 / WBS 4.4）
  *
  * 同じ栽培の写真を 2 枚並べ、撮った日と「何日目か」を添える。
  * **AI は使わない**（要件定義 R16。変化を言葉にするのは R32 の別立て）。
@@ -17,7 +17,7 @@
  * `photos` に行があってもファイルが無いことがある（バックアップ後に
  * 元の記録を消してから復元した場合など）。素の `<Image>` は黙って空白を出すので、
  * `onError` を拾って**その 1 枚を「見つかりません」に差し替え、別の写真を選べる**ようにする。
- * 使える写真が 2 枚に満たなくなったら見比べ自体をたたむ。
+ * 使える写真が 2 枚に満たなくなったら成長記録自体をたたむ。
  */
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { ChevronLeft } from 'lucide-react-native';
@@ -137,7 +137,7 @@ export default function GrowthCompareScreen() {
       <Pressable onPress={() => router.back()} hitSlop={12} accessibilityLabel="戻る">
         <ChevronLeft size={22} color={Colors.ink} />
       </Pressable>
-      <Text style={styles.title}>見比べ</Text>
+      <Text style={styles.title}>成長記録</Text>
     </View>
   );
 
@@ -156,12 +156,12 @@ export default function GrowthCompareScreen() {
         {header}
         <View style={styles.emptyBox}>
           <Text style={styles.empty}>
-            見比べには、この栽培の写真が {MIN_COMPARE_PHOTOS} 枚以上必要です。
+            成長記録には、この栽培の写真が {MIN_COMPARE_PHOTOS} 枚以上必要です。
           </Text>
           <Text style={styles.emptySub}>
             {missing.length > 0
-              ? '端末から消えている写真があります。作業ログや収穫に写真を足すと、ここで見比べられます。'
-              : '作業ログや収穫に写真を足すと、ここで見比べられます。'}
+              ? '端末から消えている写真があります。作業ログや収穫に写真を足すと、ここに並びます。'
+              : '作業ログや収穫に写真を足すと、ここに並びます。'}
           </Text>
         </View>
       </View>

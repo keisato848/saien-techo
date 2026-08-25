@@ -1,5 +1,5 @@
 /**
- * 成長の見比べ（R16 / WBS 4.4）を実 SQLite に対してテストする。
+ * 成長記録（R16 / WBS 4.4）を実 SQLite に対してテストする。
  */
 import {
   createTestDb,
@@ -30,7 +30,7 @@ jest.mock('expo-file-system/legacy', () => ({
 import { createCareLog } from '../care-log.service';
 import { daysBetween, getGrowthPhotos, type GrowthPhoto } from '../growth-compare.service';
 import { createHarvest } from '../harvest.service';
-import { createPlanting } from '../planting.service';
+import { createPlanting, endPlanting } from '../planting.service';
 
 const FAMILY_ID = 'family-001';
 const DOC = 'file:///documents/';
@@ -111,6 +111,29 @@ describeIfSqlite('growth-compare.service (real SQLite)', () => {
     // 画面には絶対 URI を渡す（相対のままだと <Image> が描けない）
     expect(photos[0].uri).toContain('garden-photos/care-1.jpg');
     expect(photos[0].uri.startsWith('garden-photos/')).toBe(false);
+  });
+
+  it('終了した栽培でも返す（去年育てたものを見返すのがこの機能の主眼）', async () => {
+    const plantingId = await seedPlanting();
+    await createCareLog({
+      plantingId,
+      kind: 'water',
+      loggedAt: '2026-05-11T00:00:00.000Z',
+      photoUris: [`${DOC}garden-photos/a.jpg`],
+    });
+    await createHarvest({
+      plantingId,
+      harvestedAt: '2026-06-20T00:00:00.000Z',
+      photoUris: [`${DOC}garden-photos/b.jpg`],
+    });
+    await endPlanting(plantingId, 'harvested', '2026-07-01T00:00:00.000Z');
+
+    const photos = await getGrowthPhotos(plantingId);
+
+    expect(photos).toHaveLength(2);
+    // 経過日数は終了日ではなく各記録の日付を基準にする
+    expect(photos[0].elapsedDays).toBe(10);
+    expect(photos[1].elapsedDays).toBe(50);
   });
 
   it('写真が 1 枚も無ければ空を返す', async () => {

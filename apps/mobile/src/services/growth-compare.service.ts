@@ -2,7 +2,7 @@ import { elapsedDaysFrom, getPlantingDetail } from './planting.service';
 import { getTimeline } from './garden-timeline.service';
 
 /**
- * 成長の見比べ（R16 / WBS 4.4）。
+ * 成長記録（R16 / WBS 4.4）。
  *
  * **新しいクエリを足さない。** 栽培にぶら下がる写真は既に
  * `getTimeline({ plantingId })` が作業ログ・収穫の両方から集めているので、
@@ -24,13 +24,13 @@ export interface GrowthPhoto {
   index: number;
 }
 
-/** 見比べに必要な最低枚数 */
+/** 成長記録に必要な最低枚数 */
 export const MIN_COMPARE_PHOTOS = 2;
 
 /**
  * 栽培にぶら下がる写真を**古い順**に返す。
  *
- * 並びを古い順にするのは、見比べが「左＝過去 / 右＝現在」を既定にするため。
+ * 並びを古い順にするのは、成長記録が「左＝過去 / 右＝現在」を既定にするため。
  * タイムライン本体は新しい順なので、ここで反転している。
  */
 export async function getGrowthPhotos(plantingId: string): Promise<GrowthPhoto[]> {

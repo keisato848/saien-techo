@@ -1,12 +1,12 @@
 /**
- * 成長の見比べ画面（R16 / WBS 4.4）。
+ * 成長記録の画面（R16 / WBS 4.4）。
  *
  * 画面テストで見張るのは分岐:
  * - 既定は「いちばん古い × いちばん新しい」で、間隔を日数で出す
  * - 選び直しは**いま選んでいる側**にだけ効く
  * - **ファイルが消えている写真**は空白ではなく「見つかりません」に落ち、
  *   生きている写真へ差し替わる（ユーザーが選び直せる）
- * - 使える写真が 2 枚未満なら見比べ自体をたたむ
+ * - 使える写真が 2 枚未満なら成長記録自体をたたむ
  */
 import { configure, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import type { useEffect as reactUseEffect } from 'react';
@@ -95,13 +95,13 @@ it('ファイルが消えている写真は「見つかりません」に落ち�
   expect(screen.queryByText('50 日目')).toBeNull();
 });
 
-it('使える写真が 2 枚未満なら見比べをたたむ', async () => {
+it('使える写真が 2 枚未満なら成長記録をたたむ', async () => {
   mockGetGrowthPhotos.mockResolvedValue([photo(0, 10)]);
 
   render(<CompareScreen />);
 
   await waitFor(() =>
-    expect(screen.getByText(/見比べには、この栽培の写真が 2 枚以上必要です/)).toBeTruthy(),
+    expect(screen.getByText(/成長記録には、この栽培の写真が 2 枚以上必要です/)).toBeTruthy(),
   );
 });
 
@@ -111,7 +111,7 @@ it('写真が 1 枚も無いときも行き止まりの空白にしない', asyn
   render(<CompareScreen />);
 
   await waitFor(() =>
-    expect(screen.getByText(/作業ログや収穫に写真を足すと、ここで見比べられます/)).toBeTruthy(),
+    expect(screen.getByText(/作業ログや収穫に写真を足すと、ここに並びます/)).toBeTruthy(),
   );
 });
 
@@ -124,9 +124,9 @@ it('左右が同時に失敗しても、同じ写真を 2 枚並べない', asyn
   fireEvent(screen.getByLabelText('10日目の写真'), 'error');
   fireEvent(screen.getByLabelText('50日目の写真'), 'error');
 
-  // 残るのは 30 日目 1 枚だけ。両側に同じものを入れず、見比べをたたむ
+  // 残るのは 30 日目 1 枚だけ。両側に同じものを入れず、成長記録をたたむ
   await waitFor(() =>
-    expect(screen.getByText(/見比べには、この栽培の写真が 2 枚以上必要です/)).toBeTruthy(),
+    expect(screen.getByText(/成長記録には、この栽培の写真が 2 枚以上必要です/)).toBeTruthy(),
   );
 });
 
