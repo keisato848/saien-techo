@@ -265,8 +265,13 @@ async function replacePhotos(
   }
 
   // 比較は DB と同じ正規形（相対パス）で行う（care-log.service と同じ理由）
+  // **両側を正規形に揃えてから比べる。** 片側だけ正規化すると、DB に絶対パスが
+  // 入っている状態（v13 前のバックアップを復元した直後）で全件不一致になり、
+  // 残すはずの写真ファイルまで削除してしまう
   const stored = photoUris.map(toStoredPhotoPath);
-  const before = (await getPhotoPaths(db, [harvestId])).get(harvestId) ?? [];
+  const before = ((await getPhotoPaths(db, [harvestId])).get(harvestId) ?? []).map(
+    toStoredPhotoPath,
+  );
   await deleteGardenPhotoFiles(before.filter((path) => !stored.includes(path)));
 
   await db
@@ -347,7 +352,8 @@ export async function getHarvestAlbum(
       quantity: row.quantity,
       unit: isHarvestUnit(row.unit) ? row.unit : null,
     };
-    const uris = photos.get(row.id) ?? [];
+    // 収穫アルバムも画面へ出るので解決する（ここだけ漏らすと全サムネイルが空になる）
+    const uris = resolvePhotoUris(photos.get(row.id) ?? []);
     if (uris.length === 0) {
       cells.push({ ...base, key: row.id, photoUri: null });
       continue;

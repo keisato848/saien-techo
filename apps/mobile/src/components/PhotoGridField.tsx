@@ -12,7 +12,11 @@ import { ActivityIndicator, Image, Pressable, StyleSheet, Text, View } from 'rea
 
 import { Colors, Typography } from '../constants/theme';
 import { expoImagePickerPhotoCaptureAdapter } from '../services/expo-photo-capture.adapter';
-import { capturePhoto, type PhotoCaptureSource } from '../services/photo-capture.service';
+import {
+  PhotoCaptureCancelledError,
+  capturePhoto,
+  type PhotoCaptureSource,
+} from '../services/photo-capture.service';
 import {
   MAX_GARDEN_PHOTOS,
   PhotoCompressionError,
@@ -41,8 +45,12 @@ export function PhotoGridField({ value, onChange, max = MAX_GARDEN_PHOTOS }: Pho
         const [path] = await persistGardenPhotos([photo]);
         onChange([...value, path]);
       } catch (e) {
-        // キャンセルは何も出さない。保存できなかったときだけ理由を見せる
-        if (e instanceof PhotoCompressionError) setError(e.message);
+        // **黙ってよいのは「ユーザーが自分でやめた」ときだけ。**
+        // 権限拒否・保存先が取れない・容量不足も無反応にすると、
+        // スピナーが一瞬出て消えるだけで何が起きたか分からなくなる
+        if (!(e instanceof PhotoCaptureCancelledError)) {
+          setError(e instanceof PhotoCompressionError ? e.message : '写真を追加できませんでした。');
+        }
       } finally {
         setBusy(false);
       }

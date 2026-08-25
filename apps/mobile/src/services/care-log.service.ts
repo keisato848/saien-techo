@@ -211,7 +211,7 @@ async function replacePhotos(
   // **比較は DB と同じ正規形（相対パス）で行う。** 画面から来るのは絶対 URI なので、
   // 正規化せずに比べると「全部消された」と誤判定して残す写真まで削除してしまう
   const stored = photoUris.map(toStoredPhotoPath);
-  const before = (await getPhotoPaths(db, [logId])).get(logId) ?? [];
+  const before = ((await getPhotoPaths(db, [logId])).get(logId) ?? []).map(toStoredPhotoPath);
   const removed = before.filter((path) => !stored.includes(path));
   await deleteGardenPhotoFiles(removed);
 

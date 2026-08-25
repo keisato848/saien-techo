@@ -21,7 +21,7 @@
  */
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { ChevronLeft } from 'lucide-react-native';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import { Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -52,15 +52,22 @@ export default function GrowthCompareScreen() {
   const [missing, setMissing] = useState<number[]>([]);
   const [leftIndex, setLeftIndex] = useState<number | null>(null);
   const [rightIndex, setRightIndex] = useState<number | null>(null);
+  // 差し替え先を選ぶときに「反対側がいま何か」を最新の値で見るための控え
+  const leftIndexRef = useRef<number | null>(null);
+  const rightIndexRef = useRef<number | null>(null);
+  leftIndexRef.current = leftIndex;
+  rightIndexRef.current = rightIndex;
   const [active, setActive] = useState<Side>('right');
 
   const load = useCallback(async () => {
     if (!id) return;
     const list = await getGrowthPhotos(id);
     setPhotos(list);
-    setMissing([]);
-    setLeftIndex(list.length > 0 ? 0 : null);
-    setRightIndex(list.length > 1 ? list.length - 1 : null);
+    // **選び直した左右と「見つからなかった」印はリセットしない。**
+    // この画面はタブ移動のたびに再取得されるので、毎回いちばん古い×新しいへ
+    // 戻すとユーザーが選んだ組み合わせが消える。既定を入れるのは初回だけ
+    setLeftIndex((prev) => (prev != null ? prev : list.length > 0 ? 0 : null));
+    setRightIndex((prev) => (prev != null ? prev : list.length > 1 ? list.length - 1 : null));
     setLoading(false);
   }, [id]);
 
@@ -86,25 +93,41 @@ export default function GrowthCompareScreen() {
    */
   const handleImageError = useCallback(
     (photo: GrowthPhoto, side: Side) => {
-      setMissing((prev) => (prev.includes(photo.index) ? prev : [...prev, photo.index]));
-      const other = side === 'left' ? rightIndex : leftIndex;
-      const replacement = photos.find(
-        (candidate) =>
-          candidate.index !== photo.index &&
-          candidate.index !== other &&
-          !missing.includes(candidate.index),
-      );
-      const next = replacement ? replacement.index : null;
-      if (side === 'left') setLeftIndex(next);
-      else setRightIndex(next);
+      // **すべて関数形の更新で書く。** 左右が同時に失敗すると、直前のレンダーの
+      // missing / leftIndex / rightIndex を読む書き方では両方が同じ写真に落ちる
+      setMissing((prevMissing) => {
+        const nextMissing = prevMissing.includes(photo.index)
+          ? prevMissing
+          : [...prevMissing, photo.index];
+
+        const pick = (other: number | null): number | null => {
+          // 左は古い側から、右は新しい側から探す（並びの意味を壊さない）
+          const candidates = side === 'left' ? photos : [...photos].reverse();
+          const found = candidates.find(
+            (candidate) => candidate.index !== other && !nextMissing.includes(candidate.index),
+          );
+          return found ? found.index : null;
+        };
+
+        if (side === 'left') setLeftIndex((_prev) => pick(rightIndexRef.current));
+        else setRightIndex((_prev) => pick(leftIndexRef.current));
+        return nextMissing;
+      });
     },
-    [photos, missing, leftIndex, rightIndex],
+    [photos],
   );
 
   const handleSelect = useCallback(
     (photo: GrowthPhoto) => {
-      if (active === 'left') setLeftIndex(photo.index);
-      else setRightIndex(photo.index);
+      // 反対側と同じ写真を選んだら**入れ替える**。同じ 2 枚を並べても比較にならず、
+      // かといって無反応だと「押せないボタン」に見える
+      if (active === 'left') {
+        if (photo.index === rightIndexRef.current) setRightIndex(leftIndexRef.current);
+        setLeftIndex(photo.index);
+      } else {
+        if (photo.index === leftIndexRef.current) setLeftIndex(rightIndexRef.current);
+        setRightIndex(photo.index);
+      }
     },
     [active],
   );

@@ -10,7 +10,11 @@ import { ActivityIndicator, Image, Pressable, StyleSheet, Text, View } from 'rea
 
 import { Colors } from '../constants/theme';
 import { expoImagePickerPhotoCaptureAdapter } from '../services/expo-photo-capture.adapter';
-import { capturePhoto, type PhotoCaptureSource } from '../services/photo-capture.service';
+import {
+  PhotoCaptureCancelledError,
+  capturePhoto,
+  type PhotoCaptureSource,
+} from '../services/photo-capture.service';
 import { PhotoCompressionError, persistRecipePhoto } from '../services/photo-storage.service';
 
 interface PhotoPickerFieldProps {
@@ -33,7 +37,10 @@ export function PhotoPickerField({ value, onChange, variant }: PhotoPickerFieldP
         const photo = await capturePhoto(source, expoImagePickerPhotoCaptureAdapter);
         onChange(await persistRecipePhoto(photo));
       } catch (e) {
-        if (e instanceof PhotoCompressionError) setError(e.message);
+        // 黙ってよいのはキャンセルだけ（PhotoGridField と同じ扱い）
+        if (!(e instanceof PhotoCaptureCancelledError)) {
+          setError(e instanceof PhotoCompressionError ? e.message : '写真を追加できませんでした。');
+        }
       } finally {
         setBusy(false);
       }

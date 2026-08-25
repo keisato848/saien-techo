@@ -632,6 +632,19 @@ const PHOTO_SOURCES = [
  *
  * @returns 落とした行数
  */
+/**
+ * payload の写真パス列を DB の正規形（相対パス）へ揃える。
+ * 復元は「アプリの外から来た値を DB へ書く」唯一の経路なので、ここで正規化する。
+ */
+function normalizePhotoPaths(payload: LocalBackupPayload): void {
+  for (const source of PHOTO_SOURCES) {
+    for (const row of payload.tables[source.table]) {
+      const value = rowString(row, source.pathColumn);
+      if (value) row[source.pathColumn] = toStoredPhotoPath(value);
+    }
+  }
+}
+
 function dropPhotoRowsWithoutFile(payload: LocalBackupPayload): number {
   const rows = payload.tables.photos;
   const kept = rows.filter((row) => Boolean(rowString(row, 'local_path')));
@@ -868,6 +881,12 @@ export async function restoreLocalBackup(uri: string): Promise<BackupOperationRe
   assertNative();
   const raw = await FileSystem.readAsStringAsync(uri, { encoding: FileSystem.EncodingType.UTF8 });
   const payload = parseLocalBackupPayload(raw);
+
+  // **「DB に入るのは相対パスだけ」を境界で守る。**
+  // v13 以前に作られたバックアップは絶対パスを持つ。そのまま書き戻すと、
+  // migrate v13 は起動時にしか走らないので絶対パスのまま残り、
+  // 次に写真を編集したときに「DB 値 ≠ 画面の値」で**残す写真まで削除**してしまう
+  normalizePhotoPaths(payload);
 
   replaceDatabase(payload);
   await rebuildSearchIndexes();

@@ -288,17 +288,18 @@ export async function updatePlanting(
   const db = getDb();
 
   // カバー写真を差し替えたら、古いファイルを端末から消す。
-  // 消さないと recipe-photos/ に誰も参照しないファイルが残り続ける
+  // 消さないと recipe-photos/ に誰も参照しないファイルが残り続ける。
+  // **両方を正規形にしてから比べる** — 片側だけだと、同じファイルを指しているのに
+  // 「差し替えられた」と誤判定して現役のカバー写真を消してしまう
   const nextCover = toStoredPhotoPathOrNull(input.coverPhotoPath);
-  const previousCover = (
-    await db
-      .select({ coverPhotoPath: schema.plantings.coverPhotoPath })
-      .from(schema.plantings)
-      .where(eq(schema.plantings.id, plantingId))
-  )[0]?.coverPhotoPath as string | null | undefined;
-  if (previousCover && previousCover !== nextCover) {
-    await deleteGardenPhotoFiles([previousCover]);
-  }
+  const previousCover = toStoredPhotoPathOrNull(
+    (
+      await db
+        .select({ coverPhotoPath: schema.plantings.coverPhotoPath })
+        .from(schema.plantings)
+        .where(eq(schema.plantings.id, plantingId))
+    )[0]?.coverPhotoPath as string | null | undefined,
+  );
 
   await db
     .update(schema.plantings)
@@ -317,6 +318,11 @@ export async function updatePlanting(
     .where(eq(schema.plantings.id, plantingId));
 
   await replaceTags(db, schema, plantingId, input.tags);
+  // **ファイル削除は DB 更新が全部成功してから。** 先に消すと、後段が失敗したときに
+  // 「行は古いカバーを指しているのにファイルだけ無い」状態が残る
+  if (previousCover && previousCover !== nextCover) {
+    await deleteGardenPhotoFiles([previousCover]);
+  }
   await updatePlantingFtsIndex(
     plantingId,
     input.cropName,

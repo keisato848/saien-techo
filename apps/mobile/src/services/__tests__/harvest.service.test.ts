@@ -17,6 +17,10 @@ jest.mock('../../db/client', () => ({
   getExpoDb: () => mockHandles.expoDb,
 }));
 
+// 実機では documentDirectory が入る。null だと resolvePhotoUri が素通しして
+// 「解決されているか」の検証にならない
+jest.mock('expo-file-system/legacy', () => ({ documentDirectory: 'file:///documents/' }));
+
 jest.mock('../photo-storage.service', () => ({
   MAX_GARDEN_PHOTOS: 6,
   deleteGardenPhotoFiles: (paths: string[]) => {
@@ -304,6 +308,38 @@ describeIfSqlite('harvest.service (real SQLite)', () => {
     for (const unit of HARVEST_UNITS) {
       expect(HARVEST_UNIT_LABEL[unit]).toBeTruthy();
     }
+  });
+});
+
+describeIfSqlite('収穫アルバムの写真パス', () => {
+  beforeEach(() => {
+    mockHandles = createTestDb();
+    seedFamily();
+  });
+
+  afterEach(() => {
+    mockHandles.close();
+  });
+
+  it('アルバムのセルにも解決済みの URI を渡す（相対のままだと全部空になる）', async () => {
+    const plantingId = await createPlanting({
+      cropName: 'トマト',
+      plantedOn: '2026-05-01',
+      plantedAs: 'seedling',
+      tags: [],
+    });
+    await createHarvest({
+      plantingId,
+      harvestedAt: '2026-06-01T00:00:00.000Z',
+      photoUris: ['file:///documents/garden-photos/a.jpg'],
+    });
+
+    const cells = await getHarvestAlbum();
+    const withPhoto = cells.find((cell) => cell.photoUri != null);
+
+    expect(withPhoto?.photoUri).toBeTruthy();
+    // file:// が無い相対パスを <Image> に渡すと描画できない
+    expect(withPhoto?.photoUri?.startsWith('garden-photos/')).toBe(false);
   });
 });
 
