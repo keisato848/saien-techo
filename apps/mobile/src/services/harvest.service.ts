@@ -17,6 +17,7 @@ import {
   dismissReadForManualQuantity,
   enqueueHarvestRead,
 } from './harvest-read.service';
+import { resolvePhotoUris, toStoredPhotoPath } from './photo-path';
 import { deleteGardenPhotoFiles, MAX_GARDEN_PHOTOS } from './photo-storage.service';
 import type {
   HarvestItem,
@@ -123,7 +124,7 @@ export async function getHarvests(plantingId: string): Promise<HarvestItem[]> {
     quantity: row.quantity,
     unit: isHarvestUnit(row.unit) ? row.unit : null,
     note: row.note,
-    photoUris: photos.get(row.id) ?? [],
+    photoUris: resolvePhotoUris(photos.get(row.id) ?? []),
   }));
 }
 
@@ -154,7 +155,7 @@ export async function getHarvest(harvestId: string): Promise<HarvestItem | null>
     quantity: row.quantity,
     unit: isHarvestUnit(row.unit) ? row.unit : null,
     note: row.note,
-    photoUris: photos.get(row.id) ?? [],
+    photoUris: resolvePhotoUris(photos.get(row.id) ?? []),
   };
 }
 
@@ -263,20 +264,22 @@ async function replacePhotos(
     throw new RangeError(`写真は${MAX_GARDEN_PHOTOS}枚まで追加できます`);
   }
 
+  // 比較は DB と同じ正規形（相対パス）で行う（care-log.service と同じ理由）
+  const stored = photoUris.map(toStoredPhotoPath);
   const before = (await getPhotoPaths(db, [harvestId])).get(harvestId) ?? [];
-  await deleteGardenPhotoFiles(before.filter((path) => !photoUris.includes(path)));
+  await deleteGardenPhotoFiles(before.filter((path) => !stored.includes(path)));
 
   await db
     .delete(schema.photos)
     .where(and(eq(schema.photos.ownerType, PHOTO_OWNER), eq(schema.photos.ownerId, harvestId)));
 
   const now = nowIso();
-  for (let i = 0; i < photoUris.length; i++) {
+  for (let i = 0; i < stored.length; i++) {
     await db.insert(schema.photos).values({
       id: generateId(),
       ownerType: PHOTO_OWNER,
       ownerId: harvestId,
-      localPath: photoUris[i],
+      localPath: stored[i],
       width: null,
       height: null,
       sortOrder: i + 1,

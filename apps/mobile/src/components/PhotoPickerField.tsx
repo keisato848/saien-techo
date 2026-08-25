@@ -11,7 +11,7 @@ import { ActivityIndicator, Image, Pressable, StyleSheet, Text, View } from 'rea
 import { Colors } from '../constants/theme';
 import { expoImagePickerPhotoCaptureAdapter } from '../services/expo-photo-capture.adapter';
 import { capturePhoto, type PhotoCaptureSource } from '../services/photo-capture.service';
-import { persistRecipePhoto } from '../services/photo-storage.service';
+import { PhotoCompressionError, persistRecipePhoto } from '../services/photo-storage.service';
 
 interface PhotoPickerFieldProps {
   /** Stored photo path (undefined = none) */
@@ -23,15 +23,17 @@ interface PhotoPickerFieldProps {
 
 export function PhotoPickerField({ value, onChange, variant }: PhotoPickerFieldProps) {
   const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const handlePick = useCallback(
     async (source: PhotoCaptureSource) => {
       setBusy(true);
+      setError(null);
       try {
         const photo = await capturePhoto(source, expoImagePickerPhotoCaptureAdapter);
         onChange(await persistRecipePhoto(photo));
-      } catch {
-        // キャンセル・保存失敗とも現状維持（フォームは壊さない）
+      } catch (e) {
+        if (e instanceof PhotoCompressionError) setError(e.message);
       } finally {
         setBusy(false);
       }
@@ -84,6 +86,7 @@ export function PhotoPickerField({ value, onChange, variant }: PhotoPickerFieldP
           </>
         )}
       </View>
+      {error ? <Text style={styles.error}>{error}</Text> : null}
     </View>
   );
 }
@@ -131,4 +134,5 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.bgInput,
   },
   pickButtonText: { fontSize: 13, color: Colors.goldDim },
+  error: { fontSize: 12, color: Colors.danger },
 });

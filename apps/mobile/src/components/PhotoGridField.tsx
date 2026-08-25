@@ -13,7 +13,11 @@ import { ActivityIndicator, Image, Pressable, StyleSheet, Text, View } from 'rea
 import { Colors, Typography } from '../constants/theme';
 import { expoImagePickerPhotoCaptureAdapter } from '../services/expo-photo-capture.adapter';
 import { capturePhoto, type PhotoCaptureSource } from '../services/photo-capture.service';
-import { MAX_GARDEN_PHOTOS, persistGardenPhotos } from '../services/photo-storage.service';
+import {
+  MAX_GARDEN_PHOTOS,
+  PhotoCompressionError,
+  persistGardenPhotos,
+} from '../services/photo-storage.service';
 
 interface PhotoGridFieldProps {
   value: string[];
@@ -23,18 +27,22 @@ interface PhotoGridFieldProps {
 
 export function PhotoGridField({ value, onChange, max = MAX_GARDEN_PHOTOS }: PhotoGridFieldProps) {
   const [busy, setBusy] = useState(false);
+  // 保存できなかったことを黙って捨てない（fail closed にしたので無反応に見えてしまう）
+  const [error, setError] = useState<string | null>(null);
   const full = value.length >= max;
 
   const handlePick = useCallback(
     async (source: PhotoCaptureSource) => {
       if (full) return;
       setBusy(true);
+      setError(null);
       try {
         const photo = await capturePhoto(source, expoImagePickerPhotoCaptureAdapter);
         const [path] = await persistGardenPhotos([photo]);
         onChange([...value, path]);
-      } catch {
-        // キャンセル・保存失敗とも現状維持（フォームは壊さない）
+      } catch (e) {
+        // キャンセルは何も出さない。保存できなかったときだけ理由を見せる
+        if (e instanceof PhotoCompressionError) setError(e.message);
       } finally {
         setBusy(false);
       }
@@ -95,6 +103,7 @@ export function PhotoGridField({ value, onChange, max = MAX_GARDEN_PHOTOS }: Pho
           {value.length} / {max}
         </Text>
       </View>
+      {error ? <Text style={styles.error}>{error}</Text> : null}
     </View>
   );
 }
@@ -131,4 +140,5 @@ const styles = StyleSheet.create({
   pickButtonText: { fontSize: Typography.size.sm, color: Colors.accentInk },
   pickButtonTextDisabled: { color: Colors.inkDim },
   count: { marginLeft: 'auto', fontSize: Typography.size.xs, color: Colors.inkDim },
+  error: { fontSize: Typography.size.xs, color: Colors.danger },
 });

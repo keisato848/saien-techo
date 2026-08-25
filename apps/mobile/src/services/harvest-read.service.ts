@@ -32,6 +32,7 @@ import * as schema from '../db/schema';
 import { getDb, isNativePlatform } from '../db/client';
 import { API_V1 } from '../config';
 import { getFreemiumStatus, incrementUsage } from './usage.service';
+import { resolvePhotoUri } from './photo-path';
 import { expoUploadImageAdapter, type UploadImageAdapter } from './upload-image';
 
 // ─── 定数（#144 で決定） ─────────────────────────────────────────────────────
@@ -293,7 +294,8 @@ export async function getReadQueue(): Promise<HarvestReadItem[]> {
     .orderBy(asc(schema.photos.sortOrder));
   const firstPhoto = new Map<string, string>();
   for (const photo of photoRows) {
-    if (!firstPhoto.has(photo.ownerId)) firstPhoto.set(photo.ownerId, photo.localPath);
+    if (!firstPhoto.has(photo.ownerId))
+      firstPhoto.set(photo.ownerId, resolvePhotoUri(photo.localPath));
   }
 
   return rows.map((row) => ({
