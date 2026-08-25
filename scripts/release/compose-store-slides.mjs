@@ -42,18 +42,28 @@ const FONT = 'Yu Gothic UI, Yu Gothic, Meiryo, Noto Sans JP, sans-serif';
 /**
  * スライド定義。**Play と App Store で共通**（同じ約束を同じ順で見せる）。
  *
- * 並び順 = 訴求の強さ順。1 枚目は一覧で必ず見えるので、最も広く刺さる
- * 「毎日の迷い」を置く。2〜4 枚目で記録と収穫（毎日使う理由）、
- * 5 枚目以降で調べもの・ふりかえり・買い物（続ける理由）。
+ * 並び順 = 訴求の強さ順。**1 枚目はアプリ全体の紹介（ヒーロー）** — 一覧で必ず
+ * 見えるのはここだけなので、個別機能より先に「何のアプリか」を言い切る。
+ * 2〜5 枚目で記録と収穫（毎日使う理由）、6 枚目以降で調べもの・ふりかえり・
+ * 買い物（続ける理由）。
  */
 const SLIDES = [
+  // 1 枚目だけ**アプリ全体の紹介**（ヒーロー）。一覧で必ず見えるのはここだけなので、
+  // 個別機能ではなく「何のアプリか」を先に言い切る。
+  //
+  // **AI がやることを盛らない。** 写真と AI が引き受けるのは
+  // 「収穫の数量読み取り」と「相談」で、**資材の写真読み取りは未実装**（#139）、
+  // 栽培の写真一括登録は 1.2 で公開予定。だから見出しは
+  // 「3 つを 1 つの手帳に」＋「写真と AI が記録と相談を引き受ける」に留める
   {
     file: '01-home.png',
-    chip: '今日の菜園',
-    headline: ['「きょう、何をすれば', 'いいんだっけ」が消える'],
-    sub: [
-      '追肥も水やりも、その日にやることだけがホームに出る。',
-      '思い出すのはアプリの仕事にする。',
+    type: 'hero',
+    headline: ['栽培も 収穫も 資材も、', 'ぜんぶ ひとつの手帳に'],
+    sub: ['写真と AI が、記録と相談を引き受ける。', '育てて、記録して、ちゃんと採れる。'],
+    pillars: [
+      { title: '栽培', body: '何日目かを自動で' },
+      { title: '収穫', body: '撮るだけで残る' },
+      { title: '資材', body: '残量から買い物へ' },
     ],
   },
   {
@@ -211,6 +221,68 @@ function captionSvg(W, H, s, slide) {
 </svg>`;
 }
 
+/**
+ * ヒーロー（1 枚目）のキャプション。アプリ名 → 見出し → 副文 → 3 本柱のタイル。
+ * 個別スライドより情報が多いぶん、スクショは下に少しだけ覗かせる。
+ */
+function heroCaptionSvg(W, H, s, slide) {
+  const x = Math.round(76 * s);
+  const nameFont = Math.round(46 * s);
+  const headFont = Math.round(76 * s);
+  const headLead = Math.round(112 * s);
+  const headTop = Math.round(430 * s);
+  const subFont = Math.round(34 * s);
+  const subLead = Math.round(52 * s);
+  const subTop = headTop + (slide.headline.length - 1) * headLead + Math.round(104 * s);
+
+  // 3 本柱のタイル。横 3 等分（左右の余白は見出しと揃える）
+  const tileGap = Math.round(22 * s);
+  const tileW = Math.round((W - x * 2 - tileGap * 2) / 3);
+  const tileH = Math.round(150 * s);
+  const tileTop = subTop + Math.round(108 * s);
+  const tiles = slide.pillars
+    .map((p, i) => {
+      const left = x + i * (tileW + tileGap);
+      return `<rect x="${left}" y="${tileTop}" width="${tileW}" height="${tileH}" rx="${28 * s}"
+                fill="#ffffff" fill-opacity="0.72" stroke="${ACCENT}" stroke-opacity="0.22" stroke-width="${2 * s}"/>
+        <text x="${left + tileW / 2}" y="${tileTop + 62 * s}" fill="${ACCENT_INK}" font-size="${40 * s}" font-weight="700"
+              text-anchor="middle" font-family="${FONT}">${escapeXml(p.title)}</text>
+        <text x="${left + tileW / 2}" y="${tileTop + 112 * s}" fill="${INK_DIM}" font-size="${26 * s}" font-weight="500"
+              text-anchor="middle" font-family="${FONT}">${escapeXml(p.body)}</text>`;
+    })
+    .join('\n  ');
+
+  const heads = slide.headline
+    .map(
+      (line, i) =>
+        `<text x="${x}" y="${headTop + i * headLead}" fill="${INK}" font-size="${headFont}" font-weight="700"
+           letter-spacing="${1.5 * s}" font-family="${FONT}">${escapeXml(line)}</text>`,
+    )
+    .join('\n  ');
+  const subs = slide.sub
+    .map(
+      (line, i) =>
+        `<text x="${x}" y="${subTop + i * subLead}" fill="${INK_DIM}" font-size="${subFont}" font-weight="500"
+           letter-spacing="${0.5 * s}" font-family="${FONT}">${escapeXml(line)}</text>`,
+    )
+    .join('\n  ');
+
+  return {
+    svg: `
+<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg">
+  <text x="${x + Math.round(148 * s)}" y="${Math.round(212 * s)}" fill="${INK}" font-size="${nameFont}" font-weight="700"
+        letter-spacing="${2 * s}" font-family="${FONT}">さいえん手帳</text>
+  ${heads}
+  ${subs}
+  ${tiles}
+</svg>`,
+    markSize: Math.round(124 * s),
+    markLeft: x,
+    markTop: Math.round(108 * s),
+    shotTop: tileTop + tileH + Math.round(96 * s),
+  };
+}
+
 const roundedRect = (w, h, r, fill, opacity = 1) =>
   Buffer.from(
     `<svg width="${w}" height="${h}" xmlns="http://www.w3.org/2000/svg">
@@ -261,13 +333,15 @@ async function composeOne(target, slide, s) {
   const srcPath = path.join(ROOT, target.src, slide.file);
   if (!fs.existsSync(srcPath)) return null;
 
+  const hero = slide.type === 'hero' ? heroCaptionSvg(W, H, s, slide) : null;
   const shotW = Math.round(880 * s);
-  const shotTop = Math.round(700 * s);
+  const shotTop = hero ? hero.shotTop : Math.round(700 * s);
   const radius = Math.round(52 * s);
 
   const srcMeta = await sharp(srcPath).metadata();
-  const keep = Math.min(srcMeta.height, await contentRows(srcPath));
-  const sparse = keep < srcMeta.height * 0.94;
+  // ヒーローはスクショを「覗かせる」だけなので、中身の下端で切らない
+  const keep = hero ? srcMeta.height : Math.min(srcMeta.height, await contentRows(srcPath));
+  const sparse = !hero && keep < srcMeta.height * 0.94;
   const area = H - shotTop; // キャプションの下に使える高さ
 
   // **中身が少ない画面は幅を広げて「浮いたカード」にする。** 画面の下半分が
@@ -308,11 +382,19 @@ async function composeOne(target, slide, s) {
     .toBuffer();
 
   const out = path.join(ROOT, target.out, slide.file);
+  const markPng = hero
+    ? await sharp(await readFile(path.join(ROOT, 'apps/mobile/assets/brand/mark.svg')))
+        .resize(hero.markSize, hero.markSize)
+        .png()
+        .toBuffer()
+    : null;
+
   await sharp(Buffer.from(backgroundSvg(W, H, s, cardTop)))
     .composite([
       { input: shadow, left: cardLeft, top: cardTop + Math.round(12 * s) },
       { input: shot, left: cardLeft, top: cardTop },
-      { input: Buffer.from(captionSvg(W, H, s, slide)), left: 0, top: 0 },
+      ...(markPng ? [{ input: markPng, left: hero.markLeft, top: hero.markTop }] : []),
+      { input: Buffer.from(hero ? hero.svg : captionSvg(W, H, s, slide)), left: 0, top: 0 },
     ])
     .png()
     .toFile(out);
