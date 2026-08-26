@@ -32,6 +32,7 @@ import { StyleSheet, Text, View } from 'react-native';
 import { Colors, Typography } from '../constants/theme';
 import { CARE_KIND_LABEL, createCareLog } from '../services/care-log.service';
 import { getTodayReminders, type TodayReminder } from '../services/reminder.service';
+import { Toast } from './Toast';
 import { PressableScale } from './PressableScale';
 
 /** 「7:05」。分は 2 桁に揃えないと行ごとに幅が揺れる */
@@ -44,6 +45,9 @@ export function TodayReminderCard() {
   const [reminders, setReminders] = useState<TodayReminder[]>([]);
   /** 二度押しで 2 件記録されるのを防ぐ */
   const [saving, setSaving] = useState<string | null>(null);
+  // 詳細画面のクイック記録と同じく、記録したことを一言だけ返す。
+  // バッジが変わるだけだと、誤タップに気づく手掛かりが無い
+  const [toast, setToast] = useState<string | null>(null);
 
   const load = useCallback(() => {
     void getTodayReminders()
@@ -61,6 +65,7 @@ export function TodayReminderCard() {
       try {
         await createCareLog({ plantingId: reminder.plantingId, kind: reminder.kind });
         load();
+        setToast(`${CARE_KIND_LABEL[reminder.kind]}を記録しました`);
       } finally {
         setSaving(null);
       }
@@ -107,6 +112,7 @@ export function TodayReminderCard() {
           )}
         </PressableScale>
       ))}
+      <Toast message={toast ?? ''} visible={toast != null} onDismiss={() => setToast(null)} />
     </View>
   );
 }

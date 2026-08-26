@@ -127,6 +127,8 @@ describe('TodayReminderCard', () => {
     );
     // ボタンは form へ飛ばさない（行の他の場所が担当）
     expect(mockPush).not.toHaveBeenCalled();
+    // 誤タップに気づけるよう、記録したことを一言返す（詳細画面のクイック記録と同じ）
+    await waitFor(() => expect(screen.getByText('追肥を記録しました')).toBeTruthy());
   });
 
   it('記録済みならボタンを出さない（二重記録の入口を作らない）', async () => {
