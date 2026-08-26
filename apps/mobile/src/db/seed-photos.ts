@@ -23,6 +23,7 @@
  * 差し替えるときも同じ処理を通すこと — スマホの写真は既定で自宅の座標を持つ。
  */
 import { eq } from 'drizzle-orm';
+import { toStoredPhotoPath } from '../services/photo-path';
 import type { ExpoSQLiteDatabase } from 'drizzle-orm/expo-sqlite';
 import { Asset } from 'expo-asset';
 import * as FileSystem from 'expo-file-system/legacy';
@@ -56,6 +57,15 @@ const SAMPLE_PHOTOS: SamplePhoto[] = [
     module: require('../../assets/sample-photos/harvest-tomato.jpg'),
     ownerType: 'harvest',
     ownerId: 'harvest-01',
+  },
+  {
+    // 「写真の読み取り」の確認カード（#148・ストア掲載スクショ 08）。
+    // **同じアセットを使い回す** — harvest-01 と同じ require なので APK は増えない。
+    // ここが空だと、写真が主役の機能なのに掲載物では灰色の枠しか写らない。
+    id: 'sample-photo-harvest-02',
+    module: require('../../assets/sample-photos/harvest-tomato.jpg'),
+    ownerType: 'harvest',
+    ownerId: 'harvest-02',
   },
   {
     id: 'sample-photo-planting-01',
@@ -116,7 +126,7 @@ export async function seedSamplePhotos(database: DB): Promise<void> {
       if (sample.ownerType === 'planting' && sample.asCover) {
         await database
           .update(schema.plantings)
-          .set({ coverPhotoPath: destination, updatedAt: now })
+          .set({ coverPhotoPath: toStoredPhotoPath(destination), updatedAt: now })
           .where(eq(schema.plantings.id, sample.ownerId));
       }
 
@@ -126,7 +136,7 @@ export async function seedSamplePhotos(database: DB): Promise<void> {
           id: sample.id,
           ownerType: sample.ownerType,
           ownerId: sample.ownerId,
-          localPath: destination,
+          localPath: toStoredPhotoPath(destination),
           width: 1200,
           height: 1200,
           sortOrder: sortOrder++,

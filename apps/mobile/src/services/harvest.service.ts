@@ -12,6 +12,12 @@ import { and, desc, eq, inArray } from 'drizzle-orm';
 import { getDb, isNativePlatform } from '../db/client';
 import * as schema from '../db/schema';
 import { generateId } from '../utils/id';
+import {
+  deleteReadForHarvest,
+  dismissReadForManualQuantity,
+  enqueueHarvestRead,
+} from './harvest-read.service';
+import { resolvePhotoUris, toStoredPhotoPath } from './photo-path';
 import { deleteGardenPhotoFiles, MAX_GARDEN_PHOTOS } from './photo-storage.service';
 import type {
   HarvestItem,
@@ -118,7 +124,7 @@ export async function getHarvests(plantingId: string): Promise<HarvestItem[]> {
     quantity: row.quantity,
     unit: isHarvestUnit(row.unit) ? row.unit : null,
     note: row.note,
-    photoUris: photos.get(row.id) ?? [],
+    photoUris: resolvePhotoUris(photos.get(row.id) ?? []),
   }));
 }
 
@@ -149,7 +155,7 @@ export async function getHarvest(harvestId: string): Promise<HarvestItem | null>
     quantity: row.quantity,
     unit: isHarvestUnit(row.unit) ? row.unit : null,
     note: row.note,
-    photoUris: photos.get(row.id) ?? [],
+    photoUris: resolvePhotoUris(photos.get(row.id) ?? []),
   };
 }
 
@@ -195,6 +201,13 @@ export async function createHarvest(input: SaveHarvestInput): Promise<string> {
   });
 
   await replacePhotos(db, id, input.photoUris ?? []);
+
+  // 写真があって数量が空なら「写真から記録」の読み取り待ちに積む（#143）。
+  // 数量を打ってあるなら読むものがない。積むだけで、送信は無料枠か
+  // リワードの通行権が付くまで起きない（harvest-read.service）
+  if ((input.photoUris?.length ?? 0) > 0 && input.quantity == null) {
+    await enqueueHarvestRead(id);
+  }
   return id;
 }
 
@@ -217,6 +230,12 @@ export async function updateHarvest(
     .where(eq(schema.harvests.id, harvestId));
 
   await replacePhotos(db, harvestId, input.photoUris ?? []);
+
+  // 数量が入ったら読み取り待ちから外す。入れずに保存し直しただけなら残す
+  // （読み取った数のまま保存されたかどうかは呼び先で判定する）
+  if (input.quantity != null) {
+    await dismissReadForManualQuantity(harvestId, input.quantity);
+  }
 }
 
 export async function deleteHarvest(harvestId: string): Promise<void> {
@@ -229,6 +248,8 @@ export async function deleteHarvest(harvestId: string): Promise<void> {
   await db
     .delete(schema.photos)
     .where(and(eq(schema.photos.ownerType, PHOTO_OWNER), eq(schema.photos.ownerId, harvestId)));
+  // 読み取り待ちの行が先（harvests への FK 参照を持つため）
+  await deleteReadForHarvest(harvestId);
   await db.delete(schema.harvests).where(eq(schema.harvests.id, harvestId));
 }
 
@@ -243,20 +264,27 @@ async function replacePhotos(
     throw new RangeError(`写真は${MAX_GARDEN_PHOTOS}枚まで追加できます`);
   }
 
-  const before = (await getPhotoPaths(db, [harvestId])).get(harvestId) ?? [];
-  await deleteGardenPhotoFiles(before.filter((path) => !photoUris.includes(path)));
+  // 比較は DB と同じ正規形（相対パス）で行う（care-log.service と同じ理由）
+  // **両側を正規形に揃えてから比べる。** 片側だけ正規化すると、DB に絶対パスが
+  // 入っている状態（v13 前のバックアップを復元した直後）で全件不一致になり、
+  // 残すはずの写真ファイルまで削除してしまう
+  const stored = photoUris.map(toStoredPhotoPath);
+  const before = ((await getPhotoPaths(db, [harvestId])).get(harvestId) ?? []).map(
+    toStoredPhotoPath,
+  );
+  await deleteGardenPhotoFiles(before.filter((path) => !stored.includes(path)));
 
   await db
     .delete(schema.photos)
     .where(and(eq(schema.photos.ownerType, PHOTO_OWNER), eq(schema.photos.ownerId, harvestId)));
 
   const now = nowIso();
-  for (let i = 0; i < photoUris.length; i++) {
+  for (let i = 0; i < stored.length; i++) {
     await db.insert(schema.photos).values({
       id: generateId(),
       ownerType: PHOTO_OWNER,
       ownerId: harvestId,
-      localPath: photoUris[i],
+      localPath: stored[i],
       width: null,
       height: null,
       sortOrder: i + 1,
@@ -324,7 +352,8 @@ export async function getHarvestAlbum(
       quantity: row.quantity,
       unit: isHarvestUnit(row.unit) ? row.unit : null,
     };
-    const uris = photos.get(row.id) ?? [];
+    // 収穫アルバムも画面へ出るので解決する（ここだけ漏らすと全サムネイルが空になる）
+    const uris = resolvePhotoUris(photos.get(row.id) ?? []);
     if (uris.length === 0) {
       cells.push({ ...base, key: row.id, photoUri: null });
       continue;

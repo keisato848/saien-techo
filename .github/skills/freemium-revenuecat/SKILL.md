@@ -16,9 +16,12 @@ Design of record: `docs/フリーミアム設計.md`.
 
 ## Where Things Live (apps/mobile)
 
-- `src/services/usage.service.ts` — device-local daily quota (`FREE_DAILY_LIMIT = 1`,
-  `app_meta` key `ai_photo_recipe_usage:YYYY-MM-DD`, auto-resets daily) plus the rewarded-ad
-  bonus (`AD_BONUS_DAILY_LIMIT = 3`, key `ai_photo_recipe_ad_bonus:YYYY-MM-DD`, `grantAdBonus()`).
+- `src/services/usage.service.ts` — **once-per-install** free quota (`FREE_LIFETIME_LIMIT = 1`,
+  `app_meta` key `ai_photo_recipe_usage:lifetime`, **never resets** — 2026-08-21) plus the
+  rewarded-ad bonus, which **stays daily** (`AD_BONUS_DAILY_LIMIT = 3`, keys
+  `ai_photo_recipe_ad_bonus:YYYY-MM-DD` granted / `ai_photo_recipe_ad_used:YYYY-MM-DD` consumed).
+  **Count the lifetime free and the daily bonus separately** — one `limit - used` subtraction
+  starves the bonus once the lifetime counter passes the limit.
   `getFreemiumStatus()` returns `canInfer` + `canWatchAdForMore`; `recordCloudInference()`.
 - `src/services/entitlement.service.ts` — provider factory (RevenueCat when
   `EXPO_PUBLIC_REVENUECAT_API_KEY` set + native, else `StubEntitlementProvider`).

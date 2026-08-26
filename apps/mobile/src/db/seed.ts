@@ -361,6 +361,55 @@ export const seedHarvests = [
     createdAt: daysAgoIso(15),
     updatedAt: daysAgoIso(15),
   },
+  {
+    // 「写真の読み取り」の読み取り待ち（#143 のスクショ用）。数量なし・写真なしで
+    // キューに乗る形。**キュウリの同梱写真が無いので写真は付けない** —
+    // トマトの写真を流用すると掲載スクショで作物と中身が食い違う
+    id: 'harvest-05',
+    plantingId: 'planting-cucumber-01',
+    harvestedAt: daysAgoIso(0),
+    quantity: null,
+    unit: null,
+    note: null,
+    createdAt: daysAgoIso(0),
+    updatedAt: daysAgoIso(0),
+  },
+] as const;
+
+/**
+ * 「写真の読み取り」の状態（#143）。ストア掲載スクショは対話フローを踏めないため、
+ * 「1 枚は読み取り済み・1 枚は待ち」の画面をシードで再現する（I8 指示書の前提）。
+ */
+export const seedHarvestPhotoReads = [
+  {
+    // harvest-02（数量なしのトマト・写真つき）: 読み取り済み・確認待ち
+    // 写真は seed-photos.ts の sample-photo-harvest-02（掲載スクショ 08 のヒーロー）
+    harvestId: 'harvest-02',
+    state: 'analyzed',
+    paid: 1,
+    attempts: 1,
+    cropGuess: 'ミニトマト',
+    cropConfidence: 'high',
+    count: 8,
+    countConfidence: 'high',
+    readNote: null,
+    createdAt: daysAgoIso(1),
+    updatedAt: daysAgoIso(0),
+  },
+  {
+    // harvest-05: これから読むもの
+    harvestId: 'harvest-05',
+    state: 'pending',
+    paid: 0,
+    attempts: 0,
+    cropGuess: null,
+    cropConfidence: null,
+    count: null,
+    countConfidence: null,
+    readNote: null,
+    createdAt: daysAgoIso(0),
+    updatedAt: daysAgoIso(0),
+  },
 ] as const;
 
 export const seedMaterials = [

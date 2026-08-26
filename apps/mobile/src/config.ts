@@ -25,12 +25,15 @@ export const REVENUECAT_API_KEY = process.env['EXPO_PUBLIC_REVENUECAT_API_KEY'] 
 // 動作確認は EXPO_PUBLIC_ADMOB_ENABLED=true でビルド（app.json のテスト ID で Google テスト広告が出る）。
 export const ADMOB_ENABLED = process.env['EXPO_PUBLIC_ADMOB_ENABLED'] === 'true';
 
-// AI 写真レシピの無料枠（1 日あたり）。既定 1。ビルド時に調整可能
-// （0 にすると常にペイウォール — 広告フローの E2E 検証にも使う）。
+// AI 相談・写真の読み取りの無料枠。**インストールごとに 1 回**（日次ではない
+// — 2026-08-21 決定。理由は usage.service.ts の冒頭）。既定 1・ビルド時に調整可能
+// （0 にすると常にペイウォール — 広告フローの E2E 検証に使う）。
+// 旧名 `EXPO_PUBLIC_FREE_DAILY_LIMIT` も読む（スキルの手順書に載っているため）。
 // 注意: Number('') は 0 になるため、未設定・空文字は先に弾く。
-const rawFreeLimit = process.env['EXPO_PUBLIC_FREE_DAILY_LIMIT'];
+const rawFreeLimit =
+  process.env['EXPO_PUBLIC_FREE_LIFETIME_LIMIT'] ?? process.env['EXPO_PUBLIC_FREE_DAILY_LIMIT'];
 const parsedFreeLimit = rawFreeLimit ? Number(rawFreeLimit) : NaN;
-export const FREE_DAILY_LIMIT_CONFIG =
+export const FREE_LIFETIME_LIMIT_CONFIG =
   Number.isInteger(parsedFreeLimit) && parsedFreeLimit >= 0 ? parsedFreeLimit : 1;
 // ── 広告ユニット ID ─────────────────────────────────────────────────────────
 //

@@ -35,12 +35,19 @@ preflight で検出して即止める（気づかずに 1 分半を捨てた実�
 EXPO_PUBLIC_ENABLE_SAMPLE_DATA=1     # サンプルシード（場所・栽培・作業ログ・収穫・資材 + 写真 4 枚）
 EXPO_PUBLIC_DISABLE_COACH_MARKS=1    # コーチマーク非表示（スクショ・回帰確認用）
 EXPO_PUBLIC_PALETTE=naedoko          # 配色の実機比較（既定は「若葉」。CLAUDE.md §7）
-EXPO_PUBLIC_FREE_DAILY_LIMIT=0       # 無料枠0=常時ペイウォール（リワード広告フローの E2E 用）
+EXPO_PUBLIC_FREE_LIFETIME_LIMIT=0    # 無料枠0=常時ペイウォール（リワード広告フローの E2E 用。旧名 _FREE_DAILY_LIMIT も可）
 EXPO_PUBLIC_ADMOB_ENABLED=true       # 広告有効
-EXPO_PUBLIC_ADMOB_ALLOW_TEST_UNITS=1 # ユニット未設定のとき公式テスト広告を出す（**検証専用**）
-EXPO_PUBLIC_ADMOB_IGNORE_FREQUENCY=1 # 起動広告の頻度制限を外す（毎回出したいとき）
+EXPO_PUBLIC_ADMOB_ALLOW_TEST_UNITS=true # ユニット未設定のとき公式テスト広告を出す（**検証専用**）
+EXPO_PUBLIC_ADMOB_IGNORE_FREQUENCY=true # 起動広告の頻度制限を外す（毎回出したいとき）
 node scripts/agent/build-android.mjs --arch x86_64   # app.json/plugins 変更時は --prebuild 必須
 ```
+
+> **`ADMOB_*` の 3 つは `true` 以外を受け取らない。** `config.ts` が
+> `=== 'true'` で見ているため、`=1` と書くと**黙って無効**になる
+> （`ADMOB_ENABLED` / `ADMOB_ALLOW_TEST_UNITS` / `ADMOB_IGNORE_FREQUENCY`）。
+> `ENABLE_SAMPLE_DATA` と `DISABLE_COACH_MARKS` は `1` でも `true` でも効くので、
+> **同じ書き方が全部に通ると思わないこと**。実績: `ALLOW_TEST_UNITS=1` で
+> ビルドしてリワードが出ず、広告側を疑って 1 ビルド分を捨てた（2026-08-22）。
 
 インストールは常に `adb install -r`（`-r` なしはローカルデータ消失リスクで hook が ask）。
 
@@ -70,6 +77,17 @@ node scripts/agent/build-android.mjs --arch x86_64   # app.json/plugins 変更�
 > シード可否だけ。`assets/` に置いた画像は Metro が `require()` を**ビルド時に
 > 静的解決**するので、フラグが無効でも AAB に入る（サンプル写真 4 枚が
 > 実際に入っていた・2026-08-12 確認）。配布物から外すのは 3.13a の仕事。
+
+> **`EXPO_PUBLIC_*` は「付けたつもり」が起こる。焼き込まれたか端末で確かめる。**
+> フラグを付けてビルドしたのに**前のビルドの env が入ったバンドルが使われた**
+> 実績がある（2026-08-21・原因未特定）。**症状が紛らわしい**: そのときは
+> サンプルデータだけが入らず、1 つ前のビルドで指定した広告フラグのほうが
+> 効いていた（リワードボタンが出た）。
+>
+> 疑ったら `apps/mobile/android/app/build/generated/assets/.../index.android.bundle`
+> の **MD5 を取り、フラグを変えて再ビルドして変わるか**を見る（env が届いていれば変わる）。
+> 直すには同ディレクトリを消してから作り直す。
+> **フラグに依存する検証は、フラグが効いていることを画面で確認してから始める。**
 
 ## 3. 画面遷移・確認
 

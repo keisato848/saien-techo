@@ -15,6 +15,7 @@ import { Image, ScrollView, StyleSheet, Text, useWindowDimensions, View } from '
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { EmptyState } from '../../../src/components/EmptyState';
+import { HarvestReadCard } from '../../../src/components/HarvestReadCard';
 import { Loading } from '../../../src/components/Loading';
 import { PressableScale } from '../../../src/components/PressableScale';
 import { Colors, Typography } from '../../../src/constants/theme';
@@ -117,6 +118,9 @@ export default function HarvestAlbumScreen() {
         </ScrollView>
       ) : null}
 
+      {/* 読み取り待ちがあるときだけ出る（0 件なら描画も余白も無い）。#143 */}
+      <HarvestReadCard style={styles.readCard} />
+
       {loading ? (
         <Loading />
       ) : months.length === 0 ? (
@@ -182,6 +186,7 @@ export default function HarvestAlbumScreen() {
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: Colors.bg },
+  readCard: { marginHorizontal: 16, marginBottom: 12 },
   header: {
     flexDirection: 'row',
     alignItems: 'baseline',

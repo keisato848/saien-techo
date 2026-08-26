@@ -31,8 +31,10 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { EmptyState } from '../../src/components/EmptyState';
 import { Loading } from '../../src/components/Loading';
 import { MonthlyWorkCard } from '../../src/components/MonthlyWorkCard';
+import { ProgressBand } from '../../src/components/ProgressBand';
 import { NextActionCard } from '../../src/components/NextActionCard';
 import { PressableScale } from '../../src/components/PressableScale';
+import { HarvestReadCard } from '../../src/components/HarvestReadCard';
 import { TodayReminderCard } from '../../src/components/TodayReminderCard';
 import { Colors, Typography } from '../../src/constants/theme';
 import { CARE_KIND_LABEL } from '../../src/services/care-log.service';
@@ -43,10 +45,18 @@ import {
   type TimelineDay,
 } from '../../src/services/garden-timeline.service';
 import { getPlantingList } from '../../src/services/planting.service';
+import {
+  describeProgress,
+  getPlantingProgress,
+  type PlantingProgress,
+} from '../../src/services/growth-progress.service';
 import type { PlantingListItem } from '../../src/services/types';
 
 /** ホームに出す件数。多すぎると「今日の菜園」ではなくなる */
 const TIMELINE_LIMIT = 30;
+
+/** 進行帯の幅。カード幅 92 から左右の余白を引いた値 */
+const GROWING_BAND_WIDTH = 76;
 
 /**
  * 日付見出し。菜園では「何日前にやったか」が知りたい情報なので、
@@ -75,6 +85,7 @@ export default function HomeScreen() {
   const insets = useSafeAreaInsets();
   const [days, setDays] = useState<TimelineDay[]>([]);
   const [growing, setGrowing] = useState<PlantingListItem[]>([]);
+  const [progress, setProgress] = useState<Map<string, PlantingProgress>>(new Map());
   const [loading, setLoading] = useState(true);
 
   const load = useCallback(async () => {
@@ -84,6 +95,7 @@ export default function HomeScreen() {
     ]);
     setDays(groupByDay(entries));
     setGrowing(plantings);
+    setProgress(await getPlantingProgress(plantings));
     setLoading(false);
   }, []);
 
@@ -125,18 +137,30 @@ export default function HomeScreen() {
         // 何も無い人にも「今月の菜園仕事」は出す。まだ植えていない人にとって
         // 「今月なにを植えられるか」が一番の手がかりになるため（WBS 3.5）
         <ScrollView contentContainerStyle={styles.body}>
+          {/* **最初の一歩は写真から勧める**（#139 / #149・2026-08-22 決定）。
+              インストール直後は何も登録されていないので、ここが最大の離脱点。
+              1 件ずつフォームを埋めるより、庭をまとめて撮るほうが速い。
+              手入力の道は必ず残す（写真が使えない人を行き止まりにしない）。 */}
           <EmptyState
             icon="🌱"
             title="さいえん手帳へようこそ"
-            message="育てているものを登録すると、経過日数と作業の記録がここに並びます。"
-            actionLabel="栽培を追加"
-            onAction={() => router.push('/plantings/new')}
+            message="育てているものを撮ると、作物名や品種を読み取ってまとめて登録できます。"
+            actionLabel="写真から登録"
+            onAction={() => router.push('/plantings/identify')}
           />
+          <PressableScale
+            style={styles.emptyManualLink}
+            onPress={() => router.push('/plantings/new')}
+            accessibilityLabel="手で入力して栽培を追加"
+          >
+            <Text style={styles.emptyManualLinkText}>手で入力して追加する →</Text>
+          </PressableScale>
           <MonthlyWorkCard />
         </ScrollView>
       ) : (
         <ScrollView contentContainerStyle={styles.body}>
-          {/* 予定（自分で決めたもの）→ 提案（アプリが出すもの）の順（画面設計 S01） */}
+          {/* 撮り溜めの回収 → 予定 → 提案 の順。読み取りは帰宅直後の一手なので最上段 */}
+          <HarvestReadCard />
           <TodayReminderCard />
           <NextActionCard />
 
@@ -164,7 +188,19 @@ export default function HomeScreen() {
                     <Text style={styles.growingName} numberOfLines={1}>
                       {planting.cropName}
                     </Text>
-                    <Text style={styles.growingDays}>{planting.elapsedDays}日目</Text>
+                    {progress.get(planting.id) ? (
+                      <>
+                        <ProgressBand
+                          progress={progress.get(planting.id) as PlantingProgress}
+                          width={GROWING_BAND_WIDTH}
+                        />
+                        <Text style={styles.growingDays} numberOfLines={1}>
+                          {describeProgress(progress.get(planting.id) as PlantingProgress)}
+                        </Text>
+                      </>
+                    ) : (
+                      <Text style={styles.growingDays}>{planting.elapsedDays}日目</Text>
+                    )}
                   </PressableScale>
                 ))}
                 <PressableScale
@@ -254,6 +290,8 @@ export default function HomeScreen() {
 }
 
 const styles = StyleSheet.create({
+  emptyManualLink: { alignItems: 'center', paddingBottom: 8 },
+  emptyManualLinkText: { fontSize: Typography.size.sm, color: Colors.accentInk },
   root: { flex: 1, backgroundColor: Colors.bg },
   header: {
     flexDirection: 'row',

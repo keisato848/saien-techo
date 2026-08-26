@@ -9,7 +9,7 @@
  *   記録に残したければ作業ログ（写真つき）を使う — 導線は結果画面の下に置く。
  * - 無料枠は usage.service を共有（既定 1 回/日・ビルド時変更可）。
  *   **植物が写っていない判定（isPlant=false）は枠を消費しない** — 撮り損じで
- *   1 日 1 回の枠が飛ぶのは理不尽（だいどこの not_a_dish と同じ扱い）。
+ *   一度きりの無料枠が飛ぶのは理不尽（だいどこの not_a_dish と同じ扱い）。
  * - 免責（Q5）は結果の有無に関係なく常に画面下部に出す。
  */
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
@@ -213,10 +213,18 @@ export default function GardenConsultScreen() {
         {/* 無料枠。使い切りは submit を殺し、広告が出せるなら +1 回の導線を添える */}
         {quotaExhausted ? (
           <View style={styles.quotaCard}>
+            {/*
+              「また明日」と言えるのは**その日のボーナス上限に当たったとき**だけ。
+              無料ぶんは生涯 1 回なので、広告が出せないだけのときに明日を約束すると嘘になる
+              （明日も残数は 0 のまま）。広告が出せない状態は珍しくない —
+              未読み込み・在庫なし・オフライン・広告無効ビルドのすべてで `adAvailable` は false。
+            */}
             <Text style={styles.quotaText}>
               {status?.canWatchAdForMore
-                ? '本日の無料回数を使い切りました。短い動画を見ると、今日もう 1 回相談できます。'
-                : '本日の相談回数を使い切りました。また明日お試しください。'}
+                ? '無料の相談は使い切りました。短い動画を見ると、もう 1 回相談できます。'
+                : status && status.adBonusGranted >= status.adBonusLimit
+                  ? '今日の相談はここまでです。また明日お試しください。'
+                  : '無料の相談は使い切りました。いまは動画を読み込めません。時間をおいてお試しください。'}
             </Text>
             {status?.canWatchAdForMore ? (
               <PressableScale
@@ -237,7 +245,12 @@ export default function GardenConsultScreen() {
             ) : null}
           </View>
         ) : status && Number.isFinite(status.remaining) ? (
-          <Text style={styles.quotaLine}>今日はあと {status.remaining} 回相談できます</Text>
+          // 無料ぶんは生涯 1 回なので「今日は」と言わない（明日戻ると誤解させる）
+          <Text style={styles.quotaLine}>
+            {status.hasFreeLeft
+              ? '最初の 1 回は無料で相談できます'
+              : `今日はあと ${status.remaining} 回相談できます`}
+          </Text>
         ) : null}
 
         <PressableScale

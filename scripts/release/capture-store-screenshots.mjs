@@ -20,6 +20,10 @@
  *
  * manual 指定のショット（AI 実行結果など自動遷移できない画面）はスキップし、
  * 既存ファイルを維持する。
+ *
+ * **撮れたかどうかはファイルサイズで分かる。** 中身が出ていれば 100KB 前後〜1MB、
+ * **20KB 前後ならローディングのスピナーしか写っていない**（2026-08-22 に 8 枚全滅した）。
+ * summary の KB を必ず見て、小さければ `--wait` を伸ばして撮り直す。
  */
 import fs from 'node:fs';
 import path from 'node:path';
@@ -57,6 +61,9 @@ const SHOTS = [
   { file: '05-crop-guide.png', route: 'crops', label: '作物ガイド' },
   { file: '06-calendar.png', route: 'calendar', label: 'カレンダー' },
   { file: '07-materials.png', route: 'materials', label: '資材の在庫' },
+  // 1.1 の目玉（#148）。**シードが「読み取り済み 1・待ち 1」をこの用途で用意している**
+  // （seed.ts の seedHarvestPhotoReads）ので、ルートを開くだけで撮れる。
+  { file: '08-harvest-reads.png', route: 'harvests/reads', label: '写真から記録（読み取り待ち）' },
 ];
 
 const adbPath = resolveAdb();
@@ -241,7 +248,9 @@ function sleep(ms) {
 }
 
 function parseArgs(argv) {
-  const parsed = { waitMs: 7000, keepStatusBar: false };
+  // 既定 7 秒では**ローディング中のスピナーが写る**（2026-08-22 に 8 枚全滅）。
+  // サンプルデータの写真をコピーする初回起動や、負荷の高いマシンでは特に足りない。
+  const parsed = { waitMs: 12000, keepStatusBar: false };
   for (let i = 0; i < argv.length; i += 1) {
     const t = argv[i];
     if (t === '--serial') parsed.serial = argv[++i];

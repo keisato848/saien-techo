@@ -27,6 +27,12 @@ export function useDatabase() {
           // 作物マスター（栽培暦）はサンプルと違い本番でも常に同期する（WBS 3.1）
           await syncCropMaster(getDb());
           await seedDatabase(getDb());
+
+          // 作物マスターを入れた**後**に、手入力で登録された栽培を暦へ紐づけ直す。
+          // 保存時の照合（crop-match.service）を足しても既存の行は null のままで、
+          // 「つぎの作業」も進行帯も出ないままになるため
+          const { backfillPlantingCropIds } = await import('../services/crop-match.service');
+          await backfillPlantingCropIds();
         }
         // Web: no DB, screens use mock data
         setIsReady(true);

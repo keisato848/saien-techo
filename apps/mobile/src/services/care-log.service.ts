@@ -13,6 +13,7 @@ import { and, desc, eq, inArray } from 'drizzle-orm';
 import { getDb, isNativePlatform } from '../db/client';
 import * as schema from '../db/schema';
 import { generateId } from '../utils/id';
+import { resolvePhotoUris, toStoredPhotoPath } from './photo-path';
 import { deleteGardenPhotoFiles, MAX_GARDEN_PHOTOS } from './photo-storage.service';
 import type { CareLogItem, CareLogKind, SaveCareLogInput } from './types';
 
@@ -97,7 +98,7 @@ export async function getCareLogs(plantingId: string): Promise<CareLogItem[]> {
     kind: row.kind as CareLogKind,
     loggedAt: row.loggedAt,
     note: row.note,
-    photoUris: photos.get(row.id) ?? [],
+    photoUris: resolvePhotoUris(photos.get(row.id) ?? []),
   }));
 }
 
@@ -126,7 +127,7 @@ export async function getCareLog(logId: string): Promise<CareLogItem | null> {
     kind: row.kind as CareLogKind,
     loggedAt: row.loggedAt,
     note: row.note,
-    photoUris: photos.get(row.id) ?? [],
+    photoUris: resolvePhotoUris(photos.get(row.id) ?? []),
   };
 }
 
@@ -207,8 +208,11 @@ async function replacePhotos(
     throw new RangeError(`写真は${MAX_GARDEN_PHOTOS}枚まで追加できます`);
   }
 
-  const before = (await getPhotoPaths(db, [logId])).get(logId) ?? [];
-  const removed = before.filter((path) => !photoUris.includes(path));
+  // **比較は DB と同じ正規形（相対パス）で行う。** 画面から来るのは絶対 URI なので、
+  // 正規化せずに比べると「全部消された」と誤判定して残す写真まで削除してしまう
+  const stored = photoUris.map(toStoredPhotoPath);
+  const before = ((await getPhotoPaths(db, [logId])).get(logId) ?? []).map(toStoredPhotoPath);
+  const removed = before.filter((path) => !stored.includes(path));
   await deleteGardenPhotoFiles(removed);
 
   await db
@@ -216,12 +220,12 @@ async function replacePhotos(
     .where(and(eq(schema.photos.ownerType, PHOTO_OWNER), eq(schema.photos.ownerId, logId)));
 
   const now = nowIso();
-  for (let i = 0; i < photoUris.length; i++) {
+  for (let i = 0; i < stored.length; i++) {
     await db.insert(schema.photos).values({
       id: generateId(),
       ownerType: PHOTO_OWNER,
       ownerId: logId,
-      localPath: photoUris[i],
+      localPath: stored[i],
       width: null,
       height: null,
       sortOrder: i + 1,

@@ -20,15 +20,47 @@ import {
   getHarvest,
   updateHarvest,
 } from '../../../../../src/services/harvest.service';
+import {
+  getReadDraft,
+  type HarvestReadDraft,
+} from '../../../../../src/services/harvest-read.service';
+import { getPlantingDetail } from '../../../../../src/services/planting.service';
+
+/**
+ * 読み取りの下書きを一言にする。「直す」で来たときに**何を直すのか**が
+ * 分からないと、ユーザーはゼロから入力するか、もう一度読み取って
+ * 枠を消費するかしかない。
+ */
+function draftHint(draft: HarvestReadDraft, cropName: string | undefined): string | undefined {
+  const parts: string[] = [];
+  if (draft.count != null) {
+    parts.push(`写真から ${draft.count} 個と読み取りました。違っていたら直してください。`);
+    if (draft.cropGuess && cropName && draft.cropGuess !== cropName) {
+      parts.push(`写真は「${draft.cropGuess}」に見えます。`);
+    }
+  }
+  if (draft.readNote) parts.push(draft.readNote);
+  return parts.length > 0 ? parts.join(' ') : undefined;
+}
 
 export default function EditHarvestScreen() {
-  const { harvestId } = useLocalSearchParams<{ id: string; harvestId: string }>();
+  const { id, harvestId } = useLocalSearchParams<{ id: string; harvestId: string }>();
   const router = useRouter();
   const [initialValues, setInitialValues] = useState<HarvestFormValues | null>(null);
+  const [cropName, setCropName] = useState<string | undefined>(undefined);
+  // 文言ではなく下書きそのものを持つ。作物名は別の effect で遅れて来るので、
+  // ここで文言を作ると作物の食い違いを添え損ねる
+  const [draft, setDraft] = useState<HarvestReadDraft | null>(null);
+
+  // 「写真から数量を読み取る」のヒント（#143）。取れなくても編集はできる
+  useEffect(() => {
+    void getPlantingDetail(id).then((planting) => setCropName(planting?.cropName));
+  }, [id]);
 
   useEffect(() => {
     let cancelled = false;
     setInitialValues(null);
+    setDraft(null);
 
     void (async () => {
       const harvest = await getHarvest(harvestId);
@@ -37,10 +69,17 @@ export default function EditHarvestScreen() {
         router.back();
         return;
       }
+      // 確定していない読み取りがあれば下書きとして使う。**既に数量が入って
+      // いるなら触らない** — ユーザーが確定した値のほうが強い
+      const pending = harvest.quantity == null ? await getReadDraft(harvestId) : null;
+      if (cancelled) return;
+
+      setDraft(pending);
       setInitialValues({
         harvestedAt: harvest.harvestedAt,
-        quantity: harvest.quantity,
-        unit: harvest.unit,
+        quantity: harvest.quantity ?? pending?.count ?? null,
+        // count は個数なので、単位が空なら「個」を入れる（applyRead と同じ）
+        unit: harvest.unit ?? (pending?.count != null ? 'piece' : null),
         note: harvest.note ?? '',
         photoUris: harvest.photoUris,
       });
@@ -86,6 +125,8 @@ export default function EditHarvestScreen() {
       onSubmit={handleSubmit}
       onCancel={() => router.back()}
       title="収穫を編集"
+      readCropName={cropName}
+      readHint={draft ? draftHint(draft, cropName) : undefined}
       footer={
         <PressableScale style={styles.deleteButton} onPress={handleDelete}>
           <Trash2 size={16} color={Colors.danger} />

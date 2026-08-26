@@ -2,6 +2,7 @@ import {
   createCookingPhotoFileName,
   createRecipePhotoFileName,
   extensionForPhoto,
+  PhotoCompressionError,
   MAX_COOKING_LOG_PHOTOS,
   persistCookingLogPhotos,
   persistRecipePhoto,
@@ -51,7 +52,7 @@ describe('photo-storage.service', () => {
     expect(result[0].localPath).toMatch(/\.jpg$/);
   });
 
-  it('stores the original file when compression fails', async () => {
+  it('圧縮に失敗したら原本をコピーせず保存自体をやめる（EXIF/GPS の流出を塞ぐ）', async () => {
     const copied: { from: string; to: string }[] = [];
     const adapter = {
       documentDirectory: 'file:///documents/',
@@ -75,10 +76,11 @@ describe('photo-storage.service', () => {
       temporary: true,
     };
 
-    const result = await persistCookingLogPhotos([photo], adapter, failingCompress);
-
-    expect(copied[0].from).toBe('file:///cache/dinner.png');
-    expect(result[0].localPath).toMatch(/\.png$/);
+    await expect(persistCookingLogPhotos([photo], adapter, failingCompress)).rejects.toThrow(
+      PhotoCompressionError,
+    );
+    // 原本のコピーが 1 件も起きないこと（起きると EXIF がアプリ内に残る）
+    expect(copied).toHaveLength(0);
   });
 
   it('rejects more than the maximum supported photos', async () => {

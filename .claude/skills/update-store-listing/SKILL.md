@@ -27,7 +27,9 @@ description: Google Play ストア掲載（ja-JP のアプリ名・説明文・�
    細い線画の付け足しは縮小で消える。既存要素と同等の太さ・面積で置き換える方が安全）
 3. 生成: `node scripts/generate-icons.mjs`
 4. Play ストア掲載アイコンへ反映（512x512 に自動リサイズ）:
-   `node scripts/release/update-play-icon.mjs --dry-run` → `node scripts/release/update-play-icon.mjs`
+   `node scripts/release/update-play-graphics.mjs --dry-run` → `node scripts/release/update-play-graphics.mjs`
+   （**さいえん手帳はアイコンとフィーチャーグラフィックを 1 本に統合してある。**
+   だいどこの `update-play-icon.mjs` / `update-play-feature-graphic.mjs` は**ここには無い**）
    - **アイコン変更は Play の審査を経てから公開される**（説明文より慎重な扱い — Console に「審査中の変更」表示）
    - アプリ本体（起動アイコン）は次回ビルドで自動的に同じ意匠になる（1024px 版を bundle）
 5. `apps/mobile/assets/*.png` と `scripts/generate-icons.mjs` の変更を PR でマージ
@@ -43,6 +45,13 @@ description: Google Play ストア掲載（ja-JP のアプリ名・説明文・�
    `emulator -avd saien_e2e_api36 -wipe-data -no-snapshot`
    ※ wipe 直後の SystemUI ANR ダイアログは capture スクリプトが dumpsys で検出して自動で閉じる
 3. `adb install -r apps/mobile/android/app/build/outputs/apk/release/app-release.apk`
+   3.5. **サンプルデータが本当に入ったか、撮る前に目で見る。**
+   `adb shell pm clear com.saientecho.app` → 起動 → ホームに
+   キュウリ/トマト/アオジソと「写真の読み取りが 2 枚 待っています」が出ること。
+   **`EXPO_PUBLIC_*` を付けたのにバンドルへ焼き込まれなかった実績がある**
+   （2026-08-21・原因未特定。直前の別ビルドの env が残ったバンドルが使われた疑い）。
+   空だったら `apps/mobile/android/app/build/generated/assets/` を消して 1 に戻る。
+   **ここを飛ばすと、空の画面を 7 枚撮ってストアに上げることになる**
 4. 取得: `node scripts/release/capture-store-screenshots.mjs`
    - ショットごとに force-stop → `saientecho://` ディープリンクでコールドスタート → screencap
    - ステータスバーは SystemUI デモモードで固定（09:00・電池100%・通知なし）
@@ -59,8 +68,8 @@ description: Google Play ストア掲載（ja-JP のアプリ名・説明文・�
    ブランドマーク `apps/mobile/assets/brand/mark.svg` が単一ソース）
 2. **公開のブランド資産なのでユーザーに画像を提示して承認を得る**
 3. 生成: `node scripts/release/generate-feature-graphic.mjs`
-4. Play へ反映: `node scripts/release/update-play-feature-graphic.mjs --dry-run` →
-   `node scripts/release/update-play-feature-graphic.mjs`
+4. Play へ反映: `node scripts/release/update-play-graphics.mjs --dry-run` →
+   `node scripts/release/update-play-graphics.mjs`（アイコンと共通）
    - **アイコンと同様 Play の審査を経てから公開される**（Console に「審査中の変更」表示）
 5. `docs/store/google-play/graphics/*.png` 等の変更を PR でマージ
 
