@@ -1,6 +1,6 @@
 ---
 name: release-verify
-description: リリース前の成果物検証チェック集。AAB の 16KB ELF アライメント（scripts/release/check-elf-align.py）、AndroidManifest の権限監査（AD_ID 等）、アップグレードインストール検証（既存データ維持）、config plugin 注入のサイレント no-op 確認。
+description: リリース前の成果物検証チェック集。成果物の鮮度（versionName/versionCode が app.json と一致し、app.json の最終コミットより新しいこと — scripts/release/check-artifact-version.py）、AAB の 16KB ELF アライメント（scripts/release/check-elf-align.py）、AndroidManifest の権限監査（AD_ID 等）、アップグレードインストール検証（既存データ維持）、config plugin 注入のサイレント no-op 確認。
 ---
 
 # リリース前 成果物検証
@@ -9,6 +9,19 @@ description: リリース前の成果物検証チェック集。AAB の 16KB ELF
 
 `release-play`（提出フロー）から呼ばれる検証の詳細。**バリデーション拒否では versionCode は未消費**
 （同じ番号で再提出できる）ので、拒否を恐れず提出前にここで潰す。
+
+## 0. 成果物の鮮度 — 「検証している物は、いま出す版か」（**最初に回す**）
+
+```bash
+python scripts/release/check-artifact-version.py <app-release.aab|apk>
+# versionName / versionCode が apps/mobile/app.json と一致し、app.json の最終コミットより
+# 新しければ PASS（exit 0）。不一致・古い成果物は exit 1、読めない環境は exit 2
+```
+
+**1.1（2026-08-22）で、監視を「AAB の存在」にしたため 8/14 の古い AAB（v1.0.0）を拾い、
+§1・§2・§6 をそれに対して回して「PASS」と報告した。** 本命のビルドは同時実行で壊れていた。
+以下の検証はすべて**この手順 0 が通った成果物**に対して行う。
+`submit-play-release.mjs` も送信前に同じチェックを走らせる（単一ソース＝この .py）。
 
 ## 1. 16KB ELF アライメント（Android 15+ 必須）
 

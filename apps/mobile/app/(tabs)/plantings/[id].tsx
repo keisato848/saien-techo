@@ -6,16 +6,17 @@
  */
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import {
+  BellRing,
   ChevronLeft,
   Droplets,
+  Images,
   Leaf,
-  BellRing,
   Pencil,
   Plus,
-  ShoppingBasket,
   RotateCcw,
   Scissors,
   ShieldCheck,
+  ShoppingBasket,
   Sparkles,
   Sprout,
   Trash2,
@@ -289,6 +290,21 @@ export default function PlantingDetailScreen() {
           <View style={styles.consultBody}>
             <Text style={styles.consultTitle}>AI に相談</Text>
             <Text style={styles.consultHint}>写真から品種の推定・病害虫や生育の診断</Text>
+          </View>
+        </PressableScale>
+
+        {/* 成長記録（R16 / WBS 4.4）。AI は使わない — 2 枚並べて目で見るだけ */}
+        <PressableScale
+          style={styles.consultCard}
+          onPress={() => router.push(`/plantings/${planting.id}/compare`)}
+          accessibilityLabel="成長記録をみる"
+        >
+          <Images size={17} color={Colors.accentInk} />
+          <View style={styles.consultBody}>
+            <Text style={styles.consultTitle}>成長記録</Text>
+            <Text style={styles.consultHint}>
+              2 枚並べて、何日でここまで育ったかを見る（終わった栽培も）
+            </Text>
           </View>
         </PressableScale>
 

@@ -3,6 +3,7 @@ import { ImageManipulator, SaveFormat } from 'expo-image-manipulator';
 
 import { generateId } from '../utils/id';
 import type { CapturedPhoto } from './photo-capture.service';
+import { resolvePhotoUri } from './photo-path';
 import type { SaveCookingPhotoInput } from './types';
 
 export const MAX_COOKING_LOG_PHOTOS = 6;
@@ -58,15 +59,32 @@ const expoPhotoCompressAdapter: PhotoCompressAdapter = {
   },
 };
 
+/** 保存できなかった写真をユーザーに知らせる例外 */
+export class PhotoCompressionError extends Error {
+  constructor() {
+    super('この写真は保存できませんでした。別の写真でお試しください。');
+    this.name = 'PhotoCompressionError';
+  }
+}
+
 /**
- * Compress a captured photo for storage. Returns the compressed temp file (as
- * JPEG) or null when compression is unavailable — callers then store the
- * original file untouched.
+ * 保存用に縮小 + JPEG 再エンコードする。
+ *
+ * **失敗したら原本をコピーせず、保存自体をやめる（fail closed）。**
+ * 以前は失敗時に原本をそのままコピーしていたが、再エンコードを経ないため
+ * **EXIF の GPS 座標が端末内に残り**、移行 zip には生バイトが入るので
+ * 書き出したファイルを外部へ渡すと撮影場所が漏れる経路になっていた。
+ * 通常経路では expo-image-manipulator の再エンコードで EXIF が落ちる
+ * （expo/expo#28913）。HEIC など一部形式で失敗しうるので、
+ * その場合は「保存できませんでした」と伝えて捨てる。
+ *
+ * 副産物として、保存される写真は必ず JPEG になり、
+ * iOS で撮った HEIC が移行 zip 経由で古い Android に渡って表示できない問題も消える。
  */
 async function compressForStorage(
   uri: string,
   compressAdapter: PhotoCompressAdapter,
-): Promise<string | null> {
+): Promise<string> {
   try {
     const result = await compressAdapter.compress(uri, {
       maxDimension: PHOTO_MAX_DIMENSION,
@@ -74,7 +92,7 @@ async function compressForStorage(
     });
     return result.uri;
   } catch {
-    return null; // 圧縮できない環境・形式では原本をそのまま保存
+    throw new PhotoCompressionError();
   }
 }
 
@@ -121,10 +139,8 @@ async function persistCookingLogPhoto(
   compressAdapter: PhotoCompressAdapter,
 ): Promise<SaveCookingPhotoInput> {
   const directory = await ensurePhotoDirectory(adapter);
-  const compressed = await compressForStorage(photo.localPath, compressAdapter);
-  const source = compressed ?? photo.localPath;
-  const extension = compressed ? 'jpg' : extensionForPhoto(photo.localPath, photo.mimeType);
-  const fileName = createCookingPhotoFileName(photo.takenAt, extension);
+  const source = await compressForStorage(photo.localPath, compressAdapter);
+  const fileName = createCookingPhotoFileName(photo.takenAt, 'jpg');
   const destination = `${directory}${fileName}`;
 
   await adapter.copyAsync({ from: source, to: destination });
@@ -192,10 +208,8 @@ export async function persistRecipePhoto(
   if (!info.exists) {
     await adapter.makeDirectoryAsync(directory, { intermediates: true });
   }
-  const compressed = await compressForStorage(photo.localPath, compressAdapter);
-  const source = compressed ?? photo.localPath;
-  const extension = compressed ? 'jpg' : extensionForPhoto(photo.localPath, photo.mimeType);
-  const destination = `${directory}${createRecipePhotoFileName(photo.takenAt, extension)}`;
+  const source = await compressForStorage(photo.localPath, compressAdapter);
+  const destination = `${directory}${createRecipePhotoFileName(photo.takenAt, 'jpg')}`;
   await adapter.copyAsync({ from: source, to: destination });
   return destination;
 }
@@ -239,10 +253,8 @@ export async function persistGardenPhotos(
 
   const persisted: string[] = [];
   for (const photo of photos) {
-    const compressed = await compressForStorage(photo.localPath, compressAdapter);
-    const source = compressed ?? photo.localPath;
-    const extension = compressed ? 'jpg' : extensionForPhoto(photo.localPath, photo.mimeType);
-    const destination = `${directory}${createGardenPhotoFileName(photo.takenAt, extension)}`;
+    const source = await compressForStorage(photo.localPath, compressAdapter);
+    const destination = `${directory}${createGardenPhotoFileName(photo.takenAt, 'jpg')}`;
     await adapter.copyAsync({ from: source, to: destination });
     persisted.push(destination);
   }
@@ -254,5 +266,11 @@ export async function deleteGardenPhotoFiles(
   paths: string[],
   adapter: FileStorageAdapter = expoFileStorageAdapter,
 ): Promise<void> {
-  await Promise.all(paths.map((path) => adapter.deleteAsync(path, { idempotent: true })));
+  // DB は相対パスを持つので絶対 URI へ戻してから消す。
+  // 呼び出し側が絶対パスを渡しても resolvePhotoUri が素通しするので両対応
+  await Promise.all(
+    paths.map((path) =>
+      adapter.deleteAsync(resolvePhotoUri(path, adapter.documentDirectory), { idempotent: true }),
+    ),
+  );
 }

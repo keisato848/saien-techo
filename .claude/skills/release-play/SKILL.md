@@ -38,7 +38,7 @@ AI 相談のサーバーはだいどこの Railway を共用している（決�
    ```
 4. **AAB ビルド**: `node scripts/agent/build-android.mjs --bundle`
    （**生 gradlew は PreToolUse で deny される** — Metro のワークスペース解決で必ず失敗するため）
-5. **成果物検証**: `release-verify` スキル（16KB アライメント / 権限 / **個人情報の非公開確認 §6** /
+5. **成果物検証**: `release-verify` スキル（**§0 鮮度 — versionCode が app.json と一致し古くないこと。ここを飛ばして旧 AAB を検証した実績あり** / 16KB アライメント / 権限 / **個人情報の非公開確認 §6** /
    アップグレードインストール）
 6. **本番構成の実機 E2E**（マージ前検証の原則・省略しない）:
    - `adb reverse --remove-all` で localhost ブリッジを排除（API 既定 = だいどこ Railway 本番）

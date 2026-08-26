@@ -14,6 +14,8 @@ export default function PlantingsLayout() {
           app/plantings/ をルートに作ると /plantings がそちらに吸われ、
           index を持たないため deep link が空画面になる（実機で踏んだ）。 */}
       <Stack.Screen name="new" options={{ presentation: 'modal' }} />
+      {/* 写真から一括登録（#139 / #149）。new と同じくモーダルで開く */}
+      <Stack.Screen name="identify" options={{ presentation: 'modal' }} />
       <Stack.Screen name="[id]/edit" options={{ presentation: 'modal' }} />
       {/* ディレクトリ名を care-logs にしているのは、.gitignore の `logs/` が
           `logs` という名前のルートを丸ごと無視してしまうため（実際に

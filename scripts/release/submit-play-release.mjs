@@ -12,6 +12,7 @@
  * 認証: C:/secure/play-service-account.json（PLAY_SERVICE_ACCOUNT_KEY で上書き可）
  * 注意: commit 後は Google の審査キューに入る。新規アプリの初回審査は数日かかる。
  */
+import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -30,6 +31,23 @@ const TRACK = trackIndex >= 0 ? process.argv[trackIndex + 1] : 'production';
 if (!fs.existsSync(AAB)) throw new Error(`AAB がありません: ${AAB}`);
 const aabStat = fs.statSync(AAB);
 if (aabStat.size < 5_000_000) throw new Error(`AAB が小さすぎます（${aabStat.size} bytes）`);
+
+// **鮮度チェック — 「この AAB はいま出そうとしている版か」。**
+// 1.1 で 8/14 の古い AAB（v1.0.0）を検証して PASS と報告しかけた（提出前に発覚）。
+// versionName / versionCode が app.json と一致し、app.json の最終コミットより新しいことを
+// 送信前に機械で確かめる。実装は check-artifact-version.py が単一ソース（二重管理にしない）。
+const freshness = spawnSync(
+  'python',
+  [path.join(ROOT, 'scripts/release/check-artifact-version.py'), AAB, '--quiet'],
+  { stdio: 'inherit', encoding: 'utf8' },
+);
+if (freshness.status !== 0) {
+  throw new Error(
+    freshness.status === 2
+      ? 'AAB のバージョンを読めませんでした（check-artifact-version.py）。提出を中止します'
+      : 'AAB が app.json と一致しないか古いビルドです。ビルドし直してから提出してください',
+  );
+}
 
 const listing = fs.readFileSync(LISTING, 'utf8');
 const notesMatch = listing.match(/## リリースノート[^\n]*\n\n([\s\S]*?)(?=\n## |$)/);
