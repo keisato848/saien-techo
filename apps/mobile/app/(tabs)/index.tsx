@@ -31,6 +31,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { EmptyState } from '../../src/components/EmptyState';
 import { Loading } from '../../src/components/Loading';
 import { MonthlyWorkCard } from '../../src/components/MonthlyWorkCard';
+import { ProgressBand } from '../../src/components/ProgressBand';
 import { NextActionCard } from '../../src/components/NextActionCard';
 import { PressableScale } from '../../src/components/PressableScale';
 import { HarvestReadCard } from '../../src/components/HarvestReadCard';
@@ -44,10 +45,18 @@ import {
   type TimelineDay,
 } from '../../src/services/garden-timeline.service';
 import { getPlantingList } from '../../src/services/planting.service';
+import {
+  describeProgress,
+  getPlantingProgress,
+  type PlantingProgress,
+} from '../../src/services/growth-progress.service';
 import type { PlantingListItem } from '../../src/services/types';
 
 /** ホームに出す件数。多すぎると「今日の菜園」ではなくなる */
 const TIMELINE_LIMIT = 30;
+
+/** 進行帯の幅。カード幅 92 から左右の余白を引いた値 */
+const GROWING_BAND_WIDTH = 76;
 
 /**
  * 日付見出し。菜園では「何日前にやったか」が知りたい情報なので、
@@ -76,6 +85,7 @@ export default function HomeScreen() {
   const insets = useSafeAreaInsets();
   const [days, setDays] = useState<TimelineDay[]>([]);
   const [growing, setGrowing] = useState<PlantingListItem[]>([]);
+  const [progress, setProgress] = useState<Map<string, PlantingProgress>>(new Map());
   const [loading, setLoading] = useState(true);
 
   const load = useCallback(async () => {
@@ -85,6 +95,7 @@ export default function HomeScreen() {
     ]);
     setDays(groupByDay(entries));
     setGrowing(plantings);
+    setProgress(await getPlantingProgress(plantings));
     setLoading(false);
   }, []);
 
@@ -177,7 +188,19 @@ export default function HomeScreen() {
                     <Text style={styles.growingName} numberOfLines={1}>
                       {planting.cropName}
                     </Text>
-                    <Text style={styles.growingDays}>{planting.elapsedDays}日目</Text>
+                    {progress.get(planting.id) ? (
+                      <>
+                        <ProgressBand
+                          progress={progress.get(planting.id) as PlantingProgress}
+                          width={GROWING_BAND_WIDTH}
+                        />
+                        <Text style={styles.growingDays} numberOfLines={1}>
+                          {describeProgress(progress.get(planting.id) as PlantingProgress)}
+                        </Text>
+                      </>
+                    ) : (
+                      <Text style={styles.growingDays}>{planting.elapsedDays}日目</Text>
+                    )}
                   </PressableScale>
                 ))}
                 <PressableScale
