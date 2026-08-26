@@ -101,7 +101,10 @@ const expoIdentifyImageAdapter: IdentifyImageAdapter = {
       });
       sendUri = saved.uri;
     } catch {
-      // 縮小できない形式は原本のまま送る（サーバー側にサイズ上限がある）
+      // **原本のまま送らない。** 再エンコードを経ないと EXIF の GPS が残り、
+      // 縮小に失敗した写真だけ撮影場所つきでサーバーへ出てしまう。
+      // 保存側（photo-storage.service）と同じく fail closed にする
+      throw new Error('写真を読み込めませんでした');
     }
     const base64 = await FileSystem.readAsStringAsync(sendUri, {
       encoding: FileSystem.EncodingType.Base64,

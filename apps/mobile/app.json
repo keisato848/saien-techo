@@ -42,6 +42,7 @@
     "plugins": [
       "expo-router",
       "./plugins/withSaienUploadSigning.js",
+      "./plugins/withSaienBackupRules.js",
       [
         "expo-build-properties",
         {

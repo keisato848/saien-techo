@@ -23,6 +23,7 @@
  * 差し替えるときも同じ処理を通すこと — スマホの写真は既定で自宅の座標を持つ。
  */
 import { eq } from 'drizzle-orm';
+import { toStoredPhotoPath } from '../services/photo-path';
 import type { ExpoSQLiteDatabase } from 'drizzle-orm/expo-sqlite';
 import { Asset } from 'expo-asset';
 import * as FileSystem from 'expo-file-system/legacy';
@@ -125,7 +126,7 @@ export async function seedSamplePhotos(database: DB): Promise<void> {
       if (sample.ownerType === 'planting' && sample.asCover) {
         await database
           .update(schema.plantings)
-          .set({ coverPhotoPath: destination, updatedAt: now })
+          .set({ coverPhotoPath: toStoredPhotoPath(destination), updatedAt: now })
           .where(eq(schema.plantings.id, sample.ownerId));
       }
 
@@ -135,7 +136,7 @@ export async function seedSamplePhotos(database: DB): Promise<void> {
           id: sample.id,
           ownerType: sample.ownerType,
           ownerId: sample.ownerId,
-          localPath: destination,
+          localPath: toStoredPhotoPath(destination),
           width: 1200,
           height: 1200,
           sortOrder: sortOrder++,

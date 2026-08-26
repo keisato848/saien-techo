@@ -13,6 +13,8 @@ import { and, asc, desc, eq, inArray, isNotNull, isNull } from 'drizzle-orm';
 
 import { getDb, isNativePlatform } from '../db/client';
 import * as schema from '../db/schema';
+import { resolvePhotoUriOrNull, toStoredPhotoPathOrNull } from './photo-path';
+import { deleteGardenPhotoFiles } from './photo-storage.service';
 import { generateId } from '../utils/id';
 import {
   removePlantingFtsEntry,
@@ -143,7 +145,7 @@ export async function getPlantingList(
       plantedAs: row.plantedAs as PlantedAs,
       elapsedDays: elapsedDaysFrom(row.plantedOn, row.endedAt),
       tags,
-      coverPhotoUri: row.coverPhotoPath,
+      coverPhotoUri: resolvePhotoUriOrNull(row.coverPhotoPath),
       endedAt: row.endedAt,
       endedReason: (row.endedReason as PlantingEndedReason | null) ?? null,
       // 場所順の並べ替えに使う。場所未設定は末尾へ送りたいので大きな値を入れる
@@ -224,7 +226,7 @@ export async function getPlantingDetail(plantingId: string): Promise<PlantingDet
     plantedAs: row.plantedAs as PlantedAs,
     elapsedDays: elapsedDaysFrom(row.plantedOn, row.endedAt),
     tags: await getTagNames(db, schema, row.id),
-    coverPhotoUri: row.coverPhotoPath,
+    coverPhotoUri: resolvePhotoUriOrNull(row.coverPhotoPath),
     note: row.note,
     endedAt: row.endedAt,
     endedReason: (row.endedReason as PlantingEndedReason | null) ?? null,
@@ -255,7 +257,7 @@ export async function createPlanting(input: SavePlantingInput): Promise<string> 
     placeId: input.placeId ?? null,
     plantedOn: input.plantedOn,
     plantedAs: input.plantedAs,
-    coverPhotoPath: input.coverPhotoPath ?? null,
+    coverPhotoPath: toStoredPhotoPathOrNull(input.coverPhotoPath),
     note: emptyToNull(input.note),
     endedAt: null,
     endedReason: null,
@@ -285,6 +287,20 @@ export async function updatePlanting(
 
   const db = getDb();
 
+  // カバー写真を差し替えたら、古いファイルを端末から消す。
+  // 消さないと recipe-photos/ に誰も参照しないファイルが残り続ける。
+  // **両方を正規形にしてから比べる** — 片側だけだと、同じファイルを指しているのに
+  // 「差し替えられた」と誤判定して現役のカバー写真を消してしまう
+  const nextCover = toStoredPhotoPathOrNull(input.coverPhotoPath);
+  const previousCover = toStoredPhotoPathOrNull(
+    (
+      await db
+        .select({ coverPhotoPath: schema.plantings.coverPhotoPath })
+        .from(schema.plantings)
+        .where(eq(schema.plantings.id, plantingId))
+    )[0]?.coverPhotoPath as string | null | undefined,
+  );
+
   await db
     .update(schema.plantings)
     .set({
@@ -295,13 +311,18 @@ export async function updatePlanting(
       placeId: input.placeId ?? null,
       plantedOn: input.plantedOn,
       plantedAs: input.plantedAs,
-      coverPhotoPath: input.coverPhotoPath ?? null,
+      coverPhotoPath: nextCover,
       note: emptyToNull(input.note),
       updatedAt: nowIso(),
     })
     .where(eq(schema.plantings.id, plantingId));
 
   await replaceTags(db, schema, plantingId, input.tags);
+  // **ファイル削除は DB 更新が全部成功してから。** 先に消すと、後段が失敗したときに
+  // 「行は古いカバーを指しているのにファイルだけ無い」状態が残る
+  if (previousCover && previousCover !== nextCover) {
+    await deleteGardenPhotoFiles([previousCover]);
+  }
   await updatePlantingFtsIndex(
     plantingId,
     input.cropName,
@@ -374,11 +395,27 @@ export async function deletePlanting(plantingId: string): Promise<void> {
     ...careLogIds.map((id): [string, string] => ['care_log', id]),
     ...harvestIds.map((id): [string, string] => ['harvest', id]),
   ];
+  // **行を消す前にファイルも消す。** 個別の作業ログ削除では消しているのに
+  // 親ごと消すと garden-photos/ に孤児ファイルが残っていた
+  const orphanPaths: string[] = [];
   for (const [ownerType, ownerId] of photoOwners) {
+    const rows = await db
+      .select({ localPath: schema.photos.localPath })
+      .from(schema.photos)
+      .where(and(eq(schema.photos.ownerType, ownerType), eq(schema.photos.ownerId, ownerId)));
+    for (const row of rows as { localPath: string }[]) orphanPaths.push(row.localPath);
     await db
       .delete(schema.photos)
       .where(and(eq(schema.photos.ownerType, ownerType), eq(schema.photos.ownerId, ownerId)));
   }
+  const cover = (
+    await db
+      .select({ coverPhotoPath: schema.plantings.coverPhotoPath })
+      .from(schema.plantings)
+      .where(eq(schema.plantings.id, plantingId))
+  )[0]?.coverPhotoPath as string | null | undefined;
+  if (cover) orphanPaths.push(cover);
+  await deleteGardenPhotoFiles(orphanPaths);
 
   await db.delete(schema.reminders).where(eq(schema.reminders.plantingId, plantingId));
   // 読み取り待ち（#143）は harvests への FK を持つので、harvests より先に消す
