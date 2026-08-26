@@ -127,6 +127,42 @@ Claude in Chrome（mcp\_\_claude-in-chrome\_\_\*）でメインループが実�
 4. リワードは報酬の「数 1 / アイテム名」を入れる（アプリは視聴完了イベントだけ見るので名前は表示用）
 5. アプリ確認（承認状況「要審査」）は**ストア掲載とリンクするまで解消しない**。
    それまで広告配信は制限される（テスト広告は出る）
+
+   **「準備完了」に必要な 3 条件**（2026-08-23 に 3 アプリで実測）:
+   1. **ストアにリンク**（アプリ一覧の「ストアを追加」→ 検索 → 追加 → 保存）。
+      **数字のストア ID では 0 件になる** — `https://apps.apple.com/jp/app/id<ID>` の
+      **URL** か、Android は**パッケージ名**で検索する
+   2. **ストア掲載に「デベロッパー ウェブサイト」がある**。Play は Console の
+      「ウェブサイト」（`edits.details.contactWebsite`・API で設定可）、**App Store は
+      ASC のマーケティング URL**（`appStoreVersionLocalizations.marketingUrl`）。
+      さいえん手帳 iOS はここが空で「デベロッパー ウェブサイトが見つかりませんでした」になった。
+      **審査中（WAITING_FOR_REVIEW）のバージョンでも PATCH できる**が、
+      公開済み版は 409 STATE_ERROR → **次版の公開まで反映されない**
+   3. そのドメインの**ルート**に `app-ads.txt`（`pub-<ID>` が一致）
+      リンク保存直後は「app-ads.txt ファイルが設定されている可能性がありますが、
+      お客様の詳細情報が AdMob アカウントの情報と一致しません」と出るが、これは
+      **まだクロールされていないときの定型文**。「アップデートを確認」を押しても
+      クロール前は同じ文が出る。
+      **実際のクロール状況は「アプリ → app-ads.txt」タブ**（`/v2/apps/appadstxt`）の
+      「前回のクロール」「ステータスの詳細」で見る。**タブに行が無い = まだクロールされていない**
+      （「広告リクエストが少ないと表示されないことがある」と注記あり）。
+      待ち時間はヘルプの公称で「最大 24 時間」、**リクエストが少ないと数日〜最長 1 か月**
+      （support.google.com/admob/answer/9679128）。
+
+      **`*.github.io` は使える（2026-08-23 実証）**: だいどこ Android の行が
+      `https://keisato848.github.io/app-ads.txt` を「1 時間前」にクロールして
+      「見つかり、確認されました」になっている。「github.io は Public Suffix List 上の
+      共有ドメインだからクローラが `github.io/app-ads.txt` を読んで失敗する」という説は
+      この実データと矛盾する（IAB 仕様もルートドメインを public suffix +1 で定義しており、
+      `keisato848.github.io` がルート）。**独自ドメインは要らない。** 失敗の原因は
+      「未クロール」か「ストア掲載にデベロッパー ウェブサイトが無い」のどちらか
+
+   > **Chrome 拡張（Claude in Chrome）が無いセッションでも操作できる。**
+   > `chrome.exe --remote-debugging-port=9333 --user-data-dir=C:	mp\chrome-saien-profile` で
+   > 別プロファイルを起動し、DevTools Protocol（Node 22 の WebSocket）で click / fill / screenshot する
+   > （2026-08-23 の実績。クライアントは `C:	mp\cdp.mjs`・未収録）。ログインはユーザーが行う。
+   > **タブグループ名は CDP からは付けられない**（拡張 API）。
+
 6. **app-ads.txt** は任意（推奨）。`google.com, pub-<ID>, DIRECT, f08c47fec0942fa0` を
    **Play 掲載の「ウェブサイト」に設定したドメイン直下**へ置く。
    さいえん手帳は連絡先にメールしか設定していないため**現状は設置できない**

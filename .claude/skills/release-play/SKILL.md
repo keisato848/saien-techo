@@ -23,6 +23,7 @@ AI 相談のサーバーはだいどこの Railway を共用している（決�
 
 ## 1. 手順（ローカル経路・v1.0 実績）
 
+0. **現状を見る**: `node scripts/release/store-status.mjs`（両ストアで何版が出ているか。終わったらもう一度）
 1. **バンプ**: `apps/mobile/app.json` の `version` / `android.versionCode` を更新
    （app.json が唯一のソース。`android/` は gitignore された prebuild 生成物）
    → feature ブランチ → PR → develop へマージ

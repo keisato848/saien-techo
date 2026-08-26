@@ -40,6 +40,15 @@ if (!commandText) {
   );
 } else if (/\brailway\s+up\b/i.test(commandText)) {
   respond('ask', 'Railway 本番へのデプロイです。ユーザーの明示承認を確認してください。');
+} else if (
+  /submit-asc-version\.mjs\b[^\n]*--submit\b/i.test(commandText) ||
+  (/submit-play-release\.mjs\b/i.test(commandText) && !/--dry-run\b/.test(commandText))
+) {
+  // API 直叩きの提出は `eas submit` を経由しないので、同じ承認ゲートをここで張る
+  respond(
+    'ask',
+    'ストアへの提出（外向きアクション）です。ユーザーの明示承認を確認してください。--dry-run で内容を先に確認できます。',
+  );
 } else if (/\beas\s+submit\b/i.test(commandText)) {
   respond(
     'ask',

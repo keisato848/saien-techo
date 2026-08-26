@@ -33,6 +33,7 @@
     "agent:validate": "node scripts/agent/validate-changed-slice.mjs",
     "agent:verify": "node scripts/agent/preflight.mjs && node scripts/agent/validate-changed-slice.mjs",
     "test": "pnpm --filter \"./apps/**\" --filter \"./packages/**\" test",
+    "test:scripts": "node --test \"scripts/release/lib/*.test.mjs\"",
     "lint": "pnpm --filter \"./apps/**\" --filter \"./packages/**\" lint",
     "typecheck": "pnpm --filter \"./apps/**\" --filter \"./packages/**\" typecheck",
     "format": "prettier --write \"**/*.{ts,tsx,js,json,md}\"",
