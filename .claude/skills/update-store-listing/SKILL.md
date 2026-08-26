@@ -43,30 +43,56 @@ description: Google Play ストア掲載（ja-JP のアプリ名・説明文・�
 文言は Play と App Store で共通。表示順は `SLIDES` の順 = `update-play-screenshots.mjs` の
 ORDER 配列（**ファイル名の番号は撮影順で、表示順とは一致しない**。変えるときは両方更新）。
 
-1. ストアショット用リリース APK をビルド（サンプルデータ有効＋コーチマーク無効。エミュレータは x86_64）:
+1. **掲載用の写真に差し替える**（任意 — 下の「本物の菜園写真」を参照）:
+   `node scripts/release/use-store-photos.mjs --apply --from <写真ディレクトリ>`
+2. ストアショット用リリース APK をビルド（サンプルデータ有効＋コーチマーク無効。エミュレータは x86_64）:
    `EXPO_PUBLIC_ENABLE_SAMPLE_DATA=1 EXPO_PUBLIC_DISABLE_COACH_MARKS=1 node scripts/agent/build-android.mjs --arch x86_64`
-2. クリーンなエミュレータを起動（**1080x2400 の `saien_e2e_api36` を使う** — 既存掲載と同解像度）:
+3. クリーンなエミュレータを起動（**1080x2400 の `saien_e2e_api36` を使う** — 既存掲載と同解像度）:
    `emulator -avd saien_e2e_api36 -wipe-data -no-snapshot`
    ※ wipe 直後の SystemUI ANR ダイアログは capture スクリプトが dumpsys で検出して自動で閉じる
-3. `adb install -r apps/mobile/android/app/build/outputs/apk/release/app-release.apk`
-   3.5. **サンプルデータが本当に入ったか、撮る前に目で見る。**
+4. `adb install -r apps/mobile/android/app/build/outputs/apk/release/app-release.apk`
+   4.5. **サンプルデータが本当に入ったか、撮る前に目で見る。**
    `adb shell pm clear com.saientecho.app` → 起動 → ホームに
    キュウリ/トマト/アオジソと「写真の読み取りが 2 枚 待っています」が出ること。
    **`EXPO_PUBLIC_*` を付けたのにバンドルへ焼き込まれなかった実績がある**
    （2026-08-21・原因未特定。直前の別ビルドの env が残ったバンドルが使われた疑い）。
-   空だったら `apps/mobile/android/app/build/generated/assets/` を消して 1 に戻る。
+   空だったら `apps/mobile/android/app/build/generated/assets/` を消して 2 に戻る。
    **ここを飛ばすと、空の画面を 7 枚撮ってストアに上げることになる**
-4. 取得: `node scripts/release/capture-store-screenshots.mjs`
+5. 取得: `node scripts/release/capture-store-screenshots.mjs`
    - ショットごとに force-stop → `saientecho://` ディープリンクでコールドスタート → screencap
    - ステータスバーは SystemUI デモモードで固定（09:00・電池100%・通知なし）
    - `manual` 指定のショット（AI 結果画面など）はスキップして既存ファイルを維持
    - 部分再取得: `--shots 01,04` / 対象レシピ変更: `--recipe recipe-3`
-5. **キャプションを合成**: `node scripts/release/compose-store-slides.mjs`
+6. **差し替えたなら必ず戻す**: `node scripts/release/use-store-photos.mjs --restore`
+   （**ここを飛ばすと掲載用の写真が配布物に入る。** 撮り終えた直後にやる）
+7. **キャプションを合成**: `node scripts/release/compose-store-slides.mjs`
    （`--play` / `--ios` で片方だけ）。`store-slides/` に書き出される
-6. **スクショはストア公開物 — 画像をユーザーに提示して承認を得る**
-7. ドライラン: `node scripts/release/update-play-screenshots.mjs --dry-run`（枚数・寸法検証）
-8. 反映: `node scripts/release/update-play-screenshots.mjs`（既存全削除→順番にアップロード→commit）
-9. PNG の変更を PR で develop にマージ
+8. **スクショはストア公開物 — 画像をユーザーに提示して承認を得る**
+9. ドライラン: `node scripts/release/update-play-screenshots.mjs --dry-run`（枚数・寸法検証）
+10. 反映: `node scripts/release/update-play-screenshots.mjs`（既存全削除→順番にアップロード→commit）
+11. PNG の変更を PR で develop にマージ
+    （**コミット前に `use-store-photos.mjs --status` が「元のまま」を返すこと**）
+
+### 本物の菜園写真を掲載スクショに使う（配布物には入れない）
+
+**`assets/` に置いたものは配布される。** `seed-photos.ts` は `require()` で読むので
+Metro がビルド時に静的解決し、`EXPO_PUBLIC_ENABLE_SAMPLE_DATA` を切っても AAB に入る
+（CLAUDE.md §4b の実績）。端末のギャラリーから実行時に読ませる案は、リリース署名の
+ビルドが `run-as` できず `/sdcard` を権限なしで読めないため成立しない。
+
+そこで **取得ビルドのときだけ差し替え、撮り終えたら戻す**。
+`scripts/release/use-store-photos.mjs` がこれをやる。
+
+- `--from` のディレクトリには**枠の名前**でファイルを置く（拡張子は自由）:
+  `harvest.*`（収穫アルバムと写真の読み取り。2 か所で使い回す）/ `planting.*`（栽培のカバー）/
+  `care-planter.*` `care-seedling.*`（作業ログ）
+- **コピーではなく sharp で再エンコードする。** 提供写真の EXIF には
+  **GPS 座標・標高・撮影方向・端末名**が既定で入る（実測: 提供 4 枚とも GPS あり →
+  差し替え後は EXIF エントリ 0）。万一コミットされても撮影場所は出ない
+- `--status` で差し替え中か分かる（差し替え中は exit 1）。二重適用は拒否する
+- `--restore` は `git checkout` で戻し、**戻ったことを検証**してから成功を返す
+- **端末のスクショ自体に EXIF は入らない**（`adb screencap` は PNG を描き直すため・実測 0 件）。
+  危ないのは**バンドルされる JPEG のほう**
 
 ### キャプションの書き方（`compose-store-slides.mjs` の `SLIDES`）
 
