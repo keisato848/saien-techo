@@ -13,6 +13,7 @@ import { and, asc, desc, eq, inArray, isNotNull, isNull } from 'drizzle-orm';
 
 import { getDb, isNativePlatform } from '../db/client';
 import * as schema from '../db/schema';
+import { resolveCropId } from './crop-match.service';
 import { resolvePhotoUriOrNull, toStoredPhotoPathOrNull } from './photo-path';
 import { deleteGardenPhotoFiles } from './photo-storage.service';
 import { generateId } from '../utils/id';
@@ -244,15 +245,20 @@ export async function createPlanting(input: SavePlantingInput): Promise<string> 
 
   const db = getDb();
 
+  // **作物名を正としてマスターへ寄せる。** フォームには候補も照合も無いので、
+  // ここで引かないと手入力の栽培は永久に cropId が null のまま残り、
+  // 「つぎの作業」も進行帯も収穫の既定単位も効かなくなる（crop-match.service）
+  const matched = await resolveCropId(input.cropName);
+
   const plantingId = generateId();
   const now = nowIso();
 
   await db.insert(schema.plantings).values({
     id: plantingId,
     familyId: FAMILY_ID,
-    cropId: input.cropId ?? null,
+    cropId: matched.cropId ?? input.cropId ?? null,
     cropName: input.cropName,
-    cropNameReading: input.cropNameReading ?? null,
+    cropNameReading: input.cropNameReading ?? matched.cropNameReading,
     variety: emptyToNull(input.variety),
     placeId: input.placeId ?? null,
     plantedOn: input.plantedOn,
@@ -289,6 +295,10 @@ export async function updatePlanting(
 
   // カバー写真を差し替えたら、古いファイルを端末から消す。
   // 消さないと recipe-photos/ に誰も参照しないファイルが残り続ける。
+  // 名前を変えたら cropId も引き直す。以前は画面が渡した cropId を素通ししていたため、
+  // 「トマト」を「ナス」に直しても cropId=crop-tomato が残り、トマトの暦で助言していた
+  const matched = await resolveCropId(input.cropName);
+
   // **両方を正規形にしてから比べる** — 片側だけだと、同じファイルを指しているのに
   // 「差し替えられた」と誤判定して現役のカバー写真を消してしまう
   const nextCover = toStoredPhotoPathOrNull(input.coverPhotoPath);
@@ -304,9 +314,9 @@ export async function updatePlanting(
   await db
     .update(schema.plantings)
     .set({
-      cropId: input.cropId ?? null,
+      cropId: matched.cropId ?? input.cropId ?? null,
       cropName: input.cropName,
-      cropNameReading: input.cropNameReading ?? null,
+      cropNameReading: input.cropNameReading ?? matched.cropNameReading,
       variety: emptyToNull(input.variety),
       placeId: input.placeId ?? null,
       plantedOn: input.plantedOn,

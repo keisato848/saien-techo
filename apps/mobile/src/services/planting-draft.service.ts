@@ -20,11 +20,17 @@
  * 「写真を残す」案の話で、登録では起こさない。カバー写真にしたい場合だけ
  * ユーザーが明示的に選ぶ（この層では持たない）。
  */
-import { isNull, like } from 'drizzle-orm';
+import { isNull } from 'drizzle-orm';
 
 import { getDb, isNativePlatform } from '../db/client';
 import * as schema from '../db/schema';
 import { consumeIdentifyCredit } from './identify-credit.service';
+import { getCropMaster, matchCropMaster, type CropMasterRow } from './crop-match.service';
+
+// 照合はここではなく crop-match.service が持つ（登録フォームからも使うため）。
+// 既存の呼び出し元を壊さないよう再エクスポートする
+export { getCropMaster, matchCropMaster };
+export type { CropMasterRow };
 import {
   identifyPlanting,
   PlantingIdentifyError,
@@ -62,54 +68,6 @@ export interface DraftProgress {
   done: number;
   total: number;
   draft: PlantingDraft;
-}
-
-interface CropMasterRow {
-  id: string;
-  name: string;
-  nameReading: string | null;
-}
-
-/** 作物マスター（30 作物）。サーバーへ渡す手がかり兼、突き合わせ用 */
-export async function getCropMaster(): Promise<CropMasterRow[]> {
-  if (!isNativePlatform) return [];
-  const db = getDb();
-  return db
-    .select({
-      id: schema.crops.id,
-      name: schema.crops.name,
-      nameReading: schema.crops.nameReading,
-    })
-    .from(schema.crops)
-    .where(like(schema.crops.id, 'crop-%'));
-}
-
-/**
- * 推定された作物名をマスターへ寄せる。
- *
- * サーバーには `knownCrops` を渡してあるので**多くはそのまま一致する**が、
- * 一覧に無い作物や表記ゆれ（「ミニトマト」と「トマト」）は残る。
- * #149 の決定どおり **あいまい一致**を許す — 完全一致 → 包含の順で見る。
- * 当たらなければ `cropId` は null のまま（自由入力の栽培として登録できる）。
- */
-export function matchCropMaster(
-  cropName: string,
-  master: CropMasterRow[],
-): { cropId: string | null; cropNameReading: string | null } {
-  const name = cropName.trim();
-  if (!name) return { cropId: null, cropNameReading: null };
-
-  const exact = master.find((row) => row.name === name);
-  if (exact) return { cropId: exact.id, cropNameReading: exact.nameReading };
-
-  // 「ミニトマト」→「トマト」のように、片方がもう片方を含むケースを拾う。
-  // 長い方を先に見て、より具体的な作物を優先する。
-  const contains = [...master]
-    .sort((a, b) => b.name.length - a.name.length)
-    .find((row) => name.includes(row.name) || row.name.includes(name));
-  if (contains) return { cropId: contains.id, cropNameReading: contains.nameReading };
-
-  return { cropId: null, cropNameReading: null };
 }
 
 /**
