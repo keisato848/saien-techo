@@ -11,6 +11,7 @@ import * as schema from './schema';
 import { isSampleDataEnabled } from './sampleData';
 import { seedSamplePhotos } from './seed-photos';
 import {
+  seedAppMeta,
   seedCareLogs,
   seedCropCalendars,
   seedCropGuides,
@@ -44,7 +45,7 @@ const DEFAULT_INVITE_CODE = 'DK0001';
 
 // サンプルデータの中身を変えたら必ず上げる。据え置くと、既にシード済みの端末は
 // appMeta のマーカーが一致して seedDatabase() が即 return し、新しい行が入らない。
-const SAMPLE_DATA_VERSION = '8';
+const SAMPLE_DATA_VERSION = '9';
 const SAMPLE_DATA_META_KEY = 'sample_data_version';
 
 export interface SeedSnapshot {
@@ -696,6 +697,17 @@ export async function seedDatabase(database: DB): Promise<void> {
 
   // 掲載スクリーンショット用の写真（WBS 3.8）。失敗しても投げない
   await seedSamplePhotos(database);
+
+  // 「写真から登録」の残高（#152）。**掲載スクショのため**に 1 本ぶんだけ入れる。
+  // 残高が 0 だと画面が「動画を 1 本見ると 5 枚 読み取れます」になり、
+  // ストアの絵として**広告を見ないと使えないアプリ**に見えてしまう。
+  // 残高があれば「あと 5 枚 読み取れます」になる。
+  // 入れるのは `app_meta` の 1 行だけで、リワードの不変条件
+  // （残高を消費できたときだけ送る）は変わらない。
+  await database
+    .insert(schema.appMeta)
+    .values([...seedAppMeta])
+    .onConflictDoNothing();
 
   // Populate FTS index
   await rebuildPlantingFts(database);

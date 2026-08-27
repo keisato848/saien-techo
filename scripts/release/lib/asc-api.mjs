@@ -96,3 +96,4 @@ export async function ascRequest(method, apiPath, body) {
 export const ascGet = (p) => ascRequest('GET', p);
 export const ascPost = (p, body) => ascRequest('POST', p, body);
 export const ascPatch = (p, body) => ascRequest('PATCH', p, body);
+export const ascDelete = (p) => ascRequest('DELETE', p);

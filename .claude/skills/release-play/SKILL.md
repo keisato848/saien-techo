@@ -78,6 +78,13 @@ AI 相談のサーバーはだいどこの Railway を共用している（決�
   `android/` は gitignore なので手パッチは prebuild で消える。
   `bundleRelease` は `SAIEN_UPLOAD_*` 未設定だと**意図的に失敗する**（debug 署名の AAB を
   Play へ上げない安全弁）
+- **`--prebuild` を付けないと、直前のビルドの JS バンドルが再利用される。** これは
+  両方向に効く。**env を付けたのに焼き込まれない**（2026-08-21・サンプルデータが空のまま）
+  だけでなく、**env を付けていないのに前のビルドの値が残る**（2026-08-27・AdMob の env を
+  一切渡していない検証用 APK が**本番の広告を表示した**）。
+  **検証用・ストアショット用のビルド前に `apps/mobile/android/app/build/generated/assets/`
+  を消すこと。** 「実 ID は EAS の production プロファイルにしか無いのでローカルビルドには
+  入らない」は**成り立たない**
 - **versionCode**: バリデーション拒否では未消費 — 同じ番号で再提出可
 - **pre-commit Prettier**: 変更ファイルを `prettier --write` してから commit
 - ProGuard マッピング未添付の警告はブロッカーではない（任意）
