@@ -34,7 +34,11 @@
  *   - スクショ用シミュレータを1台だけ Boot しておく（推奨: iPhone 16 Pro Max = 6.9"/1320x2868）:
  *       xcrun simctl boot "iPhone 16 Pro Max" ; open -a Simulator
  *   - オンボーディング（地域選択）は済ませておく。未完了だとどのルートを開いても
- *     ようこそ画面が出る
+ *     ようこそ画面が出る。
+ *     **`simctl uninstall` するとここもやり直しになる**（アプリコンテナごと消えるので
+ *     完了フラグも消える。2026-08-27 に踏んだ）。シードを入れ直すために uninstall した
+ *     あとは、**必ず人が「はじめる」を 1 タップする**こと — `simctl` に入力注入は無い。
+ *     地域は既定の「中間地」のまま触らない（掲載スクショの「8月の菜園仕事」と揃うため）
  *
  * 使い方:
  *   node scripts/release/capture-ios-screenshots.mjs [--udid <udid>] [--shots 01,02]

@@ -11,6 +11,11 @@
  *         node scripts/agent/build-android.mjs --arch x86_64
  *       adb install -r apps/mobile/android/app/build/outputs/apk/release/app-release.apk
  *   - 推奨エミュレータ: saien_e2e_api36（1080x2400 = Play 掲載のスマホ用スクショ解像度）
+ *   - **`-wipe-data` で起こし直すとオンボーディング（地域選択）もやり直しになる。**
+ *     未完了だとどのルートを開いても「ようこそ」画面が出る。通知の許可ダイアログも出る。
+ *     **撮る前に人が「Allow」→「はじめる」を押すこと**（地域は既定の「中間地」のまま触らない）。
+ *     シードを入れ直したいときは wipe-data が要る — 残高などの行は `onConflictDoNothing` で
+ *     入るので、古い行が残っていると上書きされない
  *   - wipe-data 直後の初回ブートは SystemUI が重く ANR ダイアログが写り込むことがある。
  *     起動後 2〜3 分待ってから実行する（出たら Wait で閉じて再実行）
  *
