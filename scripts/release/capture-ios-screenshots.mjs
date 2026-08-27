@@ -100,6 +100,10 @@ const SHOTS = [
   // 撮れるのは入口の空状態（「育てているものを撮って登録」）。
   // 中身の詰まった画面が要るなら、リワードを見て実際に読み取らせるしかない。
   { file: '09-planting-identify.png', route: 'plantings/identify', label: '写真から栽培を登録' },
+  // 1.2 の目玉（#161）。同じ栽培の写真を 2 枚並べて経過日数の差を出す。
+  // **栽培詳細では折り返しの下**にあるので、直リンクで撮る
+  // （simctl にスクロール手段が無く、Android だけスクロールすると両ストアで絵が変わる）。
+  { file: '10-growth-record.png', route: `plantings/${PLANTING_ID}/compare`, label: '成長記録' },
 ];
 
 const udid = args.udid ?? autoSelectBootedUdid();

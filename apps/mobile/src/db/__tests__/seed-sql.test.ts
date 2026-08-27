@@ -23,6 +23,7 @@ jest.mock('../client', () => ({
 
 import { seedDatabase } from '../migrate';
 import { seedPlantings, seedPlantingTags } from '../seed';
+import { IDENTIFY_PER_REWARD } from '../../services/identify-credit.service';
 
 const describeIfSqlite = isSqliteAvailable ? describe : describe.skip;
 
@@ -92,6 +93,17 @@ describeIfSqlite('seedDatabase against real SQLite', () => {
   it('外部キーが全て解決している', () => {
     // PRAGMA foreign_key_check は違反行を返す。空なら健全
     expect(rows('PRAGMA foreign_key_check')).toEqual([]);
+  });
+
+  it('「写真から登録」の残高が入り、IDENTIFY_PER_REWARD と一致する', () => {
+    // seed.ts は循環 import を避けて数値で持っている。**ずれたらここで落とす。**
+    // 残高が 0 だと掲載スクショが「動画を 1 本見ると…」になり、
+    // 広告を見ないと使えないアプリに見える（#152）
+    const got = rows<{ value: string }>(
+      "SELECT value FROM app_meta WHERE key = 'planting_identify_credits'",
+    );
+    expect(got).toHaveLength(1);
+    expect(Number(got[0].value)).toBe(IDENTIFY_PER_REWARD);
   });
 
   it('2 回呼んでも重複しない', async () => {
