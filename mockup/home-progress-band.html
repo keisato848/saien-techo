@@ -1,0 +1,675 @@
+<title>栽培体験の再設計</title>
+<style>
+  :root {
+    --ground: #e7ebdd;
+    --bg: #f6f8f1;
+    --surface: #ffffff;
+    --line: #dde5d2;
+    --ink: #1e2a16;
+    --ink-dim: #5e6b52;
+    --accent: #5b9b3e;
+    --accent-ink: #2f4a25;
+    --accent-soft: #eaf3e0;
+    --accent-line: #cbe0b8;
+    --harvest: #b4622a;
+    --harvest-soft: #fbeee2;
+    --harvest-line: #eed6be;
+  }
+  * {
+    box-sizing: border-box;
+  }
+  body {
+    margin: 0;
+    background: var(--ground);
+    color: var(--ink);
+    font-family: 'Yu Gothic UI', 'Yu Gothic', Meiryo, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    line-height: 1.6;
+  }
+  .page {
+    max-width: 1180px;
+    margin: 0 auto;
+    padding: 40px 22px 80px;
+  }
+
+  header.masthead {
+    margin-bottom: 34px;
+  }
+  .concept {
+    font-size: 12px;
+    letter-spacing: 3px;
+    color: var(--accent-ink);
+    font-weight: 700;
+  }
+  h1 {
+    font-size: 34px;
+    margin: 6px 0 4px;
+    letter-spacing: 1px;
+  }
+  .tagline {
+    font-size: 15px;
+    color: var(--ink-dim);
+    margin: 0;
+  }
+  .tagline b {
+    color: var(--accent-ink);
+  }
+  .provenance {
+    font-size: 11.5px;
+    color: var(--ink-dim);
+    margin-top: 10px;
+  }
+  .provenance code {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    padding: 1px 5px;
+    font-size: 10.5px;
+  }
+
+  .stage {
+    display: flex;
+    gap: 30px;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    margin-bottom: 8px;
+  }
+  .unit {
+    flex: 1 1 460px;
+    display: flex;
+    gap: 18px;
+    align-items: flex-start;
+    min-width: 340px;
+  }
+  .phone {
+    width: 330px;
+    flex: 0 0 330px;
+    background: var(--bg);
+    border-radius: 26px;
+    padding: 14px 12px 18px;
+    box-shadow: 0 12px 32px rgba(47, 74, 37, 0.18);
+  }
+  .phase {
+    font-size: 11px;
+    letter-spacing: 2px;
+    font-weight: 700;
+    color: var(--ink-dim);
+    margin: 2px 4px 10px;
+  }
+  .aside {
+    flex: 1 1 120px;
+    min-width: 120px;
+    font-size: 12px;
+    color: var(--ink-dim);
+    line-height: 1.75;
+    padding-top: 8px;
+  }
+  .aside p {
+    margin: 0 0 12px;
+    padding-left: 10px;
+    border-left: 2px solid var(--accent-line);
+  }
+  .aside b {
+    color: var(--accent-ink);
+  }
+
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    padding: 12px 13px;
+    margin-bottom: 10px;
+  }
+  .cardLabel {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 1.5px;
+    color: var(--ink-dim);
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 8px;
+  }
+  .cardLabel .lk {
+    color: var(--accent);
+    font-weight: 500;
+    letter-spacing: 0;
+  }
+
+  /* 今週の要注意 */
+  .riskCard {
+    border-color: var(--accent-line);
+    background: linear-gradient(180deg, #f2f7ea, var(--surface) 70%);
+  }
+  .riskRow {
+    display: flex;
+    gap: 11px;
+  }
+  .riskArt {
+    flex: 0 0 54px;
+    height: 54px;
+    border-radius: 12px;
+    background: var(--accent-soft);
+    display: grid;
+    place-items: center;
+  }
+  .riskHead {
+    font-size: 14.5px;
+    font-weight: 700;
+    margin: 0 0 3px;
+  }
+  .riskWhy {
+    font-size: 11.5px;
+    color: var(--ink-dim);
+    margin: 0;
+  }
+  .riskBtns {
+    display: flex;
+    gap: 8px;
+    margin-top: 10px;
+  }
+  .btn {
+    flex: 1;
+    text-align: center;
+    border-radius: 999px;
+    padding: 8px 0;
+    font-size: 13px;
+    font-weight: 700;
+  }
+  .btnMain {
+    background: var(--accent);
+    color: #fff;
+  }
+  .btnSub {
+    background: var(--surface);
+    border: 1.5px solid var(--harvest-line);
+    color: var(--harvest);
+  }
+  .stampNote {
+    font-size: 10.5px;
+    color: var(--ink-dim);
+    margin-top: 8px;
+  }
+  .stamp {
+    display: inline-block;
+    background: var(--accent-soft);
+    color: var(--accent-ink);
+    border-radius: 999px;
+    padding: 1px 8px;
+    font-weight: 700;
+  }
+
+  /* 収支 */
+  .ledgerNums {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    font-size: 12px;
+    color: var(--ink-dim);
+  }
+  .ledgerNums b {
+    font-size: 15px;
+    color: var(--ink);
+    font-variant-numeric: tabular-nums;
+  }
+  .goal {
+    font-size: 12.5px;
+    font-weight: 700;
+    color: var(--harvest);
+    margin-top: 6px;
+  }
+  .forecast {
+    font-size: 10.5px;
+    color: var(--ink-dim);
+    margin-top: 3px;
+  }
+
+  /* つぎの作業 */
+  .task {
+    font-size: 13.5px;
+    font-weight: 700;
+    margin: 0;
+  }
+  .taskWhy {
+    font-size: 11px;
+    color: var(--ink-dim);
+    margin: 2px 0 0;
+  }
+  .zero {
+    color: var(--accent-ink);
+    font-weight: 700;
+  }
+
+  /* 三点帯カード */
+  .bandRow {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+  }
+  .crop {
+    font-size: 13.5px;
+    font-weight: 700;
+  }
+  .badge {
+    font-size: 10.5px;
+    font-weight: 700;
+    color: var(--harvest);
+    background: var(--harvest-soft);
+    border-radius: 999px;
+    padding: 1px 8px;
+  }
+  .cd {
+    font-size: 12px;
+    color: var(--accent-ink);
+    font-weight: 700;
+    margin: 2px 0 4px;
+  }
+
+  /* シーズン集計 */
+  .settle {
+    text-align: left;
+  }
+  .settleBig {
+    font-size: 22px;
+    font-weight: 700;
+    color: var(--accent-ink);
+    margin: 2px 0;
+    font-variant-numeric: tabular-nums;
+  }
+  .settleSub {
+    font-size: 11.5px;
+    color: var(--ink-dim);
+  }
+  .plRow {
+    display: flex;
+    justify-content: space-between;
+    font-size: 12px;
+    padding: 5px 0;
+    border-top: 1px dashed var(--line);
+    font-variant-numeric: tabular-nums;
+  }
+  .plRow .win {
+    color: var(--accent-ink);
+    font-weight: 700;
+  }
+  .plRow .lose {
+    color: var(--ink-dim);
+  }
+  .share {
+    margin-top: 9px;
+    text-align: center;
+    border: 1.5px solid var(--accent-line);
+    border-radius: 999px;
+    padding: 7px 0;
+    font-size: 12.5px;
+    font-weight: 700;
+    color: var(--accent-ink);
+  }
+  .memo {
+    font-size: 12.5px;
+    margin: 0;
+  }
+  .memo q {
+    font-style: normal;
+    font-weight: 700;
+    color: var(--accent-ink);
+  }
+
+  /* 下段の解説 */
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 22px;
+    margin-top: 34px;
+  }
+  .panel {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    padding: 18px 20px;
+  }
+  .panel h2 {
+    font-size: 15px;
+    margin: 0 0 10px;
+    color: var(--accent-ink);
+  }
+  .panel ol,
+  .panel ul {
+    margin: 0;
+    padding-left: 18px;
+    font-size: 12.5px;
+    color: var(--ink-dim);
+  }
+  .panel li {
+    margin-bottom: 6px;
+  }
+  .panel li b {
+    color: var(--ink);
+  }
+  table.mini {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12px;
+  }
+  table.mini th {
+    text-align: left;
+    font-size: 10.5px;
+    letter-spacing: 1px;
+    color: var(--ink-dim);
+    border-bottom: 1px solid var(--line);
+    padding: 4px 6px;
+  }
+  table.mini td {
+    padding: 6px;
+    border-bottom: 1px dashed var(--line);
+    vertical-align: top;
+  }
+  table.mini td:first-child {
+    font-weight: 700;
+    white-space: nowrap;
+    color: var(--accent-ink);
+  }
+  .cost {
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+  }
+</style>
+
+<div class="page">
+  <header class="masthead">
+    <div class="concept">検討 — 5 案 × 3 審査から統合した 4 機能</div>
+    <h1>栽培体験の再設計</h1>
+    <p class="tagline">
+      <b>記録 → 予測 → 結果 → 翌年</b>を閉じる 4
+      機能。週次リスクチェック／収支の可視化／実績による予測補正／翌年への引き継ぎ。
+    </p>
+    <p class="provenance">
+      全文は <code>docs/検討-栽培体験の再設計.md</code>。写真の見比べは AI
+      の説明文（R32）だけ後段に回し、UI 自体は写真基盤の修正とセットで残す（doc §6-1）。<b
+        >全段で変動費 ¥0・サーバー変更なし・ネイティブ依存追加なし。</b
+      >
+    </p>
+    <p class="provenance">
+      <b>これは検討時のモックで、実装の正ではない。</b>ホームの進行帯は #162 で実装したが、<b
+        >縞の収穫窓は描いていない</b
+      >
+      — その幅を出せるデータが無い（<code>harvestAfterDays</code> は単一の日数で幅を持たず、<code
+        >crop_calendars</code
+      >
+      の収穫窓は月単位で植え付け日と無関係）。写真の見比べは <b>「成長記録」</b>に改名して #161
+      で実装した。実装の正は <code>docs/検討-ホームの進行帯と気温.md</code> と
+      <code>docs/レビュー記録/2026-08-26-進行帯の利用者目線レビュー.md</code>。
+    </p>
+  </header>
+
+  <div class="stage">
+    <!-- ============ シーズン中 ============ -->
+    <div class="unit">
+      <div class="phone">
+        <div class="phase">シーズン中のホーム</div>
+
+        <div class="card riskCard">
+          <div class="cardLabel"><span>今週の要注意</span><span class="lk">8/24（月）〜</span></div>
+          <div class="riskRow">
+            <div class="riskArt">
+              <svg
+                width="38"
+                height="38"
+                viewBox="0 0 38 38"
+                role="img"
+                aria-label="葉裏のアブラムシ"
+              >
+                <path d="M19 4 C8 8 6 20 19 34 C32 20 30 8 19 4 Z" fill="#8ab473" />
+                <path d="M19 6 L19 32" stroke="#5b9b3e" stroke-width="1.4" />
+                <circle cx="14" cy="17" r="2.1" fill="#2f4a25" />
+                <circle cx="23" cy="21" r="2.1" fill="#2f4a25" />
+                <circle cx="17" cy="25" r="2.1" fill="#2f4a25" />
+              </svg>
+            </div>
+            <div>
+              <p class="riskHead">ミニトマト: 葉裏チェックの週</p>
+              <p class="riskWhy">
+                5/2 に植えて 18 日目。中間地の 5 月はアブラムシが出やすい時期です
+              </p>
+            </div>
+          </div>
+          <div class="riskBtns">
+            <div class="btn btnMain">見た → 兆候なし</div>
+            <div class="btn btnSub">兆候あり</div>
+          </div>
+          <div class="stampNote">
+            どちらも作業ログに記録される（新種別
+            <span class="stamp">点検</span>）。進行帯にドットが打たれる
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="cardLabel"><span>収支</span><span class="lk">集計 →</span></div>
+          <div class="ledgerNums">
+            <span>支出 <b>¥3,480</b></span
+            ><span>収穫換算 <b>¥2,940</b></span>
+          </div>
+          <svg
+            viewBox="0 0 300 18"
+            width="100%"
+            height="18"
+            style="margin-top: 6px"
+            role="img"
+            aria-label="回収メーター 84%"
+          >
+            <defs>
+              <pattern
+                id="st"
+                width="6"
+                height="6"
+                patternTransform="rotate(45)"
+                patternUnits="userSpaceOnUse"
+              >
+                <rect width="6" height="6" fill="#fbeee2" />
+                <line x1="0" y1="0" x2="0" y2="6" stroke="#e2b48c" stroke-width="3" />
+              </pattern>
+            </defs>
+            <rect x="0" y="3" width="300" height="12" rx="6" fill="#eff3e7" />
+            <rect x="0" y="3" width="253" height="12" rx="6" fill="#5b9b3e" />
+            <rect x="253" y="3" width="47" height="12" fill="url(#st)" />
+            <rect x="0" y="3" width="300" height="12" rx="6" fill="none" stroke="#dde5d2" />
+          </svg>
+          <div class="goal">あと ¥540 で黒字</div>
+          <div class="forecast">回収の見込み: 6 月下旬〜（実績値・去年 2 回から）</div>
+        </div>
+
+        <div class="card">
+          <div class="cardLabel"><span>つぎの作業</span></div>
+          <p class="task">ナス: 追肥の時期です</p>
+          <p class="taskWhy">
+            目安 30 日・いま 32 日目 ／ 在庫の化成肥料で足ります<span class="zero"
+              >（追加出費 ¥0）</span
+            >
+          </p>
+        </div>
+
+        <div class="card">
+          <div class="cardLabel"><span>育てているもの</span></div>
+          <div class="bandRow">
+            <span class="crop">ミニトマト</span><span class="badge">回収 62%</span>
+          </div>
+          <div class="cd">
+            収穫まで あと 12 日<span
+              style="font-weight: 500; color: var(--ink-dim); font-size: 10.5px"
+              >（実績値 52 日）</span
+            >
+          </div>
+          <svg
+            viewBox="0 0 300 30"
+            width="100%"
+            height="30"
+            role="img"
+            aria-label="ミニトマトの進行帯"
+          >
+            <rect x="0" y="8" width="300" height="12" rx="6" fill="#eff3e7" />
+            <rect x="0" y="8" width="188" height="12" rx="6" fill="#5b9b3e" />
+            <rect x="222" y="8" width="78" height="12" rx="6" fill="url(#st)" />
+            <circle cx="42" cy="26" r="2.2" fill="#8ab473" />
+            <circle cx="96" cy="26" r="2.2" fill="#8ab473" />
+            <circle cx="150" cy="26" r="2.2" fill="#8ab473" />
+            <polygon points="188,7 184,1 192,1" fill="#2f4a25" />
+            <line x1="188" y1="8" x2="188" y2="22" stroke="#2f4a25" stroke-width="1.5" />
+          </svg>
+          <div style="height: 8px"></div>
+          <div class="bandRow">
+            <span class="crop">ナス</span><span class="badge">回収 48%</span>
+          </div>
+          <div class="cd">追肥まで あと 3 日</div>
+          <svg viewBox="0 0 300 30" width="100%" height="30" role="img" aria-label="ナスの進行帯">
+            <rect x="0" y="8" width="300" height="12" rx="6" fill="#eff3e7" />
+            <rect x="0" y="8" width="92" height="12" rx="6" fill="#5b9b3e" />
+            <rect x="240" y="8" width="60" height="12" rx="6" fill="url(#st)" />
+            <circle cx="30" cy="26" r="2.2" fill="#8ab473" />
+            <circle cx="66" cy="26" r="2.2" fill="#8ab473" />
+            <polygon points="92,7 88,1 96,1" fill="#2f4a25" />
+            <line x1="92" y1="8" x2="92" y2="22" stroke="#2f4a25" stroke-width="1.5" />
+          </svg>
+        </div>
+      </div>
+      <div class="aside">
+        <p>
+          <b>週 1 回・最上位 1 件のみ通知。</b
+          >閾値未満の週は通知せず「今週は要注意なし」と表示。同じ失敗種で兆候なしが 2
+          回続くと重み半減（誤警告の抑制）
+        </p>
+        <p><b>帯のドット</b>＝点検の記録。「見ただけ」も作業ログになる</p>
+        <p>
+          <b>金額の表示は獲得フレームのみ。</b>「あと ¥540
+          で黒字」「元が取れました」。支出を催促する通知は出さない
+        </p>
+        <p>
+          凡例: 塗り＝経過 ／ 縞＝収穫窓 ／ ▲＝今日。2
+          年目は窓が<b>実績値</b>由来の見込みに置き換わる
+        </p>
+      </div>
+    </div>
+
+    <!-- ============ オフシーズン ============ -->
+    <div class="unit">
+      <div class="phone">
+        <div class="phase">オフシーズンのホーム（冬）</div>
+
+        <div class="card settle">
+          <div class="cardLabel">
+            <span>シーズン集計</span><span class="lk">2026 シーズン</span>
+          </div>
+          <div class="settleBig">＋¥4,220 の黒字</div>
+          <div class="settleSub">無事だった週 14/18 ・ ¥換算できた収穫 12/15 回</div>
+          <div style="height: 8px"></div>
+          <div class="plRow">
+            <span>ミニトマト</span><span class="win">¥800 → ¥6,200（7.7 倍）</span>
+          </div>
+          <div class="plRow">
+            <span>キュウリ</span><span class="win">¥620 → ¥1,480（2.4 倍）</span>
+          </div>
+          <div class="plRow">
+            <span>ナス</span><span class="lose">¥1,200 → ¥900（楽しみ代 ¥50/月）</span>
+          </div>
+          <div class="share">集計カードを書き出す</div>
+        </div>
+
+        <div class="card">
+          <div class="cardLabel"><span>翌年への引き継ぎ</span></div>
+          <p class="memo">ミニトマト（5 月・南の畝）— <q>支柱は最初から太いのに</q></p>
+          <p class="taskWhy" style="margin-top: 6px">
+            片づけレビューで入力した 1 行。翌年の同じ週の警告に添えて再表示される
+          </p>
+        </div>
+
+        <div class="card">
+          <div class="cardLabel"><span>春支度</span></div>
+          <p class="task">ミニトマトの植えどきまで あと 3 週</p>
+          <p class="taskWhy">シーズン集計から作付け計画の下書きを生成できます</p>
+        </div>
+      </div>
+      <div class="aside">
+        <p><b>オフシーズンは同じ枠が入れ替わる。</b>集計 → 引き継ぎメモ → 植えどきカウントダウン</p>
+        <p>
+          <b>道具は初期投資として分離</b>（初年度を赤字に見せない）。赤字作物には「楽しみ代
+          ¥50/月」の別フレームを併置
+        </p>
+        <p>
+          <b>初収穫時に答え合わせ:</b>「目安 45 日 → 実際 52
+          日。実績に反映しました（植え付けが例年より遅かった影響とみられます）」—
+          外れの原因は常に外部へ帰属させる
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <div class="grid">
+    <div class="panel">
+      <h2>ループの閉じ方</h2>
+      <ol>
+        <li>
+          <b>シーズン中（週次）:</b> 週 1 の点検（10 秒）→ 記録 or AI 確認 → 収穫を撮る →
+          収支が伸びる → 黒字化
+        </li>
+        <li>
+          <b>シーズンごと:</b> 答え合わせ（実績補正）→ 片づけレビュー（30 秒）→ 冬のシーズン集計 →
+          翌春の個人化警告と作付け下書き
+        </li>
+        <li>
+          <b>閉路:</b> 記録 → 予測 → 結果 → 翌年 → また記録。各辺が次の辺の入力になる。<b
+            >「何も使わない」（記憶＋写真フォルダ）には構造上できない 3 つ</b
+          >
+          — 先回りして知らせる／元が取れたか答える／去年の記述を該当時期に返す
+        </li>
+      </ol>
+    </div>
+    <div class="panel">
+      <h2>段階導入（1.3 →）— 全段 変動費 ¥0</h2>
+      <table class="mini">
+        <tr>
+          <th>版</th>
+          <th>テーマ</th>
+          <th>締切の理由</th>
+        </tr>
+        <tr>
+          <td>1.3</td>
+          <td>週次リスクチェック（失敗マスター 10 作物×3）</td>
+          <td class="cost">秋作に間に合わせる</td>
+        </tr>
+        <tr>
+          <td>1.4</td>
+          <td>片づけレビュー・答え合わせ・実績補正</td>
+          <td class="cost"><b>撤収期(10-11月)が採取の唯一の機会</b></td>
+        </tr>
+        <tr>
+          <td>1.5</td>
+          <td>収支（支出入力・市価・回収メーター・集計）</td>
+          <td class="cost">春の買い物期(2-3月)前</td>
+        </tr>
+        <tr>
+          <td>1.6</td>
+          <td>個人化警告・引き継ぎメモの再表示</td>
+          <td class="cost">1.4 のデータが前提</td>
+        </tr>
+      </table>
+    </div>
+    <div class="panel">
+      <h2>ストアスライド見出し</h2>
+      <ul>
+        <li>
+          <b>記録が、翌年の予測になる</b> —
+          週いちの点検、収穫の金額換算、実績にもとづく収穫予測（ヒーロー）
+        </li>
+        <li>
+          <b>「気づいたときには手遅れ」をなくす</b> — 週 1 回・10 秒。何もない週も点検の記録になる
+        </li>
+        <li>
+          <b>「野菜なんて買った方が安い」に数字で答える</b> —
+          撮るだけで個数と金額。元が取れた日がわかる
+        </li>
+        <li>
+          <b>本の「45 日」ではなく、うちの畑の「52 日」</b> —
+          去年の実績で収穫予測が変わる。記録するほど自分の畑に合う
+        </li>
+      </ul>
+    </div>
+  </div>
+</div>
