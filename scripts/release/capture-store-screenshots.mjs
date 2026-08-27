@@ -64,6 +64,10 @@ const SHOTS = [
   // 1.1 の目玉（#148）。**シードが「読み取り済み 1・待ち 1」をこの用途で用意している**
   // （seed.ts の seedHarvestPhotoReads）ので、ルートを開くだけで撮れる。
   { file: '08-harvest-reads.png', route: 'harvests/reads', label: '写真から記録（読み取り待ち）' },
+  // 1.2 の目玉（#152）。**ドラフトは DB に持たないのでシードで埋められない** —
+  // 撮れるのは入口の空状態（「育てているものを撮って登録」）。
+  // 中身の詰まった画面が要るなら、リワードを見て実際に読み取らせるしかない。
+  { file: '09-planting-identify.png', route: 'plantings/identify', label: '写真から栽培を登録' },
 ];
 
 const adbPath = resolveAdb();
