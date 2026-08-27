@@ -80,9 +80,21 @@ pnpm --filter mobile exec expo run:ios          # dev クライアントで起�
 
 ```bash
 EXPO_PUBLIC_ENABLE_SAMPLE_DATA=1 EXPO_PUBLIC_DISABLE_COACH_MARKS=1 \
-  pnpm --filter mobile exec expo run:ios --configuration Release
-node scripts/release/capture-ios-screenshots.mjs     # 9:41・満充電に固定して取得
+  pnpm --filter mobile exec expo run:ios --configuration Release --device <UDID>
+node scripts/release/capture-ios-screenshots.mjs --udid <UDID>   # 9:41・満充電に固定して取得
 ```
+
+> **`--device <UDID>` を省かない。** 端末選択の対話プロンプトで止まり、
+> **非対話環境（エージェント実行・stdin が /dev/null）では無反応のまま固まる**
+> （2026-08-27 実測: 14 分・CPU 0.94 秒・子プロセスなし）。`script` で擬似端末を
+> 与えても stdin が EOF で即終了する。通らないときは `xcodebuild` を直接叩く。
+>
+> **`ios/` が壊れていると Pods のビルドに失敗する。** `app 2` / `Pods 2` のような
+> 重複ディレクトリが残ると `EXPermissionsRequester.h` が見つからず
+> `could not build Objective-C module 'EXNotifications'` で落ちる。
+> `Podfile.lock` と `Manifest.lock` は一致したままなので CocoaPods は気づかない。
+> **ローカルでビルドする前に `expo prebuild --platform ios --clean`。**
+> EAS はクラウドも `--local` も一時コピーで prebuild し直すので表面化しない。
 
 - 出力 = `docs/store/app-store/phone-screenshots/`
 - 主サイズ = 6.9"（iPhone 16 Pro Max = 1320×2868）
