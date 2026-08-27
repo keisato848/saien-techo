@@ -28,9 +28,20 @@
  *   - Xcode + iOS シミュレータ、Node/pnpm セットアップ済み（docs/リリース手順.md §7・ios-release Skill）
  *   - ストアショット用ビルド（サンプルデータ有効＋コーチマーク無効）をシミュレータに導入済み:
  *       LANG=en_US.UTF-8 EXPO_PUBLIC_ENABLE_SAMPLE_DATA=1 EXPO_PUBLIC_DISABLE_COACH_MARKS=1 \
- *         pnpm --filter mobile exec expo run:ios --configuration Release
+ *         pnpm --filter mobile exec expo run:ios --configuration Release --device <UDID>
  *     （LANG が未設定だと CocoaPods が Encoding::CompatibilityError で落ちる）
  *     （または EAS の simulator ビルドを `xcrun simctl install booted <App.app>`）
+ *   - **`expo run:ios` には必ず `--device <UDID>` を渡す。** 付けないと端末選択の
+ *     対話プロンプトで止まり、**非対話環境（エージェント実行・stdin が /dev/null）では
+ *     無反応のまま固まる**（2026-08-27 に別リポジトリで 14 分・CPU 0.94 秒・
+ *     子プロセスなしで停止したのを実測）。`script` で擬似端末を与えても
+ *     stdin が EOF になって即終了する。通らないときは `xcodebuild` を直接叩く
+ *   - **`ios/` は壊れることがある。** `app 2` / `Pods 2` のような重複ディレクトリが
+ *     残ると `EXPermissionsRequester.h` が見つからず
+ *     `could not build Objective-C module 'EXNotifications'` で落ちる。
+ *     `Podfile.lock` と `Manifest.lock` は一致したままなので CocoaPods は気づかない。
+ *     **ローカルでビルドする前に `expo prebuild --platform ios --clean` を通す。**
+ *     EAS はクラウドも `--local` も一時コピーで prebuild し直すので表面化しない
  *   - スクショ用シミュレータを1台だけ Boot しておく（推奨: iPhone 16 Pro Max = 6.9"/1320x2868）:
  *       xcrun simctl boot "iPhone 16 Pro Max" ; open -a Simulator
  *   - オンボーディング（地域選択）は済ませておく。未完了だとどのルートを開いても
