@@ -23,12 +23,32 @@ AI 相談のサーバーはだいどこの Railway を共用している（決�
 
 ## 1. 手順（ローカル経路・v1.0 実績）
 
+> **順序の原則: リリースに要る工程を末尾に置かない。** 末尾の工程は落ちる。
+> このリポジトリで実際に落ちた 2 件:
+>
+> - **1.0.0 のとき main が 114 コミット遅れたまま放置された。** 提出も公開も
+>   07-28 の main で行われ、main が動いたのは 08-22（1.1）が最初
+> - **v1.0.0 / v1.1.0 のタグが打たれていなかった**（2026-08-27 に遡って付与）。
+>   手順が「公開されたら打つ」＝末尾だったため
+>
+> だから **main マージとタグを提出より前に置く**。「リリースしてから main へ」
+> 「公開されたらタグ」は、どちらも同じ理由で採らない。
+
 0. **現状を見る**: `node scripts/release/store-status.mjs`（両ストアで何版が出ているか。終わったらもう一度）
 1. **バンプ**: `apps/mobile/app.json` の `version` / `android.versionCode` を更新
    （app.json が唯一のソース。`android/` は gitignore された prebuild 生成物）
    → feature ブランチ → PR → develop へマージ
 2. **リリース PR**: `gh pr create --base main --head develop --title "release: x.y.z (versionCode N)"`
    → `gh pr checks <PR> --watch` → `gh pr merge <PR> --merge`（**develop は削除しない**）
+   2b. **タグを打つ（提出より前）**:
+   ```bash
+   git fetch origin && git tag -a v<x.y.z> origin/main -F -   # 由来を本文に残す
+   git push origin v<x.y.z>
+   ```
+   2c. **タグからビルドする**: `git checkout v<x.y.z>`
+   **これで「タグ = 成果物の元」が定義として成立する。** develop からビルドして
+   あとで main へマージすると、一致するのは結果論でしかない。
+   鮮度チェック（§5 / release-verify §0）もこの前提で意味を持つ。
 3. **署名と広告の env を通す**（値をチャット・ログに出さない）:
    ```powershell
    $creds = Get-Content "C:\secure\saien-upload-credentials.properties" | Where-Object { $_ -match '=' }
@@ -61,21 +81,13 @@ AI 相談のサーバーはだいどこの Railway を共用している（決�
    ```
 8. **初回提出は Console で仕上げる**: draft を載せただけでは審査に入らない。
    「公開の概要」→「変更を審査に送信」（`console-browser-ops` §2）
-9. **提出したら、その場でタグを打つ**（**「公開されたら」では遅い**）:
+9. **却下・出し直しのときはタグを動かす**: 同じバージョン番号で作り直したら
+   `git tag -f -a v<x.y.z> <新しい commit>` → `git push -f origin v<x.y.z>`。
+   **タグが「出していないもの」を指したままにしない。**
+   バージョン番号ごと上げるなら新しいタグになるので、動かす必要はない。
 
-   ```bash
-   git tag -a v<x.y.z> <main のリリースマージ commit> -F -   # 由来を本文に残す
-   git push origin v<x.y.z>
-   ```
-
-   **提出時点なら成果物と commit が 1 対 1 で対応する。** 公開を待つ間に develop が
-   進み、どれを出したのか後から辿れなくなる。審査に落ちて出し直すときは打ち直せばよい。
-
-   > **v1.0.0 / v1.1.0 は 2026-08-27 まで打たれていなかった。** 手順に
-   > 「公開されたら」と書いてあったため、公開を確認する頃には別の作業へ移っていた。
-   > 遡って打ったが、**v1.0.0 は正確に打てなかった** — Android(vc2) と iOS(build 4) で
-   > 成果物の元 commit が違ううえ、当時 main が更新されていなかった。
-   > タグ本文に近似である旨を書いてある。
+   > iOS 1.0 は実際に却下されて build 2 → 3 → 4 と出し直している（マイク権限の
+   > purpose string）。**出し直しは例外ではなく通常運転**として扱う。
 
 ## 2. 既知の落とし穴
 
