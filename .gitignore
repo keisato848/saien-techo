@@ -78,3 +78,10 @@ Temp/
 !.claude/settings.json
 chat.json
 nul
+
+# ビルド成果物（リポジトリに入れない）
+# `eas build --local` は apps/mobile/ 直下に build-<epoch>.ipa を吐く。20MB 級で、
+# 無視していないと `git add -A` で入る（2026-08-27 に Mac 側が気づいた）。
+# android/ は既にプロジェクトごと無視しているので aab/apk は対象外。
+apps/mobile/build-*.ipa
+*.ipa
