@@ -31,12 +31,12 @@ const DRY_RUN = process.argv.includes('--dry-run');
  */
 const ORDER = [
   '01-home.png',
+  '09-planting-identify.png',
   '02-plantings.png',
   '03-planting-detail.png',
   '04-harvests.png',
   '08-harvest-reads.png',
   '05-crop-guide.png',
-  '06-calendar.png',
   '07-materials.png',
 ];
 

@@ -54,12 +54,12 @@ const EDITABLE_STATES = new Set(['PREPARE_FOR_SUBMISSION', 'DEVELOPER_REJECTED',
  */
 const ORDER = [
   '01-home.png',
+  '09-planting-identify.png',
   '02-plantings.png',
   '03-planting-detail.png',
   '04-harvests.png',
   '08-harvest-reads.png',
   '05-crop-guide.png',
-  '06-calendar.png',
   '07-materials.png',
 ];
 
