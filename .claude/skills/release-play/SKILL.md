@@ -23,6 +23,7 @@ AI 相談のサーバーはだいどこの Railway を共用している（決�
 
 ## 1. 手順（ローカル経路・v1.0 実績）
 
+0. **現状を見る**: `node scripts/release/store-status.mjs`（両ストアで何版が出ているか。終わったらもう一度）
 1. **バンプ**: `apps/mobile/app.json` の `version` / `android.versionCode` を更新
    （app.json が唯一のソース。`android/` は gitignore された prebuild 生成物）
    → feature ブランチ → PR → develop へマージ
@@ -37,7 +38,7 @@ AI 相談のサーバーはだいどこの Railway を共用している（決�
    ```
 4. **AAB ビルド**: `node scripts/agent/build-android.mjs --bundle`
    （**生 gradlew は PreToolUse で deny される** — Metro のワークスペース解決で必ず失敗するため）
-5. **成果物検証**: `release-verify` スキル（16KB アライメント / 権限 / **個人情報の非公開確認 §6** /
+5. **成果物検証**: `release-verify` スキル（**§0 鮮度 — versionCode が app.json と一致し古くないこと。ここを飛ばして旧 AAB を検証した実績あり** / 16KB アライメント / 権限 / **個人情報の非公開確認 §6** /
    アップグレードインストール）
 6. **本番構成の実機 E2E**（マージ前検証の原則・省略しない）:
    - `adb reverse --remove-all` で localhost ブリッジを排除（API 既定 = だいどこ Railway 本番）
@@ -77,6 +78,13 @@ AI 相談のサーバーはだいどこの Railway を共用している（決�
   `android/` は gitignore なので手パッチは prebuild で消える。
   `bundleRelease` は `SAIEN_UPLOAD_*` 未設定だと**意図的に失敗する**（debug 署名の AAB を
   Play へ上げない安全弁）
+- **`--prebuild` を付けないと、直前のビルドの JS バンドルが再利用される。** これは
+  両方向に効く。**env を付けたのに焼き込まれない**（2026-08-21・サンプルデータが空のまま）
+  だけでなく、**env を付けていないのに前のビルドの値が残る**（2026-08-27・AdMob の env を
+  一切渡していない検証用 APK が**本番の広告を表示した**）。
+  **検証用・ストアショット用のビルド前に `apps/mobile/android/app/build/generated/assets/`
+  を消すこと。** 「実 ID は EAS の production プロファイルにしか無いのでローカルビルドには
+  入らない」は**成り立たない**
 - **versionCode**: バリデーション拒否では未消費 — 同じ番号で再提出可
 - **pre-commit Prettier**: 変更ファイルを `prettier --write` してから commit
 - ProGuard マッピング未添付の警告はブロッカーではない（任意）

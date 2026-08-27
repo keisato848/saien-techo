@@ -31,6 +31,14 @@ jest.mock('../../../src/services/planting.service', () => ({
   getPlantingList: (...args: unknown[]) => mockGetPlantingList(...args),
 }));
 
+// 進行帯は DB を引くので、ホームの並びを見るテストでは黙らせる
+// （帯そのものの検証は growth-progress.service.test.ts が実 SQLite で行う）
+const mockGetPlantingProgress = jest.fn();
+jest.mock('../../../src/services/growth-progress.service', () => ({
+  ...jest.requireActual('../../../src/services/growth-progress.service'),
+  getPlantingProgress: (...args: unknown[]) => mockGetPlantingProgress(...args),
+}));
+
 // 子カードは印だけ出す。中身ではなく「どこに置いたか」を見たいので
 function mockMarkerCard(label: string) {
   return () => {
@@ -127,6 +135,7 @@ describe('ホーム（S01 / WBS 3.5）', () => {
     mockPush.mockReset();
     mockGetTimeline.mockReset().mockResolvedValue([]);
     mockGetPlantingList.mockReset().mockResolvedValue([]);
+    mockGetPlantingProgress.mockReset().mockResolvedValue(new Map());
   });
 
   describe('カードの並び', () => {

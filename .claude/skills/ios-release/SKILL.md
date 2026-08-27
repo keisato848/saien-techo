@@ -108,6 +108,9 @@ pnpm exec eas build -p ios --profile production
 
 ```bash
 pnpm exec eas submit -p ios --profile production --id <BUILD_ID> --non-interactive
+# バイナリを上げるだけ。審査提出は次（UI でやらない — 1.1 で抜けた工程）:
+node scripts/release/submit-asc-version.mjs --dry-run
+node scripts/release/submit-asc-version.mjs --submit   # 承認を得てから
 ```
 
 > **「Something went wrong」を信じない。** だいどこでは失敗表示のまま

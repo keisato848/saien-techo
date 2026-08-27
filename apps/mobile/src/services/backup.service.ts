@@ -15,6 +15,7 @@ import { strFromU8, strToU8, unzipSync, zipSync } from 'fflate';
 
 import { getDb, getExpoDb, isNativePlatform } from '../db/client';
 import { rebuildPlantingFts } from '../db/migrate';
+import { resolvePhotoUri, toStoredPhotoPath } from './photo-path';
 
 const BACKUP_FORMAT = 'saien.local-backup';
 const BACKUP_SCHEMA_VERSION = 2;
@@ -619,6 +620,38 @@ const PHOTO_SOURCES = [
   { table: 'plantings', idColumn: 'id', pathColumn: 'cover_photo_path' },
 ] as const;
 
+/**
+ * `local_path` が空のままの `photos` 行を落とす。
+ *
+ * 移行 zip の書き出しは「端末から消えている写真」の `local_path` を null にするが、
+ * `photos.local_path` は NOT NULL（migrate.ts）。null のまま `replaceDatabase` へ渡すと
+ * INSERT が制約違反になり、catch が ROLLBACK して**復元全体が失敗する**
+ * （写真 1 枚の欠損で全データが戻らない）。行ごと落として復元を通す。
+ *
+ * `plantings.cover_photo_path` は nullable なので対象外。
+ *
+ * @returns 落とした行数
+ */
+/**
+ * payload の写真パス列を DB の正規形（相対パス）へ揃える。
+ * 復元は「アプリの外から来た値を DB へ書く」唯一の経路なので、ここで正規化する。
+ */
+function normalizePhotoPaths(payload: LocalBackupPayload): void {
+  for (const source of PHOTO_SOURCES) {
+    for (const row of payload.tables[source.table]) {
+      const value = rowString(row, source.pathColumn);
+      if (value) row[source.pathColumn] = toStoredPhotoPath(value);
+    }
+  }
+}
+
+function dropPhotoRowsWithoutFile(payload: LocalBackupPayload): number {
+  const rows = payload.tables.photos;
+  const kept = rows.filter((row) => Boolean(rowString(row, 'local_path')));
+  payload.tables.photos = kept;
+  return rows.length - kept.length;
+}
+
 /** アーカイブ内で一意になる鍵。テーブルをまたいで id が衝突しても混ざらない */
 function photoKey(table: string, id: string): string {
   return `${table}:${id}`;
@@ -761,7 +794,9 @@ export async function createMigrationBackupPackage(): Promise<MigrationBackupOpe
       if (!rowId || !localPath) continue;
 
       const key = photoKey(source.table, rowId);
-      const info = await FileSystem.getInfoAsync(localPath);
+      // DB は相対パスを持つので、ファイルを触る前に絶対 URI へ戻す
+      const fileUri = resolvePhotoUri(localPath);
+      const info = await FileSystem.getInfoAsync(fileUri);
       if (!info.exists) {
         // 端末から消えている写真は、復元先で「無い写真」を指さないよう空にする
         updatePhotoLocalPath(payload, key, null);
@@ -770,7 +805,7 @@ export async function createMigrationBackupPackage(): Promise<MigrationBackupOpe
 
       const archivePath = createMigrationPhotoArchivePath(key, localPath);
       const fileName = archivePath.split('/').pop() ?? `${rowId}.jpg`;
-      const photoBase64 = await FileSystem.readAsStringAsync(localPath, {
+      const photoBase64 = await FileSystem.readAsStringAsync(fileUri, {
         encoding: FileSystem.EncodingType.Base64,
       });
       zipEntries[archivePath] = base64ToUint8Array(photoBase64);
@@ -847,6 +882,12 @@ export async function restoreLocalBackup(uri: string): Promise<BackupOperationRe
   const raw = await FileSystem.readAsStringAsync(uri, { encoding: FileSystem.EncodingType.UTF8 });
   const payload = parseLocalBackupPayload(raw);
 
+  // **「DB に入るのは相対パスだけ」を境界で守る。**
+  // v13 以前に作られたバックアップは絶対パスを持つ。そのまま書き戻すと、
+  // migrate v13 は起動時にしか走らないので絶対パスのまま残り、
+  // 次に写真を編集したときに「DB 値 ≠ 画面の値」で**残す写真まで削除**してしまう
+  normalizePhotoPaths(payload);
+
   replaceDatabase(payload);
   await rebuildSearchIndexes();
 
@@ -896,9 +937,15 @@ export async function restoreMigrationBackupPackage(
         encoding: FileSystem.EncodingType.Base64,
       });
       copiedPhotoUris.push(destination);
-      updatePhotoLocalPath(payload, photo.id, destination);
+      // DB には相対パスを入れる（iOS はコンテナ UUID が変わるため）
+      updatePhotoLocalPath(payload, photo.id, toStoredPhotoPath(destination));
       restoredPhotoCount += 1;
     }
+
+    // **写真ファイルが無い行は落としてから書き戻す。**
+    // photos.local_path は NOT NULL なので、null のまま INSERT すると
+    // 制約違反でトランザクションごと ROLLBACK し、復元が丸ごと失敗する
+    dropPhotoRowsWithoutFile(payload);
 
     replaceDatabase(payload);
     await rebuildSearchIndexes();

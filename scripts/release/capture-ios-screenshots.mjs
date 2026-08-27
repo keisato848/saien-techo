@@ -34,7 +34,11 @@
  *   - スクショ用シミュレータを1台だけ Boot しておく（推奨: iPhone 16 Pro Max = 6.9"/1320x2868）:
  *       xcrun simctl boot "iPhone 16 Pro Max" ; open -a Simulator
  *   - オンボーディング（地域選択）は済ませておく。未完了だとどのルートを開いても
- *     ようこそ画面が出る
+ *     ようこそ画面が出る。
+ *     **`simctl uninstall` するとここもやり直しになる**（アプリコンテナごと消えるので
+ *     完了フラグも消える。2026-08-27 に踏んだ）。シードを入れ直すために uninstall した
+ *     あとは、**必ず人が「はじめる」を 1 タップする**こと — `simctl` に入力注入は無い。
+ *     地域は既定の「中間地」のまま触らない（掲載スクショの「8月の菜園仕事」と揃うため）
  *
  * 使い方:
  *   node scripts/release/capture-ios-screenshots.mjs [--udid <udid>] [--shots 01,02]
@@ -96,6 +100,14 @@ const SHOTS = [
   { file: '07-materials.png', route: 'materials', label: '資材の在庫' },
   // 1.1 の目玉（#148）。シードが「読み取り済み 1・待ち 1」を用意している（I8 §2）
   { file: '08-harvest-reads.png', route: 'harvests/reads', label: '写真から記録（読み取り待ち）' },
+  // 1.2 の目玉（#152）。**ドラフトは DB に持たないのでシードで埋められない** —
+  // 撮れるのは入口の空状態（「育てているものを撮って登録」）。
+  // 中身の詰まった画面が要るなら、リワードを見て実際に読み取らせるしかない。
+  { file: '09-planting-identify.png', route: 'plantings/identify', label: '写真から栽培を登録' },
+  // 1.2 の目玉（#161）。同じ栽培の写真を 2 枚並べて経過日数の差を出す。
+  // **栽培詳細では折り返しの下**にあるので、直リンクで撮る
+  // （simctl にスクロール手段が無く、Android だけスクロールすると両ストアで絵が変わる）。
+  { file: '10-growth-record.png', route: `plantings/${PLANTING_ID}/compare`, label: '成長記録' },
 ];
 
 const udid = args.udid ?? autoSelectBootedUdid();

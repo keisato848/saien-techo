@@ -17,14 +17,18 @@ export const UPLOAD_BASE = `https://androidpublisher.googleapis.com/upload/andro
 
 const KEY_PATH = process.env.PLAY_SERVICE_ACCOUNT_KEY ?? 'C:/secure/play-service-account.json';
 
-/** サービスアカウント JWT で androidpublisher スコープのアクセストークンを得る */
-export async function getAccessToken() {
+/**
+ * サービスアカウント JWT でアクセストークンを得る。
+ * 既定は androidpublisher。store-status.mjs は統計用に playdeveloperreporting を渡す
+ * （同じ SA でも **GCP 側で API を有効化していなければ 403**）。
+ */
+export async function getAccessToken(scope = 'https://www.googleapis.com/auth/androidpublisher') {
   const key = JSON.parse(fs.readFileSync(KEY_PATH, 'utf8'));
   const now = Math.floor(Date.now() / 1000);
   const b64 = (o) => Buffer.from(JSON.stringify(o)).toString('base64url');
   const unsigned = `${b64({ alg: 'RS256', typ: 'JWT' })}.${b64({
     iss: key.client_email,
-    scope: 'https://www.googleapis.com/auth/androidpublisher',
+    scope,
     aud: 'https://oauth2.googleapis.com/token',
     iat: now,
     exp: now + 3600,

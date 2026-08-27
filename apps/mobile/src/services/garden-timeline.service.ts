@@ -12,6 +12,7 @@ import { and, desc, eq, gte, inArray, lte } from 'drizzle-orm';
 
 import { getDb, isNativePlatform } from '../db/client';
 import * as schema from '../db/schema';
+import { resolvePhotoUri } from './photo-path';
 import type { CareLogKind, GardenTimelineEntry, HarvestUnit } from './types';
 
 const CARE_PHOTO_OWNER = 'care_log';
@@ -153,7 +154,7 @@ export async function getTimeline(options: TimelineOptions = {}): Promise<Garden
 
     for (const row of [...photoRows].sort((a, b) => a.sortOrder - b.sortOrder)) {
       const list = byOwner.get(row.ownerId) ?? [];
-      list.push(row.localPath);
+      list.push(resolvePhotoUri(row.localPath));
       byOwner.set(row.ownerId, list);
     }
   }

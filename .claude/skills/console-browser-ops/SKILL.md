@@ -127,10 +127,86 @@ Claude in Chrome（mcp\_\_claude-in-chrome\_\_\*）でメインループが実�
 4. リワードは報酬の「数 1 / アイテム名」を入れる（アプリは視聴完了イベントだけ見るので名前は表示用）
 5. アプリ確認（承認状況「要審査」）は**ストア掲載とリンクするまで解消しない**。
    それまで広告配信は制限される（テスト広告は出る）
+
+   **「準備完了」に必要な 3 条件**（2026-08-23 に 3 アプリで実測）:
+   1. **ストアにリンク**（アプリ一覧の「ストアを追加」→ 検索 → 追加 → 保存）。
+      **数字のストア ID では 0 件になる** — `https://apps.apple.com/jp/app/id<ID>` の
+      **URL** か、Android は**パッケージ名**で検索する
+   2. **ストア掲載に「デベロッパー ウェブサイト」がある**。Play は Console の
+      「ウェブサイト」（`edits.details.contactWebsite`・API で設定可）、**App Store は
+      ASC のマーケティング URL**（`appStoreVersionLocalizations.marketingUrl`）。
+      さいえん手帳 iOS はここが空で「デベロッパー ウェブサイトが見つかりませんでした」になった。
+      **審査中（WAITING_FOR_REVIEW）のバージョンでも PATCH できる**が、
+      公開済み版は 409 STATE_ERROR → **次版の公開まで反映されない**
+   3. そのドメインの**ルート**に `app-ads.txt`（`pub-<ID>` が一致）
+      リンク保存直後は「app-ads.txt ファイルが設定されている可能性がありますが、
+      お客様の詳細情報が AdMob アカウントの情報と一致しません」と出るが、これは
+      **まだクロールされていないときの定型文**。「アップデートを確認」を押しても
+      クロール前は同じ文が出る。
+      **実際のクロール状況は「アプリ → app-ads.txt」タブ**（`/v2/apps/appadstxt`）の
+      「前回のクロール」「ステータスの詳細」で見る。**タブに行が無い = まだクロールされていない**
+      （「広告リクエストが少ないと表示されないことがある」と注記あり）。
+      待ち時間はヘルプの公称で「最大 24 時間」、**リクエストが少ないと数日〜最長 1 か月**
+      （support.google.com/admob/answer/9679128）。
+      **App Store は別枠で「7 日ほど」**（app-ads.txt タブ上部のバナー・2026-08-27 実測）:
+      「Apple App Store 内のドメイン URL を変更された場合、Google のクローラが検知するまで
+      7 日ほどかかることがあります」。**24 時間で判断しないこと。**
+
+      **押す前に、自分側の 3 条件を全部つぶしてから押す。** 押しても状態は変わらないので、
+      条件が欠けたまま押すのは待ち時間を浪費するだけ。ブラウザなしで確かめられる:
+
+      ```bash
+      # 条件 2（App Store のデベロッパー ウェブサイト）— ログイン不要
+      curl -s "https://itunes.apple.com/lookup?bundleId=com.saientecho.app&country=jp" \
+        | python -c "import sys,json; r=json.load(sys.stdin)['results'][0]; print(r['version'], r['currentVersionReleaseDate'], r['sellerUrl'])"
+      # 条件 3（app-ads.txt がルートにあり pub-ID が一致）
+      curl -s "https://keisato848.github.io/app-ads.txt"
+      ```
+
+      > **実績（さいえん iOS・2026-08-27）:** 3 条件とも満たしているのに未クロールだった。
+      > ストアはリンク済み（`6801141151`）、`sellerUrl=https://keisato848.github.io` は
+      > 1.1.0 公開（2026-08-23）で公開済み、app-ads.txt は HTTP 200 で行も一致。
+      > それでも app-ads.txt タブの行は「前回のクロール = —」「app-ads.txt ファイルが
+      > 見つかりません」。**公開から 4 日目で、7 日の窓の内側だった。**
+      > 同じドメイン・同じ App Store で**だいどこ iOS は「2 時間前」にクロール済み**なので、
+      > 経路そのものは成立している。**待つ以外にやることは無い。**
+      >
+      > 併せて、**クエリ数が「100 未満」だと表に出ないことがある**（タブの注記）。
+      > 出したばかりのアプリは広告リクエストが少ないので、7 日を超えることがある。
+
+      **`*.github.io` は使える（2026-08-23 実証）**: だいどこ Android の行が
+      `https://keisato848.github.io/app-ads.txt` を「1 時間前」にクロールして
+      「見つかり、確認されました」になっている。「github.io は Public Suffix List 上の
+      共有ドメインだからクローラが `github.io/app-ads.txt` を読んで失敗する」という説は
+      この実データと矛盾する（IAB 仕様もルートドメインを public suffix +1 で定義しており、
+      `keisato848.github.io` がルート）。**独自ドメインは要らない。** 失敗の原因は
+      「未クロール」か「ストア掲載にデベロッパー ウェブサイトが無い」のどちらか
+
+   > **Chrome 拡張（Claude in Chrome）が無いセッションでも操作できる。**
+   > `chrome.exe --remote-debugging-port=9333 --user-data-dir=C:/tmp/chrome-saien-profile` で
+   > 別プロファイルを起動し、DevTools Protocol（Node 22 の WebSocket）で click / fill / screenshot する
+   > （2026-08-23 / 08-27 の実績。クライアントは `C:/tmp/cdp.mjs`・未収録）。ログインはユーザーが行う。
+   > **タブグループ名は CDP からは付けられない**（拡張 API）ので、
+   > **プロファイルを分けること自体が「さいえん作業だと分かる」印**になる。
+   >
+   > **Bash ツールの `&` では起動が残らない。** コマンドが返るとプロセスごと落ちて
+   > 9333 が LISTEN しない（2026-08-27 に踏んだ）。**PowerShell の `Start-Process`** で起動する:
+   >
+   > ```powershell
+   > Start-Process -FilePath "C:\Program Files\Google\Chrome\Application\chrome.exe" `
+   >   -ArgumentList '--remote-debugging-port=9333','--user-data-dir=C:\tmp\chrome-saien-profile',
+   >     '--no-first-run','--no-default-browser-check','<開きたい URL>'
+   > ```
+   >
+   > AdMob の表は `<tr>` ではないので **`eval` の DOM 走査では取れない**。スクショで読む。
+   > ページ全体のスクロールも `window.scrollTo` では動かない
+   > （内側の div がスクロールコンテナ）。
+
 6. **app-ads.txt** は任意（推奨）。`google.com, pub-<ID>, DIRECT, f08c47fec0942fa0` を
    **Play 掲載の「ウェブサイト」に設定したドメイン直下**へ置く。
-   さいえん手帳は連絡先にメールしか設定していないため**現状は設置できない**
-   （やるなら先に掲載情報へウェブサイト URL を追加する）。
+   **さいえん手帳も設置済み**（2026-08-23 に Play 掲載の「ウェブサイト」へ
+   `https://keisato848.github.io` を設定 → 同じファイルが両アプリに効く）。
+   だいどこと**同じパブリッシャー ID なのでファイルは 1 本で足りる**。
    だいどこは `keisato848/keisato848.github.io`（GitHub Pages）に設置していて、
    Pages ビルドが `building` で固まったら `gh api .../pages/builds -X POST` で再トリガー
 

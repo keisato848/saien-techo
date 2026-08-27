@@ -11,6 +11,7 @@ import * as schema from './schema';
 import { isSampleDataEnabled } from './sampleData';
 import { seedSamplePhotos } from './seed-photos';
 import {
+  seedAppMeta,
   seedCareLogs,
   seedCropCalendars,
   seedCropGuides,
@@ -33,7 +34,7 @@ type DB = ExpoSQLiteDatabase<typeof schema>;
 //      同じ kind でも春秋 2 つの窓を持てるように）
 // v11: だいどこ由来テーブルを DROP（WBS 2.9e。処分表は docs/WBS.md §2.9）
 // v12: harvest_photo_reads（「写真から記録」の読み取り状態 — #143）
-export const CURRENT_SCHEMA_VERSION = 12;
+export const CURRENT_SCHEMA_VERSION = 13;
 
 const DEFAULT_USER_ID = 'user-kei';
 const DEFAULT_FAMILY_ID = 'family-001';
@@ -44,7 +45,7 @@ const DEFAULT_INVITE_CODE = 'DK0001';
 
 // サンプルデータの中身を変えたら必ず上げる。据え置くと、既にシード済みの端末は
 // appMeta のマーカーが一致して seedDatabase() が即 return し、新しい行が入らない。
-const SAMPLE_DATA_VERSION = '8';
+const SAMPLE_DATA_VERSION = '9';
 const SAMPLE_DATA_META_KEY = 'sample_data_version';
 
 export interface SeedSnapshot {
@@ -364,6 +365,20 @@ const DAIDOKO_TABLES_TO_DROP = [
   'recipe_fts',
 ] as const;
 
+/** v13 の相対化対象。photo-path.ts の PHOTO_DIRECTORIES と揃える */
+const PHOTO_DIRECTORY_NAMES = [
+  'garden-photos/',
+  'recipe-photos/',
+  'cooking-photos/',
+  'backup-photos/',
+] as const;
+
+/** 写真パスを持つ列 */
+const PHOTO_PATH_COLUMNS = [
+  ['photos', 'local_path'],
+  ['plantings', 'cover_photo_path'],
+] as const;
+
 /** Run migrations (create tables + additive column changes) */
 export function runMigrations(expoDb: { execSync: (sql: string) => void }): MigrationResult {
   expoDb.execSync(CREATE_TABLES_SQL);
@@ -385,6 +400,20 @@ export function runMigrations(expoDb: { execSync: (sql: string) => void }): Migr
       // column already exists (fresh install or already migrated)
     }
   }
+  // v13: 写真パスを相対化する。
+  // 以前は `file:///…/Documents/garden-photos/x.jpg` のような絶対パスを保存していたが、
+  // **iOS はアプリのデータコンテナ UUID が再インストール・端末復元で変わる**ため、
+  // バックアップを入れ直すと全写真のパスが無効になり画面が空白になっていた。
+  // instr が 1 を返す行（既に相対）は書き換えないので、毎起動走っても冪等。
+  for (const directory of PHOTO_DIRECTORY_NAMES) {
+    for (const [table, column] of PHOTO_PATH_COLUMNS) {
+      expoDb.execSync(
+        `UPDATE ${table} SET ${column} = substr(${column}, instr(${column}, '${directory}')) ` +
+          `WHERE ${column} IS NOT NULL AND instr(${column}, '${directory}') > 1`,
+      );
+    }
+  }
+
   expoDb.execSync(`PRAGMA user_version = ${CURRENT_SCHEMA_VERSION}`);
   return { schemaVersion: CURRENT_SCHEMA_VERSION };
 }
@@ -668,6 +697,17 @@ export async function seedDatabase(database: DB): Promise<void> {
 
   // 掲載スクリーンショット用の写真（WBS 3.8）。失敗しても投げない
   await seedSamplePhotos(database);
+
+  // 「写真から登録」の残高（#152）。**掲載スクショのため**に 1 本ぶんだけ入れる。
+  // 残高が 0 だと画面が「動画を 1 本見ると 5 枚 読み取れます」になり、
+  // ストアの絵として**広告を見ないと使えないアプリ**に見えてしまう。
+  // 残高があれば「あと 5 枚 読み取れます」になる。
+  // 入れるのは `app_meta` の 1 行だけで、リワードの不変条件
+  // （残高を消費できたときだけ送る）は変わらない。
+  await database
+    .insert(schema.appMeta)
+    .values([...seedAppMeta])
+    .onConflictDoNothing();
 
   // Populate FTS index
   await rebuildPlantingFts(database);
