@@ -482,6 +482,26 @@ export const seedPlantingTagMasters = [
   { id: 'tag-p05', familyId: FAMILY_ID, name: 'プランター', color: null },
 ] as const;
 
+/**
+ * `app_meta` へ入れるサンプル値。**掲載スクリーンショットのためだけ**にある。
+ *
+ * `planting_identify_credits` が 0 だと「写真から登録」の画面が
+ * 「動画を 1 本見ると 5 枚 読み取れます」になり、ストアの絵として
+ * **広告を見ないと使えないアプリ**に見えてしまう。残高があれば
+ * 「あと 5 枚 読み取れます」になる。
+ *
+ * **値は `identify-credit.service.ts` の `IDENTIFY_PER_REWARD` と一致させること。**
+ * ここから service を import すると db → service の循環になるので数値で持ち、
+ * ずれたらテストが落ちるようにしてある（`seed-sql.test.ts`）。
+ */
+export const seedAppMeta = [
+  {
+    key: 'planting_identify_credits',
+    value: '5',
+    updatedAt: SAIEN_TIMESTAMP,
+  },
+] as const;
+
 export const seedPlantingTags = [
   { plantingId: 'planting-tomato-01', tagId: 'tag-p01' },
   { plantingId: 'planting-tomato-01', tagId: 'tag-p02' },

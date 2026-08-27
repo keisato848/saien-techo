@@ -73,6 +73,27 @@ ORDER 配列（**ファイル名の番号は撮影順で、表示順とは一致
 11. PNG の変更を PR で develop にマージ
     （**コミット前に `use-store-photos.mjs --status` が「元のまま」を返すこと**）
 
+### App Store 側（`--ios`）
+
+**文言も表示順も Play と同じ `SLIDES` から出る。** 生キャプチャだけが別で、
+`docs/store/app-store/phone-screenshots/`（**macOS で `capture-ios-screenshots.mjs`**）。
+合成は `compose-store-slides.mjs --ios` で `1320x2868`（iPhone 6.9"）を書き出す。
+
+反映は **Windows から可**: `node scripts/release/update-asc-screenshots.mjs [--dry-run]`。
+
+- **準備中のバージョンにしか反映できない。** 公開済み・審査中は API が拒否する。
+  先に `submit-asc-version.mjs` でバージョンページを作ること
+  （新バージョンは前バージョンのスクショを引き継ぐので、消してから上げ直す）
+- 表示種別は `APP_IPHONE_67`。**1320x2868 以外は弾く**
+- `ORDER` に書いたのに実体が無いものは**黙って飛ばさず、落としたことを出す**
+- アップロードは「予約 → `uploadOperations` のとおりに PUT → MD5 で確定」。
+  **`assetDeliveryState` が COMPLETE になるまで待つ**（PATCH が通っただけでは終わりでない）
+
+> **取得は無人化できない。** iOS 17+ はカスタムスキームを開くと
+> 「"さいえん手帳" で開きますか?」が出て、押すまでアプリが起動しない。
+> 2026-08-14 に**7 枚とも「ホーム画面＋確認ダイアログ」を撮って captured と報告した**
+> 事故があったので、取得スクリプトは毎回「前面に出たか」を確認して待つ。
+
 ### 本物の菜園写真を掲載スクショに使う（配布物には入れない）
 
 **`assets/` に置いたものは配布される。** `seed-photos.ts` は `require()` で読むので

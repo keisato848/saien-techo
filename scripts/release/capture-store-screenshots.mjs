@@ -11,6 +11,11 @@
  *         node scripts/agent/build-android.mjs --arch x86_64
  *       adb install -r apps/mobile/android/app/build/outputs/apk/release/app-release.apk
  *   - 推奨エミュレータ: saien_e2e_api36（1080x2400 = Play 掲載のスマホ用スクショ解像度）
+ *   - **`-wipe-data` で起こし直すとオンボーディング（地域選択）もやり直しになる。**
+ *     未完了だとどのルートを開いても「ようこそ」画面が出る。通知の許可ダイアログも出る。
+ *     **撮る前に人が「Allow」→「はじめる」を押すこと**（地域は既定の「中間地」のまま触らない）。
+ *     シードを入れ直したいときは wipe-data が要る — 残高などの行は `onConflictDoNothing` で
+ *     入るので、古い行が残っていると上書きされない
  *   - wipe-data 直後の初回ブートは SystemUI が重く ANR ダイアログが写り込むことがある。
  *     起動後 2〜3 分待ってから実行する（出たら Wait で閉じて再実行）
  *
@@ -64,6 +69,14 @@ const SHOTS = [
   // 1.1 の目玉（#148）。**シードが「読み取り済み 1・待ち 1」をこの用途で用意している**
   // （seed.ts の seedHarvestPhotoReads）ので、ルートを開くだけで撮れる。
   { file: '08-harvest-reads.png', route: 'harvests/reads', label: '写真から記録（読み取り待ち）' },
+  // 1.2 の目玉（#152）。**ドラフトは DB に持たないのでシードで埋められない** —
+  // 撮れるのは入口の空状態（「育てているものを撮って登録」）。
+  // 中身の詰まった画面が要るなら、リワードを見て実際に読み取らせるしかない。
+  { file: '09-planting-identify.png', route: 'plantings/identify', label: '写真から栽培を登録' },
+  // 1.2 の目玉（#161）。同じ栽培の写真を 2 枚並べて経過日数の差を出す。
+  // **栽培詳細では折り返しの下**にあるので、直リンクで撮る
+  // （simctl にスクロール手段が無く、Android だけスクロールすると両ストアで絵が変わる）。
+  { file: '10-growth-record.png', route: `plantings/${PLANTING_ID}/compare`, label: '成長記録' },
 ];
 
 const adbPath = resolveAdb();
