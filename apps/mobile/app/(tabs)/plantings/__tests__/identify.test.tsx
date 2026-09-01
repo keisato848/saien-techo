@@ -5,6 +5,7 @@
  * - 残高が無いときに動画を勧め、視聴完了でだけ残高を足す
  * - 推定は必ず直せる（正はユーザーの確定 — #139 の共通の作法）
  * - 写真が使えなくても手入力へ抜けられる（行き止まりにしない）
+ * - pending が残ったら、写真を選んだ直後に自動でリワードを開始する（利用者の要望・2026-09-02）
  */
 import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import type { useEffect as reactUseEffect } from 'react';
@@ -231,6 +232,104 @@ describe('写真から登録', () => {
         ),
       ).toBeTruthy(),
     );
+  });
+
+  // ここから自動リワード(利用者からの要望を採用・2026-09-02)。
+  // 「動画を見ればいいなら、写真を選んだ時点で自動的にリワードを始めてほしい」という要望どおり、
+  // handleWatchAd（手動の動画ボタン）を一度も押さずに showRewardedAd が呼ばれることを見る。
+  it('残高不足で写真を選ぶと、動画ボタンを押していなくても自動でリワードを開始する。見終えなければ再読み取りしない', async () => {
+    mockCredits = 0;
+    mockCapturePhotos.mockResolvedValue([{ localPath: 'a.jpg' }]);
+    mockIdentifyBatch.mockResolvedValue([{ imageUri: 'a.jpg', state: 'pending' }]);
+    mockShowRewardedAd.mockResolvedValue({ rewarded: false });
+
+    render(<IdentifyPlantingScreen />);
+    await waitFor(() => expect(screen.getByLabelText('写真を選ぶ')).toBeTruthy());
+    fireEvent.press(screen.getByLabelText('写真を選ぶ'));
+
+    // 「動画を見て◯枚を読み取る」ボタンには一度も触れていない
+    await waitFor(() => expect(mockShowRewardedAd).toHaveBeenCalledTimes(1));
+    expect(mockGrant).not.toHaveBeenCalled();
+    expect(mockIdentifyBatch).toHaveBeenCalledTimes(1); // 再読み取りはしていない
+    await waitFor(() =>
+      expect(
+        screen.getByText(
+          '動画が最後まで再生されませんでした。残りは動画を見るか、作物名を入力すれば登録できます。',
+        ),
+      ).toBeTruthy(),
+    );
+  });
+
+  it('自動リワードの視聴完了で pending だった写真が再読み取りされる。順序は視聴→付与→再読み取り', async () => {
+    mockCredits = 0;
+    mockCapturePhotos.mockResolvedValue([{ localPath: 'a.jpg' }]);
+    mockIdentifyBatch
+      .mockResolvedValueOnce([{ imageUri: 'a.jpg', state: 'pending' }])
+      .mockResolvedValueOnce([{ imageUri: 'a.jpg', state: 'identified', cropName: 'ナス' }]);
+    mockShowRewardedAd.mockResolvedValue({ rewarded: true });
+
+    render(<IdentifyPlantingScreen />);
+    await waitFor(() => expect(screen.getByLabelText('写真を選ぶ')).toBeTruthy());
+    fireEvent.press(screen.getByLabelText('写真を選ぶ'));
+
+    await waitFor(() => expect(mockGrant).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(mockIdentifyBatch).toHaveBeenCalledTimes(2));
+    expect(mockIdentifyBatch).toHaveBeenNthCalledWith(2, ['a.jpg'], expect.any(Function));
+
+    // 視聴 → 付与 → 再読み取りの順(逆だと「見ていないのに送る」余地ができる。#143 と同じ不変条件)
+    expect(mockShowRewardedAd.mock.invocationCallOrder[0]).toBeLessThan(
+      mockGrant.mock.invocationCallOrder[0],
+    );
+    expect(mockGrant.mock.invocationCallOrder[0]).toBeLessThan(
+      mockIdentifyBatch.mock.invocationCallOrder[1],
+    );
+
+    await waitFor(() => expect(screen.getByDisplayValue('ナス')).toBeTruthy());
+  });
+
+  it('広告が使えない環境では、pending が残っても自動開始せず案内文だけになる', async () => {
+    mockAdAvailable = false;
+    mockCredits = 1;
+    mockCapturePhotos.mockResolvedValue([{ localPath: 'a.jpg' }, { localPath: 'b.jpg' }]);
+    mockIdentifyBatch.mockResolvedValue([
+      { imageUri: 'a.jpg', state: 'identified', cropName: 'トマト' },
+      { imageUri: 'b.jpg', state: 'pending' },
+    ]);
+
+    render(<IdentifyPlantingScreen />);
+    await waitFor(() => expect(screen.getByLabelText('写真を選ぶ')).toBeTruthy());
+    fireEvent.press(screen.getByLabelText('写真を選ぶ'));
+
+    await waitFor(() =>
+      expect(
+        screen.getByText(
+          '残り 1 枚は動画を見ると読み取れます。作物名を入力すれば、その写真だけ先に登録できます。',
+        ),
+      ).toBeTruthy(),
+    );
+    expect(mockShowRewardedAd).not.toHaveBeenCalled();
+    expect(mockIdentifyBatch).toHaveBeenCalledTimes(1);
+  });
+
+  it('広告の呼び出しが例外を投げたら、既存の pending 案内文にフォールバックする', async () => {
+    mockCredits = 0;
+    mockCapturePhotos.mockResolvedValue([{ localPath: 'a.jpg' }]);
+    mockIdentifyBatch.mockResolvedValue([{ imageUri: 'a.jpg', state: 'pending' }]);
+    mockShowRewardedAd.mockRejectedValue(new Error('ad load failed'));
+
+    render(<IdentifyPlantingScreen />);
+    await waitFor(() => expect(screen.getByLabelText('写真を選ぶ')).toBeTruthy());
+    fireEvent.press(screen.getByLabelText('写真を選ぶ'));
+
+    await waitFor(() =>
+      expect(
+        screen.getByText(
+          '残り 1 枚は動画を見ると読み取れます。作物名を入力すれば、その写真だけ先に登録できます。',
+        ),
+      ).toBeTruthy(),
+    );
+    expect(mockGrant).not.toHaveBeenCalled();
+    expect(mockIdentifyBatch).toHaveBeenCalledTimes(1);
   });
 });
 

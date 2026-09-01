@@ -25,6 +25,15 @@
  * の不変条件（残高が無ければ 1 枚も送らない）は直さず、残高 0 のときだけ
  * 「動画を見て読み取る」ボタンを先に出す（`primaryButton`/`rewardButton` の並び替え）。
  *
+ * ## 写真を選んだ直後に自動でリワードを開始する（利用者の要望・2026-09-02）
+ *
+ * 「動画を見ればいいなら、写真を選んだ時点で自動的にリワードを始めてほしい」という要望を
+ * 採用した。`handlePick` は初回の読み取りで pending が残ったとき、広告が使えるなら
+ * （`isAdRewardAvailable()` かつ未視聴中）その場で 1 回だけリワードを自動開始する。
+ * 「写真を選ぶ」という利用者の明示操作の直後なので、無操作での自動再生には当たらないと
+ * 判断した。1 本見ても足りなければ 2 本目は自動で開始しない（広告を連発しない） —
+ * 続きは案内文と `rewardButton` で利用者の判断に委ねる。
+ *
  * ## 植え付け日・場所も写真から埋める（方針転換・2026-09-02・実機フィードバック）
  *
  * 「作物名しか取れないなら使い道がない」という実機からの指摘（利用者）を受けて、
@@ -74,6 +83,11 @@ import type { PlaceItem } from '../../../src/services/types';
 /** 登録日の既定は今日。PlantingForm と同じ作法（あとから編集できる） */
 function todayIso(): string {
   return new Date().toISOString();
+}
+
+/** 「残り N 枚は動画を見ると読み取れます」の定型文。手動待ち・自動リワード失敗時の両方で使う */
+function pendingMessage(count: number): string {
+  return `残り ${count} 枚は動画を見ると読み取れます。作物名を入力すれば、その写真だけ先に登録できます。`;
 }
 
 /**
@@ -166,11 +180,47 @@ export default function IdentifyPlantingScreen() {
         setProgressText(`${progress.done} / ${progress.total} 枚`);
       });
       setDrafts(applyPlantedOnDefaults(result, photos));
-      const pending = result.filter((draft) => draft.state === 'pending').length;
-      if (pending > 0) {
-        setMessage(
-          `残り ${pending} 枚は動画を見ると読み取れます。作物名を入力すれば、その写真だけ先に登録できます。`,
+      const pendingUris = result
+        .filter((draft) => draft.state === 'pending')
+        .map((draft) => draft.imageUri);
+
+      if (pendingUris.length === 0) {
+        return;
+      }
+
+      if (!isAdRewardAvailable() || watchingAd) {
+        setMessage(pendingMessage(pendingUris.length));
+        return;
+      }
+
+      // 「写真を選ぶ」という明示操作の直後にだけ自動開始する。以降は自動で連発しない。
+      setWatchingAd(true);
+      try {
+        const outcome = await getAdRewardProvider().showRewardedAd();
+        if (!outcome.rewarded) {
+          setMessage(
+            '動画が最後まで再生されませんでした。残りは動画を見るか、作物名を入力すれば登録できます。',
+          );
+          return;
+        }
+        await grantIdentifyCredits();
+        setProgressText(`0 / ${pendingUris.length} 枚`);
+        const reprocessed = await identifyPhotoBatch(pendingUris, (progress) => {
+          setProgressText(`${progress.done} / ${progress.total} 枚`);
+        });
+        // 読み直しで生育ステージ・推定経過日数が入るので、植え付け日も付け直す
+        const byUri = new Map(
+          applyPlantedOnDefaults(reprocessed, photos).map((draft) => [draft.imageUri, draft]),
         );
+        setDrafts((current) => current.map((draft) => byUri.get(draft.imageUri) ?? draft));
+        const stillPending = reprocessed.filter((draft) => draft.state === 'pending').length;
+        if (stillPending > 0) {
+          setMessage(pendingMessage(stillPending));
+        }
+      } catch {
+        setMessage(pendingMessage(pendingUris.length));
+      } finally {
+        setWatchingAd(false);
       }
     } finally {
       runningRef.current = false;
@@ -178,7 +228,7 @@ export default function IdentifyPlantingScreen() {
       setProgressText(null);
       await loadCredits();
     }
-  }, [loadCredits]);
+  }, [loadCredits, watchingAd]);
 
   /** 未読み取りぶんを、残高を足してから読み直す */
   const handleProcessPending = useCallback(async () => {
