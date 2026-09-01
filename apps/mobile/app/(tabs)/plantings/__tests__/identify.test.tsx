@@ -9,6 +9,8 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import type { useEffect as reactUseEffect } from 'react';
 
+jest.mock('@react-native-community/datetimepicker', () => 'DateTimePicker');
+
 const mockReplace = jest.fn();
 const mockBack = jest.fn();
 jest.mock('expo-router', () => ({
@@ -37,11 +39,6 @@ jest.mock('../../../../src/services/expo-photo-capture.adapter', () => ({
 
 const mockIdentifyBatch = jest.fn();
 const mockRegistrable = jest.fn();
-jest.mock('../../../../src/services/planting-draft.service', () => ({
-  MAX_IDENTIFY_BATCH: 10,
-  identifyPhotoBatch: (...args: unknown[]) => mockIdentifyBatch(...args),
-  registrableDrafts: (...args: unknown[]) => mockRegistrable(...args),
-}));
 
 let mockCredits = 0;
 const mockGrant = jest.fn();
@@ -63,11 +60,31 @@ jest.mock('../../../../src/services/planting.service', () => ({
   createPlanting: (...args: unknown[]) => mockCreatePlanting(...args),
 }));
 
+let mockPlaces: { id: string; name: string; kind: string }[] = [];
+jest.mock('../../../../src/services/place.service', () => ({
+  getPlaceList: () => Promise.resolve(mockPlaces),
+}));
+
+const mockPersistGardenPhotos = jest.fn();
+jest.mock('../../../../src/services/photo-storage.service', () => ({
+  persistGardenPhotos: (...args: unknown[]) => mockPersistGardenPhotos(...args),
+}));
+
+// estimatePlantedOn は実物を使う。植え付け日の出し方を画面側でモックすると、
+// 画面とサービスで違う既定値になっても気づけない（PlantingForm.test.tsx の elapsedDaysFrom と同じ作法）
+jest.mock('../../../../src/services/planting-draft.service', () => ({
+  ...jest.requireActual('../../../../src/services/planting-draft.service'),
+  MAX_IDENTIFY_BATCH: 10,
+  identifyPhotoBatch: (...args: unknown[]) => mockIdentifyBatch(...args),
+  registrableDrafts: (...args: unknown[]) => mockRegistrable(...args),
+}));
+
 import IdentifyPlantingScreen from '../identify';
 
 beforeEach(() => {
   mockCredits = 0;
   mockAdAvailable = true;
+  mockPlaces = [];
   mockReplace.mockReset();
   mockBack.mockReset();
   mockCapturePhotos.mockReset();
@@ -75,6 +92,7 @@ beforeEach(() => {
   mockGrant.mockReset().mockResolvedValue(5);
   mockShowRewardedAd.mockReset();
   mockCreatePlanting.mockReset().mockResolvedValue('p1');
+  mockPersistGardenPhotos.mockReset().mockResolvedValue(['file:///documents/garden-photos/x.jpg']);
   mockRegistrable.mockImplementation((drafts: { cropName?: string }[]) =>
     drafts.filter((d) => Boolean(d.cropName?.trim())),
   );
@@ -273,5 +291,189 @@ describe('ボタンの並び', () => {
     expect(primary).toBeGreaterThanOrEqual(0);
     expect(reward).toBeGreaterThanOrEqual(0);
     expect(primary).toBeLessThan(reward);
+  });
+});
+
+describe('場所の一括適用', () => {
+  it('場所が 0 件なら選択 UI を出さず、placeId は null で登録する', async () => {
+    mockCredits = 1;
+    mockPlaces = [];
+    mockCapturePhotos.mockResolvedValue([{ localPath: 'a.jpg' }]);
+    mockIdentifyBatch.mockResolvedValue([
+      { imageUri: 'a.jpg', state: 'identified', cropName: 'トマト' },
+    ]);
+
+    render(<IdentifyPlantingScreen />);
+    await waitFor(() => expect(screen.getByLabelText('写真を選ぶ')).toBeTruthy());
+    fireEvent.press(screen.getByLabelText('写真を選ぶ'));
+    await waitFor(() => expect(screen.getByDisplayValue('トマト')).toBeTruthy());
+
+    expect(screen.queryByText('場所（すべての下書きに適用）')).toBeNull();
+
+    fireEvent.press(screen.getByLabelText('1 件を登録する'));
+    await waitFor(() => expect(mockCreatePlanting).toHaveBeenCalled());
+    expect(mockCreatePlanting).toHaveBeenCalledWith(expect.objectContaining({ placeId: null }));
+  });
+
+  it('場所が 1 件だけなら選択 UI を出さず、自動でその場所を使う', async () => {
+    mockCredits = 1;
+    mockPlaces = [{ id: 'place-1', name: '南の畝', kind: 'row' }];
+    mockCapturePhotos.mockResolvedValue([{ localPath: 'a.jpg' }]);
+    mockIdentifyBatch.mockResolvedValue([
+      { imageUri: 'a.jpg', state: 'identified', cropName: 'トマト' },
+    ]);
+
+    render(<IdentifyPlantingScreen />);
+    await waitFor(() => expect(screen.getByLabelText('写真を選ぶ')).toBeTruthy());
+    fireEvent.press(screen.getByLabelText('写真を選ぶ'));
+    await waitFor(() => expect(screen.getByDisplayValue('トマト')).toBeTruthy());
+
+    expect(screen.queryByText('場所（すべての下書きに適用）')).toBeNull();
+
+    fireEvent.press(screen.getByLabelText('1 件を登録する'));
+    await waitFor(() => expect(mockCreatePlanting).toHaveBeenCalled());
+    expect(mockCreatePlanting).toHaveBeenCalledWith(
+      expect.objectContaining({ placeId: 'place-1' }),
+    );
+  });
+
+  // 下書きごとには選ばせない（一括登録のタップ数の少なさが価値のため — #149）
+  it('場所が複数あるときは一括選択 UI を出し、選んだ場所を全下書きへ適用する', async () => {
+    mockCredits = 2;
+    mockPlaces = [
+      { id: 'place-1', name: '南の畝', kind: 'row' },
+      { id: 'place-2', name: 'プランターA', kind: 'planter' },
+    ];
+    mockCapturePhotos.mockResolvedValue([{ localPath: 'a.jpg' }, { localPath: 'b.jpg' }]);
+    mockIdentifyBatch.mockResolvedValue([
+      { imageUri: 'a.jpg', state: 'identified', cropName: 'トマト' },
+      { imageUri: 'b.jpg', state: 'identified', cropName: 'キュウリ' },
+    ]);
+
+    render(<IdentifyPlantingScreen />);
+    await waitFor(() => expect(screen.getByLabelText('写真を選ぶ')).toBeTruthy());
+    fireEvent.press(screen.getByLabelText('写真を選ぶ'));
+    await waitFor(() => expect(screen.getByText('場所（すべての下書きに適用）')).toBeTruthy());
+
+    fireEvent.press(screen.getByLabelText('場所をプランターAにする'));
+    fireEvent.press(screen.getByLabelText('2 件を登録する'));
+
+    await waitFor(() => expect(mockCreatePlanting).toHaveBeenCalledTimes(2));
+    expect(mockCreatePlanting).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({ placeId: 'place-2' }),
+    );
+    expect(mockCreatePlanting).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({ placeId: 'place-2' }),
+    );
+  });
+});
+
+describe('カバー写真の保存', () => {
+  // #149 が問題にした肥大は毎日の記録写真の話で、登録 1 件 1 枚とは桁が違う
+  // （方針転換・2026-09-02）。保存できないだけで登録が止まるのは行き止まりなので fail-open
+  it('写真の保存に失敗しても登録自体は成功する（fail-open）', async () => {
+    mockCredits = 1;
+    mockCapturePhotos.mockResolvedValue([{ localPath: 'a.jpg' }]);
+    mockIdentifyBatch.mockResolvedValue([
+      { imageUri: 'a.jpg', state: 'identified', cropName: 'トマト' },
+    ]);
+    mockPersistGardenPhotos.mockRejectedValue(new Error('保存できません'));
+
+    render(<IdentifyPlantingScreen />);
+    await waitFor(() => expect(screen.getByLabelText('写真を選ぶ')).toBeTruthy());
+    fireEvent.press(screen.getByLabelText('写真を選ぶ'));
+    await waitFor(() => expect(screen.getByDisplayValue('トマト')).toBeTruthy());
+
+    fireEvent.press(screen.getByLabelText('1 件を登録する'));
+
+    await waitFor(() => expect(mockCreatePlanting).toHaveBeenCalled());
+    expect(mockCreatePlanting).toHaveBeenCalledWith(
+      expect.objectContaining({ coverPhotoPath: null }),
+    );
+  });
+
+  it('写真の保存に成功したらカバー写真として登録する', async () => {
+    mockCredits = 1;
+    mockCapturePhotos.mockResolvedValue([{ localPath: 'a.jpg' }]);
+    mockIdentifyBatch.mockResolvedValue([
+      { imageUri: 'a.jpg', state: 'identified', cropName: 'トマト' },
+    ]);
+    mockPersistGardenPhotos.mockResolvedValue(['file:///documents/garden-photos/g1.jpg']);
+
+    render(<IdentifyPlantingScreen />);
+    await waitFor(() => expect(screen.getByLabelText('写真を選ぶ')).toBeTruthy());
+    fireEvent.press(screen.getByLabelText('写真を選ぶ'));
+    await waitFor(() => expect(screen.getByDisplayValue('トマト')).toBeTruthy());
+
+    fireEvent.press(screen.getByLabelText('1 件を登録する'));
+
+    await waitFor(() => expect(mockCreatePlanting).toHaveBeenCalled());
+    expect(mockCreatePlanting).toHaveBeenCalledWith(
+      expect.objectContaining({ coverPhotoPath: 'file:///documents/garden-photos/g1.jpg' }),
+    );
+  });
+});
+
+describe('植え付け日の初期値', () => {
+  // estimatePlantedOn は実物を使っているので、ここでは画面への配線だけを見る
+  it('estimatedAgeDays があれば推定日を初期値にし、なぜその日付かを見せる', async () => {
+    mockCredits = 1;
+    mockCapturePhotos.mockResolvedValue([
+      { localPath: 'a.jpg', takenAt: '2024-06-15T00:00:00.000Z' },
+    ]);
+    mockIdentifyBatch.mockResolvedValue([
+      {
+        imageUri: 'a.jpg',
+        state: 'identified',
+        cropName: 'トマト',
+        growthStage: 'flowering',
+        estimatedAgeDays: 45,
+      },
+    ]);
+
+    render(<IdentifyPlantingScreen />);
+    await waitFor(() => expect(screen.getByLabelText('写真を選ぶ')).toBeTruthy());
+    fireEvent.press(screen.getByLabelText('写真を選ぶ'));
+
+    await waitFor(() => expect(screen.getByText('開花期と判断 → およそ45日前')).toBeTruthy());
+  });
+
+  it('estimatedAgeDays が無ければ撮影日をそのまま初期値にし、理由は出さない', async () => {
+    mockCredits = 1;
+    mockCapturePhotos.mockResolvedValue([
+      { localPath: 'a.jpg', takenAt: '2024-06-15T00:00:00.000Z' },
+    ]);
+    mockIdentifyBatch.mockResolvedValue([
+      { imageUri: 'a.jpg', state: 'identified', cropName: 'トマト' },
+    ]);
+
+    render(<IdentifyPlantingScreen />);
+    await waitFor(() => expect(screen.getByLabelText('写真を選ぶ')).toBeTruthy());
+    fireEvent.press(screen.getByLabelText('写真を選ぶ'));
+
+    await waitFor(() => expect(screen.getByDisplayValue('トマト')).toBeTruthy());
+    expect(screen.getByText('2024年6月15日')).toBeTruthy();
+    expect(screen.queryByText(/と判断/)).toBeNull();
+  });
+
+  // EXIF が無い写真（takenAt が無い）でも落ちない — estimatePlantedOn 側が今日にフォールバックする
+  it('撮影日が拾えない写真でも落ちずに登録できる', async () => {
+    mockCredits = 1;
+    mockCapturePhotos.mockResolvedValue([{ localPath: 'a.jpg' }]);
+    mockIdentifyBatch.mockResolvedValue([
+      { imageUri: 'a.jpg', state: 'identified', cropName: 'トマト' },
+    ]);
+
+    render(<IdentifyPlantingScreen />);
+    await waitFor(() => expect(screen.getByLabelText('写真を選ぶ')).toBeTruthy());
+    fireEvent.press(screen.getByLabelText('写真を選ぶ'));
+    await waitFor(() => expect(screen.getByDisplayValue('トマト')).toBeTruthy());
+
+    fireEvent.press(screen.getByLabelText('1 件を登録する'));
+    await waitFor(() => expect(mockCreatePlanting).toHaveBeenCalled());
+    const call = mockCreatePlanting.mock.calls[0][0] as { plantedOn: string };
+    expect(Number.isNaN(new Date(call.plantedOn).getTime())).toBe(false);
   });
 });
