@@ -194,7 +194,7 @@ describe('写真から登録', () => {
     expect(mockReplace).toHaveBeenCalledWith('/plantings/new');
   });
 
-  it('残高が足りないぶんは動画で読み取れると案内する', async () => {
+  it('残高が足りないぶんは動画で読み取れる・作物名を入れれば先に登録できると案内する', async () => {
     mockCredits = 1;
     mockCapturePhotos.mockResolvedValue([{ localPath: 'a.jpg' }, { localPath: 'b.jpg' }]);
     mockIdentifyBatch.mockResolvedValue([
@@ -208,8 +208,70 @@ describe('写真から登録', () => {
 
     await waitFor(() =>
       expect(
-        screen.getByText('残り 1 枚は動画を見ると読み取れます。手で入力してもかまいません。'),
+        screen.getByText(
+          '残り 1 枚は動画を見ると読み取れます。作物名を入力すれば、その写真だけ先に登録できます。',
+        ),
       ).toBeTruthy(),
     );
+  });
+});
+
+/** 描画結果に現れる文字列を、画面上の順に並べて返す（app/(tabs)/__tests__/home.test.tsx と同じ作法） */
+function renderedTexts(): string[] {
+  const found: string[] = [];
+  const walk = (node: unknown): void => {
+    if (typeof node === 'string') {
+      found.push(node);
+      return;
+    }
+    if (Array.isArray(node)) {
+      node.forEach(walk);
+      return;
+    }
+    if (node && typeof node === 'object' && 'children' in node) {
+      walk((node as { children: unknown }).children);
+    }
+  };
+  walk(screen.toJSON());
+  return found;
+}
+
+function orderOf(...labels: string[]): number[] {
+  const texts = renderedTexts();
+  return labels.map((label) => texts.findIndex((text) => text.includes(label)));
+}
+
+describe('ボタンの並び', () => {
+  // 残高 0 の利用者が「写真を選ぶ」を先に押し、選んだ写真が全部 pending のまま
+  // 進めなくなった実績があるため、残高 0 のときは動画ボタンを先に出す（2026-09-01）
+  it('残高が無いときは動画を見るボタンを写真を選ぶより先に出す', async () => {
+    render(<IdentifyPlantingScreen />);
+    await waitFor(() => expect(screen.getByLabelText('動画を見て 5 枚を読み取る')).toBeTruthy());
+
+    const [reward, primary] = orderOf('動画を見て 5 枚を読み取る', '写真を選ぶ');
+    expect(reward).toBeGreaterThanOrEqual(0);
+    expect(primary).toBeGreaterThanOrEqual(0);
+    expect(reward).toBeLessThan(primary);
+  });
+
+  it('残高があるときは写真を選ぶボタンの順番を変えない', async () => {
+    mockCredits = 1;
+    mockCapturePhotos.mockResolvedValue([{ localPath: 'a.jpg' }, { localPath: 'b.jpg' }]);
+    mockIdentifyBatch.mockResolvedValue([
+      { imageUri: 'a.jpg', state: 'identified', cropName: 'トマト' },
+      { imageUri: 'b.jpg', state: 'pending' },
+    ]);
+
+    render(<IdentifyPlantingScreen />);
+    await waitFor(() => expect(screen.getByLabelText('写真を選ぶ')).toBeTruthy());
+    fireEvent.press(screen.getByLabelText('写真を選ぶ'));
+
+    // pending が残るので動画ボタンも出る（残高は 1 のまま = credits > 0）
+    await waitFor(() => expect(screen.getByLabelText('動画を見て 5 枚を読み取る')).toBeTruthy());
+
+    const [primary, reward] = orderOf('写真を選ぶ', '動画を見て 5 枚を読み取る');
+    expect(primary).toBeGreaterThanOrEqual(0);
+    expect(reward).toBeGreaterThanOrEqual(0);
+    expect(primary).toBeLessThan(reward);
   });
 });

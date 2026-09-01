@@ -17,6 +17,13 @@
  * 使い切って相談を一度も試せなくなる。ここは `identify-credit.service` の残高だけを使う。
  *
  * **写真が無くても手で登録できる**（#139 の共通の作法）。読み取りは近道であって必須にしない。
+ *
+ * ## ボタンの並びは残高 0 のときだけ入れ替える（実機で利用者が詰まった・2026-09-01）
+ *
+ * 残高 0 の利用者が主要ボタン「写真を選ぶ」を自然に先に押し、選んだ写真が全部
+ * `pending`（読み取り待ち）のまま先に進めなくなった実績がある。`identifyPhotoBatch`
+ * の不変条件（残高が無ければ 1 枚も送らない）は直さず、残高 0 のときだけ
+ * 「動画を見て読み取る」ボタンを先に出す（`primaryButton`/`rewardButton` の並び替え）。
  */
 import { useFocusEffect, useRouter } from 'expo-router';
 import { Camera, ChevronLeft, PlayCircle, Sparkles } from 'lucide-react-native';
@@ -103,7 +110,9 @@ export default function IdentifyPlantingScreen() {
       setDrafts(result);
       const pending = result.filter((draft) => draft.state === 'pending').length;
       if (pending > 0) {
-        setMessage(`残り ${pending} 枚は動画を見ると読み取れます。手で入力してもかまいません。`);
+        setMessage(
+          `残り ${pending} 枚は動画を見ると読み取れます。作物名を入力すれば、その写真だけ先に登録できます。`,
+        );
       }
     } finally {
       runningRef.current = false;
@@ -202,6 +211,37 @@ export default function IdentifyPlantingScreen() {
   const pendingCount = drafts.filter((draft) => draft.state === 'pending').length;
   const canWatchAd = isAdRewardAvailable() && !watchingAd && !processing;
 
+  const primaryButton = !processing ? (
+    <PressableScale
+      style={styles.primaryButton}
+      onPress={() => void handlePick()}
+      accessibilityLabel="写真を選ぶ"
+    >
+      <Camera size={16} color={Colors.onAccent} />
+      <Text style={styles.primaryButtonText}>写真を選ぶ</Text>
+    </PressableScale>
+  ) : null;
+
+  // 残高が無い、または待っている写真があるときだけ動画を勧める
+  const rewardButton =
+    canWatchAd && (credits === 0 || pendingCount > 0) ? (
+      <PressableScale
+        style={styles.rewardButton}
+        onPress={() => void handleWatchAd()}
+        disabled={watchingAd}
+        accessibilityLabel={`動画を見て ${IDENTIFY_PER_REWARD} 枚を読み取る`}
+      >
+        {watchingAd ? (
+          <ActivityIndicator color={Colors.accentInk} size="small" />
+        ) : (
+          <PlayCircle size={16} color={Colors.accentInk} />
+        )}
+        <Text style={styles.rewardButtonText}>
+          {watchingAd ? '広告を読み込み中…' : `動画を見て ${IDENTIFY_PER_REWARD} 枚を読み取る`}
+        </Text>
+      </PressableScale>
+    ) : null;
+
   return (
     // 入力欄（作物名・品種）の下に「登録する」が来る＝#134 と同じ形なので必ず包む
     <KeyboardAvoider style={styles.root}>
@@ -209,7 +249,7 @@ export default function IdentifyPlantingScreen() {
         <PressableScale onPress={() => router.back()} hitSlop={12} accessibilityLabel="戻る">
           <ChevronLeft size={24} color={Colors.ink} />
         </PressableScale>
-        <Text style={styles.headerTitle}>写真から登録</Text>
+        <Text style={styles.headerTitle}>写真から栽培を登録</Text>
         <View style={styles.headerSpacer} />
       </View>
 
@@ -228,35 +268,23 @@ export default function IdentifyPlantingScreen() {
             : `動画を 1 本見ると ${IDENTIFY_PER_REWARD} 枚 読み取れます`}
         </Text>
 
-        {!processing ? (
-          <PressableScale
-            style={styles.primaryButton}
-            onPress={() => void handlePick()}
-            accessibilityLabel="写真を選ぶ"
-          >
-            <Camera size={16} color={Colors.onAccent} />
-            <Text style={styles.primaryButtonText}>写真を選ぶ</Text>
-          </PressableScale>
-        ) : null}
-
-        {/* 残高が無い、または待っている写真があるときだけ動画を勧める */}
-        {canWatchAd && (credits === 0 || pendingCount > 0) ? (
-          <PressableScale
-            style={styles.rewardButton}
-            onPress={() => void handleWatchAd()}
-            disabled={watchingAd}
-            accessibilityLabel={`動画を見て ${IDENTIFY_PER_REWARD} 枚を読み取る`}
-          >
-            {watchingAd ? (
-              <ActivityIndicator color={Colors.accentInk} size="small" />
-            ) : (
-              <PlayCircle size={16} color={Colors.accentInk} />
-            )}
-            <Text style={styles.rewardButtonText}>
-              {watchingAd ? '広告を読み込み中…' : `動画を見て ${IDENTIFY_PER_REWARD} 枚を読み取る`}
-            </Text>
-          </PressableScale>
-        ) : null}
+        {/*
+          残高 0 で「写真を選ぶ」を先に押すと、選んだ分が全部 pending のまま
+          進めなくなった実績があるため、残高 0 のときだけ動画ボタンを先に出す
+          （ファイル冒頭の doc コメント参照・2026-09-01）。credits > 0 なら現状どおり
+          「写真を選ぶ」が先。
+        */}
+        {credits === 0 ? (
+          <>
+            {rewardButton}
+            {primaryButton}
+          </>
+        ) : (
+          <>
+            {primaryButton}
+            {rewardButton}
+          </>
+        )}
 
         {progressText ? (
           <View style={styles.progressRow}>

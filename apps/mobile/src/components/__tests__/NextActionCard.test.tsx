@@ -100,4 +100,58 @@ describe('NextActionCard', () => {
     await waitFor(() => expect(mockGetActions).toHaveBeenCalled());
     expect(screen.queryByText('つぎの作業')).toBeNull();
   });
+
+  // 「つぎの作業」は栽培ごとに行が増え、ホームで「育てているもの」（進行帯）を
+  // 画面外に押し出す。上位 2 件で打ち切り、残りは「ほかN件」に畳む（2026-09-01）
+  describe('3件以上の打ち切り', () => {
+    function actions3() {
+      return [
+        action({ plantingId: 'p1', cropName: 'カブ' }),
+        action({ plantingId: 'p2', cropName: 'ダイコン' }),
+        action({ plantingId: 'p3', cropName: 'ホウレンソウ' }),
+      ];
+    }
+
+    it('上位2件だけカードで出し、3件目以降は「ほかN件」にまとめる', async () => {
+      mockGetActions.mockResolvedValue(actions3());
+      render(<NextActionCard />);
+
+      await waitFor(() => expect(screen.getByText('つぎの作業')).toBeTruthy());
+
+      expect(screen.getByText('カブ')).toBeTruthy();
+      expect(screen.getByText('ダイコン')).toBeTruthy();
+      expect(screen.queryByText('ホウレンソウ')).toBeNull();
+      expect(screen.getByText('ほか1件 →')).toBeTruthy();
+    });
+
+    it('並び順（優先度）はそのまま。上位2件は getNextActions の返り順どおり', async () => {
+      mockGetActions.mockResolvedValue(actions3());
+      render(<NextActionCard />);
+      await waitFor(() => expect(screen.getByText('つぎの作業')).toBeTruthy());
+
+      // 3件目（ホウレンソウ）の「記録する」ボタンは存在しない = slice(0, 2) だけを描画
+      expect(screen.queryByLabelText('ホウレンソウの追肥を記録する')).toBeNull();
+    });
+
+    it('「ほかN件」をタップすると栽培一覧へ遷移する', async () => {
+      mockGetActions.mockResolvedValue(actions3());
+      render(<NextActionCard />);
+      await waitFor(() => expect(screen.getByText('つぎの作業')).toBeTruthy());
+
+      fireEvent.press(screen.getByLabelText('ほかの提案1件を栽培一覧で見る'));
+
+      expect(mockPush).toHaveBeenCalledWith('/plantings');
+    });
+
+    it('2件以下では「ほか」の行を出さない', async () => {
+      mockGetActions.mockResolvedValue([
+        action({ plantingId: 'p1', cropName: 'カブ' }),
+        action({ plantingId: 'p2', cropName: 'ダイコン' }),
+      ]);
+      render(<NextActionCard />);
+      await waitFor(() => expect(screen.getByText('つぎの作業')).toBeTruthy());
+
+      expect(screen.queryByText(/^ほか/)).toBeNull();
+    });
+  });
 });
