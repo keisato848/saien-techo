@@ -209,7 +209,7 @@ export default function IdentifyPlantingScreen() {
         <PressableScale onPress={() => router.back()} hitSlop={12} accessibilityLabel="戻る">
           <ChevronLeft size={24} color={Colors.ink} />
         </PressableScale>
-        <Text style={styles.headerTitle}>写真から登録</Text>
+        <Text style={styles.headerTitle}>写真から栽培を登録</Text>
         <View style={styles.headerSpacer} />
       </View>
 

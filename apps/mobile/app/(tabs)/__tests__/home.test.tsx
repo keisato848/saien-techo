@@ -3,12 +3,21 @@
  *
  * 各カードの中身はそれぞれのテストで担保。ここで見るのは**統合の判断**:
  * カードの並びと、栽培ゼロのときに何を出すか。
- * 並びは「予定 → 提案 → 自分の畑 → 季節 → 履歴」（docs/画面設計.md S01）。
+ * 並びは「予定 → 自分の畑 → 提案 → 季節 → 履歴」。もとは「予定 → 提案 →
+ * 自分の畑 → 季節 → 履歴」（docs/画面設計.md S01）だったが、「つぎの作業」が
+ * 複数行で縦に伸び「育てているもの」が画面外に落ちるという実利用者の指摘を受けて
+ * 2026-09-01 に「育てているもの」を「つぎの作業」より前へ上げた（index.tsx 冒頭
+ * の doc コメント参照）。
  */
-import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+import { configure, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import { StyleSheet } from 'react-native';
 
 import { Colors } from '../../../src/constants/theme';
+
+// 最初のテストがモジュールのコールドスタートを払う（他の画面のテストで実績のある対処。
+// add.test.tsx / compare.test.tsx と同じ理由）。既定の waitFor タイムアウトでは
+// 「育てているもの」の初回描画待ちが間に合わないことがある
+configure({ asyncUtilTimeout: 10_000 });
 
 const mockPush = jest.fn();
 jest.mock('expo-router', () => ({
@@ -143,7 +152,7 @@ describe('ホーム（S01 / WBS 3.5）', () => {
       mockGetPlantingList.mockResolvedValue([planting()]);
     });
 
-    it('予定 → 提案 → 自分の畑 → 季節 → 履歴 の順に並べる', async () => {
+    it('予定 → 自分の畑 → 提案 → 季節 → 履歴 の順に並べる', async () => {
       render(<HomeScreen />);
       await waitFor(() => expect(screen.getByText('育てているもの')).toBeTruthy());
 
@@ -151,8 +160,8 @@ describe('ホーム（S01 / WBS 3.5）', () => {
         // 撮り溜めの回収は帰宅直後の一手なので、予定より前（#143）
         '写真の読み取り',
         '今日のリマインダー',
-        'つぎの作業',
         '育てているもの',
+        'つぎの作業',
         '今月の菜園仕事',
         'さいきんの記録',
       );
@@ -167,6 +176,17 @@ describe('ホーム（S01 / WBS 3.5）', () => {
 
       const [reminder, nextAction] = orderOf('今日のリマインダー', 'つぎの作業');
       expect(reminder).toBeLessThan(nextAction);
+    });
+
+    // 「つぎの作業」は栽培ごとに複数行出て縦に伸びるため、後ろに置くと実機で
+    // 「育てているもの」（進行帯）が画面外に落ち、実利用者が到達できなかった。
+    // その回帰を防ぐための固定（2026-09-01）
+    it('育てているものを、つぎの作業より上に置く', async () => {
+      render(<HomeScreen />);
+      await waitFor(() => expect(screen.getByText('育てているもの')).toBeTruthy());
+
+      const [growing, nextAction] = orderOf('育てているもの', 'つぎの作業');
+      expect(growing).toBeLessThan(nextAction);
     });
   });
 
