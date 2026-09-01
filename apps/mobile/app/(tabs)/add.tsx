@@ -8,7 +8,7 @@
  * 選択肢が 1 つしかない画面を挟むと、毎日の記録が毎回 1 タップ重くなる。
  */
 import { useFocusEffect, useRouter } from 'expo-router';
-import { ChevronLeft, Droplets, ShoppingBasket, Sprout } from 'lucide-react-native';
+import { Camera, ChevronLeft, Droplets, ShoppingBasket, Sprout } from 'lucide-react-native';
 import { useCallback, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -124,6 +124,23 @@ export default function AddScreen() {
           <Text style={styles.hint}>先に栽培を追加すると、作業と収穫を記録できます。</Text>
         ) : null}
 
+        {/* 栽培が 1 件でもあると「追加」タブから写真登録（/plantings/identify）へ行けなくなっていた
+            （バグ・2026-09-02 実機で発見）。手入力フォーム内の小さいリンクだけが頼りで、
+            ホームの空状態と同じ「写真から優先」（2026-08-22 決定）に反していた。カードを分けて復元 */}
+        <PressableScale
+          style={styles.card}
+          onPress={() => router.push('/plantings/identify')}
+          accessibilityLabel="写真から栽培を登録"
+        >
+          <View style={styles.cardIcon}>
+            <Camera size={22} color={Colors.accent} />
+          </View>
+          <View style={styles.cardText}>
+            <Text style={styles.cardLabel}>写真から栽培を登録</Text>
+            <Text style={styles.cardDescription}>撮るだけでまとめて登録</Text>
+          </View>
+        </PressableScale>
+
         <PressableScale
           style={styles.card}
           onPress={() => router.push('/plantings/new')}
@@ -134,7 +151,7 @@ export default function AddScreen() {
           </View>
           <View style={styles.cardText}>
             <Text style={styles.cardLabel}>栽培を追加</Text>
-            <Text style={styles.cardDescription}>新しく育てはじめる</Text>
+            <Text style={styles.cardDescription}>手で入力して育てはじめる</Text>
           </View>
         </PressableScale>
       </ScrollView>
