@@ -37,6 +37,8 @@ const TIMEOUT_MS = 60_000;
 export type IdentifyConfidence = 'high' | 'medium' | 'low';
 /** ラベル（種袋・苗札）か、育っている株か。サーバーが判定して返す */
 export type IdentifySource = 'label' | 'plant';
+/** 株の生育段階。サーバーが写真から判定する（自信が無ければ省略される契約） */
+export type GrowthStage = 'seedling' | 'vegetative' | 'flowering' | 'fruiting' | 'harvest';
 
 /** サーバー（identify-vision.ts）の IdentifyVisionRaw と同じ形 */
 export interface PlantingIdentifyResult {
@@ -47,6 +49,14 @@ export interface PlantingIdentifyResult {
   /** **ラベルを読めたときだけ返る。** 株の外見からは決まらない */
   variety?: string;
   plantedAs?: 'seed' | 'seedling';
+  /** 育っている株の生育段階。source === 'plant' のときだけ入りうる */
+  growthStage?: GrowthStage;
+  /**
+   * 撮影時点で植え付けから約何日か。**source === 'plant' のときだけ返る契約**
+   * （自信が無ければサーバーは省略する）。植え付け日の初期値の手がかりに使う
+   * （`planting-draft.service.ts` の `estimatePlantedOn`）。
+   */
+  estimatedAgeDays?: number;
   note?: string;
 }
 

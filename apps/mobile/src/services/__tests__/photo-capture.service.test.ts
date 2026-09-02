@@ -50,6 +50,33 @@ describe('OCR-REQ-01 photo capture boundary', () => {
     ).rejects.toBeInstanceOf(PhotoCaptureCancelledError);
   });
 
+  // 育っている株を撮って登録すると「今日植えた」になって経過日数が狂うため、
+  // EXIF の撮影日時があれば takenAt はそちらを使う（2026-09-02）
+  it('uses exifTakenAt for takenAt when the adapter provides it', async () => {
+    const photo = await capturePhoto(
+      'gallery',
+      adapter({
+        pickFromGallery: async () => ({
+          localPath: 'file:///tmp/gallery.jpg',
+          exifTakenAt: '2026-04-01T03:00:00.000Z',
+        }),
+      }),
+    );
+
+    expect(photo.takenAt).toBe('2026-04-01T03:00:00.000Z');
+  });
+
+  it('falls back to now() when exifTakenAt is absent', async () => {
+    const photo = await capturePhoto(
+      'gallery',
+      adapter({
+        pickFromGallery: async () => ({ localPath: 'file:///tmp/gallery.jpg' }),
+      }),
+    );
+
+    expect(photo.takenAt).toBe('2026-05-27T10:00:00.000Z');
+  });
+
   it('cleans up only temporary photos', async () => {
     const deleted: string[] = [];
 
