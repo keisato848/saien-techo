@@ -55,6 +55,10 @@ adb install -r <new.apk>   # -r 必須（データ維持）
 - 既存の SQLite データ（栽培・作業ログ・収穫・資材・写真）が残り、マイグレーション
   （migrate.ts の `CURRENT_SCHEMA_VERSION` / ADD_COLUMN_MIGRATIONS）が正常に走ること
 - 署名が一致していること（EAS 鍵 76:BA:… ↔ ローカル release 鍵は別物。混在時は install が失敗する）
+- **`install -r` のあとは `adb shell am force-stop <pkg>` してから触る。** 写真ピッカーなどの
+  Activity 結果待ちを抱えたまま入れ替えると、新プロセスで `launchImageLibraryAsync` が
+  即座に「写真を選べませんでした」で失敗する（1.3.0 実機確認・2026-09-03）。アプリの
+  バグに見えるが入れ替え手順の副作用。強制終了→再起動で解消する
 
 ## 4. config plugin 注入の確認（サイレント no-op 対策）
 
