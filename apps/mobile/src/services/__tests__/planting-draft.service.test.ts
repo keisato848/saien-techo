@@ -49,6 +49,7 @@ jest.mock('../planting-identify.service', () => {
 });
 
 import {
+  estimatePlantedOn,
   findActivePlantingNames,
   getCropMaster,
   identifyPhotoBatch,
@@ -175,6 +176,33 @@ describe('identifyPhotoBatch — 下書きの中身', () => {
     });
   });
 
+  // サーバー拡張（growthStage / estimatedAgeDays）を下書きへ運ぶ。
+  // 自信が無ければ省略される契約なので undefined でも壊れないこと
+  it('株の生育ステージ・推定経過日数が返れば下書きへ運ぶ', async () => {
+    mockCredits = 1;
+    mockIdentify.mockResolvedValue({
+      found: true,
+      source: 'plant',
+      cropGuess: 'キュウリ',
+      growthStage: 'flowering',
+      estimatedAgeDays: 45,
+    });
+
+    const [draft] = await identifyPhotoBatch(['a.jpg'], undefined, { master: MASTER });
+
+    expect(draft).toMatchObject({ growthStage: 'flowering', estimatedAgeDays: 45 });
+  });
+
+  it('growthStage / estimatedAgeDays が無くても下書きは壊れない', async () => {
+    mockCredits = 1;
+    mockIdentify.mockResolvedValue({ found: true, source: 'plant', cropGuess: 'キュウリ' });
+
+    const [draft] = await identifyPhotoBatch(['a.jpg'], undefined, { master: MASTER });
+
+    expect(draft?.growthStage).toBeUndefined();
+    expect(draft?.estimatedAgeDays).toBeUndefined();
+  });
+
   it('株なら品種は入らない（サーバーが落としている前提を崩さない）', async () => {
     mockCredits = 1;
     mockIdentify.mockResolvedValue({
@@ -243,6 +271,73 @@ describe('identifyPhotoBatch — 下書きの中身', () => {
       undefined,
       undefined,
     );
+  });
+});
+
+describe('estimatePlantedOn — 植え付け日の初期値（純関数）', () => {
+  const NOW = new Date('2026-09-02T09:00:00.000Z');
+
+  it('estimatedAgeDays があれば「撮影日 − estimatedAgeDays」で、なぜその日付かを返す', () => {
+    const result = estimatePlantedOn(
+      { growthStage: 'flowering', estimatedAgeDays: 45 },
+      '2026-08-20T00:00:00.000Z',
+      NOW,
+    );
+
+    // 撮影日から 45 日引いた日付になっていること
+    const expected = new Date(
+      new Date('2026-08-20T00:00:00.000Z').getTime() - 45 * 86_400_000,
+    ).toISOString();
+    expect(result.plantedOn).toBe(expected);
+    expect(result.reason).toBe('開花期と判断 → およそ45日前');
+  });
+
+  it('growthStage が無ければ「生育の様子」で説明する', () => {
+    const result = estimatePlantedOn({ estimatedAgeDays: 10 }, '2026-08-20T00:00:00.000Z', NOW);
+    expect(result.reason).toBe('生育の様子と判断 → およそ10日前');
+  });
+
+  it('estimatedAgeDays が無ければ撮影日をそのまま使い、reason は付かない', () => {
+    const result = estimatePlantedOn({}, '2026-08-20T00:00:00.000Z', NOW);
+
+    expect(result.plantedOn).toBe('2026-08-20T00:00:00.000Z');
+    expect(result.reason).toBeUndefined();
+  });
+
+  it('estimatedAgeDays が 0 なら推定扱いしない（reason 無し・撮影日のまま）', () => {
+    const result = estimatePlantedOn(
+      { growthStage: 'seedling', estimatedAgeDays: 0 },
+      '2026-08-20T00:00:00.000Z',
+      NOW,
+    );
+
+    expect(result.plantedOn).toBe('2026-08-20T00:00:00.000Z');
+    expect(result.reason).toBeUndefined();
+  });
+
+  // 未来の日付にはしない（端末の時計ズレ等で撮影日が未来になっていた場合）
+  it('撮影日が未来なら now に丸める', () => {
+    const result = estimatePlantedOn({}, '2099-01-01T00:00:00.000Z', NOW);
+
+    expect(result.plantedOn).toBe(NOW.toISOString());
+  });
+
+  // 3年より前などの極端な推定は信用せず、撮影日に丸める
+  it('estimatedAgeDays が 3 年を超える極端な値は撮影日に丸め、reason は付けない', () => {
+    const result = estimatePlantedOn(
+      { growthStage: 'harvest', estimatedAgeDays: 365 * 3 + 1 },
+      '2026-08-20T00:00:00.000Z',
+      NOW,
+    );
+
+    expect(result.plantedOn).toBe('2026-08-20T00:00:00.000Z');
+    expect(result.reason).toBeUndefined();
+  });
+
+  it('壊れた撮影日（パースできない）は now を使う', () => {
+    const result = estimatePlantedOn({}, 'not-a-date', NOW);
+
+    expect(result.plantedOn).toBe(NOW.toISOString());
   });
 });
 

@@ -53,13 +53,27 @@ describe('追加タブ', () => {
     mockGetPlantingList.mockReset().mockResolvedValue([]);
   });
 
-  it('3 つの入り口を出す', async () => {
+  it('4 つの入り口を出す', async () => {
     render(<AddScreen />);
 
     await waitFor(() => expect(mockGetPlantingList).toHaveBeenCalled());
     expect(screen.getByText('作業を記録')).toBeTruthy();
     expect(screen.getByText('収穫を記録')).toBeTruthy();
+    expect(screen.getByText('写真から栽培を登録')).toBeTruthy();
     expect(screen.getByText('栽培を追加')).toBeTruthy();
+  });
+
+  // 栽培が 1 件でもあると「追加」タブから写真登録へ行けなくなっていた
+  // （手入力フォーム内の小さいリンクだけが頼りだった・2026-09-02 実機で発見）。
+  // 栽培が既にあっても押せることを固定する
+  it('栽培が 1 件あっても「写真から栽培を登録」へ行ける', async () => {
+    mockGetPlantingList.mockResolvedValue([planting({ id: 'p1' })]);
+    render(<AddScreen />);
+    await waitFor(() => expect(screen.queryByText(/先に栽培を追加すると/)).toBeNull());
+
+    fireEvent.press(screen.getByText('写真から栽培を登録'));
+
+    expect(mockPush).toHaveBeenCalledWith('/plantings/identify');
   });
 
   it('栽培が 0 件なら作業・収穫は押せず、案内を出す', async () => {

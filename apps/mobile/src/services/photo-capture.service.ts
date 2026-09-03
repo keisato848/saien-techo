@@ -1,5 +1,12 @@
 /**
  * PhotoCapture service — adapter boundary for camera/gallery image acquisition.
+ *
+ * `takenAt` は「EXIF の撮影日時があればそれ、無ければ選択/撮影した今」（2026-09-02）。
+ * 写真から栽培登録するとき、育っている株を撮ると「今」を植え付け日にしてしまうと
+ * 経過日数が最初から狂うため、撮影日を手がかりにする。EXIF の読み出しは
+ * アダプタ（`expo-photo-capture.adapter.ts`）が担当し、**日付以外のフィールド
+ * （特に GPS）はここまで運ばない** — #161 で原本 EXIF の GPS 座標を
+ * サーバーへ送っていた欠陥を出しているため。
  */
 export type PhotoCaptureSource = 'camera' | 'gallery';
 
@@ -9,6 +16,13 @@ export interface CapturedPhoto {
   width?: number;
   height?: number;
   mimeType?: string;
+  /**
+   * EXIF から取れた撮影日時（ISO 8601）。アダプタが読み取れたときだけ入る。
+   * GPS 等の位置情報は一切読まない・保持しない（#161 — サーバーへ原本の
+   * GPS 入り EXIF を送っていた欠陥の教訓）。`takenAt` の元になるだけで、
+   * それ以外の用途には使わない。
+   */
+  exifTakenAt?: string;
   takenAt: string;
   temporary: boolean;
 }
@@ -42,7 +56,10 @@ function stampPhoto(
   return {
     ...photo,
     source,
-    takenAt: now(),
+    // EXIF の撮影日時があればそれを植え付け日推定の手がかりにする（既に育っている
+    // 株を撮って登録すると「今日植えた」ことになり経過日数が最初から狂うため）。
+    // 無ければ従来どおり選択/撮影した「今」を使う。
+    takenAt: photo.exifTakenAt ?? now(),
     temporary: true,
   };
 }

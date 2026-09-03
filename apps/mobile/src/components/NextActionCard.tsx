@@ -4,6 +4,13 @@
  * ホームの最上段（行動を促すもの）。栽培×ガイドの突き合わせ結果を並べ、
  * 「記録する」で該当の記録画面へ、「あとで」で 3 日先送り。
  * 提案が無ければカードごと出さない。
+ *
+ * **表示は上位 VISIBLE_COUNT 件で打ち切り、残りは「ほかN件」の1行にまとめる**
+ * （2026-09-01）。getNextActions() はサービス側で最大10件返すため、栽培が増えると
+ * このカードが際限なく縦に伸び、下にある「育てているもの」（進行帯）が画面外に
+ * 落ちる — ホームのカード順を入れ替えただけでは栽培数が増えると再発する
+ * （index.tsx 冒頭の doc コメント参照）。並び順（優先度）はサービス側のまま変えず、
+ * ここでは表示件数を slice するだけにとどめる。
  */
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useState } from 'react';
@@ -16,6 +23,9 @@ import {
   snoozeNextAction,
   type NextAction,
 } from '../services/next-action.service';
+
+/** カードで通常表示する件数。これを超える分は「ほかN件」に畳む */
+const VISIBLE_COUNT = 2;
 
 export function NextActionCard() {
   const router = useRouter();
@@ -30,6 +40,9 @@ export function NextActionCard() {
   useFocusEffect(load);
 
   if (actions.length === 0) return null;
+
+  const visibleActions = actions.slice(0, VISIBLE_COUNT);
+  const hiddenCount = actions.length - visibleActions.length;
 
   const record = (action: NextAction) => {
     router.push(
@@ -46,7 +59,7 @@ export function NextActionCard() {
   return (
     <View style={styles.card} testID="next-action-card">
       <Text style={styles.title}>つぎの作業</Text>
-      {actions.map((action) => (
+      {visibleActions.map((action) => (
         <View key={`${action.plantingId}-${action.kind}`} style={styles.row}>
           <View style={styles.rowText}>
             <Text style={styles.crop}>{action.cropName}</Text>
@@ -71,6 +84,16 @@ export function NextActionCard() {
           </View>
         </View>
       ))}
+      {hiddenCount > 0 ? (
+        <Pressable
+          onPress={() => router.push('/plantings')}
+          hitSlop={6}
+          accessibilityLabel={`ほかの提案${hiddenCount}件を栽培一覧で見る`}
+          testID="next-action-more"
+        >
+          <Text style={styles.moreText}>ほか{hiddenCount}件 →</Text>
+        </Pressable>
+      ) : null}
     </View>
   );
 }
@@ -114,4 +137,10 @@ const styles = StyleSheet.create({
   },
   laterButton: { paddingVertical: 8 },
   laterText: { fontSize: Typography.size.sm, color: Colors.inkDim },
+  // 「作物ガイドをみる →」（MonthlyWorkCard）と同じ、面のリンク表現に合わせる
+  moreText: {
+    fontSize: Typography.size.sm,
+    fontWeight: Typography.weight.medium,
+    color: Colors.accentInk,
+  },
 });
