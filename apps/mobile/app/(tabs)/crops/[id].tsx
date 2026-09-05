@@ -285,7 +285,16 @@ const styles = StyleSheet.create({
   },
   calKindHarvest: { color: Colors.harvest },
   calMonths: { fontSize: Typography.size.sm, color: Colors.ink },
-  factsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  // 札が 2 行以上に折り返す（4.19 で 10 枚前後になった）。`gap` だけだと Yoga が折り返し後の高さを
+  // 取り違え、次の見出しと重なった上に 2 行目以降の札が縦に伸びた（実機 2026-09-06）。
+  // 行間・列間を分けて指定し、札を上寄せにする
+  factsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'flex-start',
+    rowGap: 8,
+    columnGap: 8,
+  },
   fact: {
     fontSize: Typography.size.xs,
     color: Colors.accentInk,
@@ -295,6 +304,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 3,
     overflow: 'hidden',
+    alignSelf: 'flex-start',
   },
   guideBlock: { gap: 3 },
   guideLabel: { fontSize: Typography.size.xs, color: Colors.inkDim },
