@@ -113,6 +113,36 @@ describeIfSqlite('growth-progress.service (real SQLite)', () => {
     expect(describeProgress(progress)).toBe('あと15日');
   });
 
+  it('収穫の幅があれば「あと N 日」は幅の最小まで、帯の右端は最大（4.19）', async () => {
+    mockHandles.expoDb.runSync(
+      "UPDATE crop_guides SET harvest_window_min_days = 50, harvest_window_max_days = 70 WHERE crop_id = 'crop-tomato'",
+    );
+    const plantingId = await seedPlanting({ cropId: 'crop-tomato', daysAgo: 45 });
+
+    const progress = await progressFor(plantingId);
+
+    expect(progress.state).toBe('growing');
+    expect(progress.harvestWindow).toEqual({ min: 50, max: 70 });
+    expect(progress.harvestAfterDays).toBe(70);
+    expect(progress.daysToHarvest).toBe(5);
+    expect(progress.ratio).toBeCloseTo(45 / 70, 5);
+    expect(describeProgress(progress)).toBe('あと5日');
+
+    // 幅に入ったら due（右端の 70 日を待たない）
+    const inWindow = await progressFor(await seedPlanting({ cropId: 'crop-tomato', daysAgo: 55 }));
+    expect(inWindow.state).toBe('due');
+    expect(inWindow.ratio).toBeCloseTo(55 / 70, 5);
+  });
+
+  it('幅が片方だけ・逆転している行は 1 点扱い（旧データの防御）', async () => {
+    mockHandles.expoDb.runSync(
+      "UPDATE crop_guides SET harvest_window_min_days = 70, harvest_window_max_days = 50 WHERE crop_id = 'crop-tomato'",
+    );
+    const progress = await progressFor(await seedPlanting({ cropId: 'crop-tomato', daysAgo: 45 }));
+    expect(progress.harvestWindow).toBeNull();
+    expect(progress.daysToHarvest).toBe(15);
+  });
+
   it('未収穫で目安を過ぎたら due（採りどき）', async () => {
     const plantingId = await seedPlanting({ cropId: 'crop-tomato', daysAgo: 70 });
 
