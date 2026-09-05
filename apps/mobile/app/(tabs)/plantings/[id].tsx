@@ -35,8 +35,10 @@ import { Colors, Typography } from '../../../src/constants/theme';
 import { formatDateLabel } from '../../../src/components/DateField';
 import { getReminders } from '../../../src/services/reminder.service';
 import {
+  careLogKindForAction,
   describeNextAction,
   getNextActionsForPlanting,
+  nextActionLabel,
   type NextAction,
 } from '../../../src/services/next-action.service';
 import { describeSchedule } from '../../../src/utils/reminderSchedule';
@@ -199,16 +201,16 @@ export default function PlantingDetailScreen() {
           <View style={styles.adviceCard}>
             {nextActions.map((action) => (
               <Pressable
-                key={action.kind}
+                key={`${action.kind}-${action.thresholdDays}`}
                 style={styles.adviceRow}
                 onPress={() =>
                   router.push(
                     action.kind === 'harvest'
                       ? `/plantings/${id}/harvests/new`
-                      : `/plantings/${id}/care-logs/new?kind=fertilize`,
+                      : `/plantings/${id}/care-logs/new?kind=${careLogKindForAction(action.kind)}`,
                   )
                 }
-                accessibilityLabel={`${action.kind === 'harvest' ? '収穫' : '追肥'}を記録する`}
+                accessibilityLabel={`${nextActionLabel(action)}を記録する`}
               >
                 <BellRing size={15} color={Colors.accentInk} />
                 <Text style={styles.adviceText}>{describeNextAction(action)}</Text>

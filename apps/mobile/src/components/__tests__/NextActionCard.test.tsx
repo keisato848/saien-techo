@@ -81,6 +81,21 @@ describe('NextActionCard', () => {
     expect(mockPush).toHaveBeenCalledWith('/plantings/p1/harvests/new');
   });
 
+  it('作業（芽かき）は剪定の作業ログへ、土寄せはその他へ送る（4.19）', async () => {
+    mockGetActions.mockResolvedValue([
+      action({ kind: 'sucker', thresholdDays: 10, elapsedDays: 12, cropName: 'トマト' }),
+      action({ kind: 'hill', thresholdDays: 35, elapsedDays: 36, cropName: 'ジャガイモ' }),
+    ]);
+    render(<NextActionCard />);
+    await waitFor(() => expect(screen.getByText('つぎの作業')).toBeTruthy());
+
+    fireEvent.press(screen.getByLabelText('トマトの芽かきを記録する'));
+    expect(mockPush).toHaveBeenCalledWith('/plantings/p1/care-logs/new?kind=prune');
+
+    fireEvent.press(screen.getByLabelText('ジャガイモの土寄せを記録する'));
+    expect(mockPush).toHaveBeenCalledWith('/plantings/p1/care-logs/new?kind=other');
+  });
+
   it('「あとで」で先送りして読み直す', async () => {
     mockGetActions.mockResolvedValue([action()]);
     render(<NextActionCard />);
@@ -89,7 +104,7 @@ describe('NextActionCard', () => {
     mockGetActions.mockResolvedValue([]);
     fireEvent.press(screen.getByLabelText('カブの提案をあとで'));
 
-    await waitFor(() => expect(mockSnooze).toHaveBeenCalledWith('p1', 'fertilize'));
+    await waitFor(() => expect(mockSnooze).toHaveBeenCalledWith('p1', 'fertilize', 20));
     await waitFor(() => expect(screen.queryByText('つぎの作業')).toBeNull());
   });
 

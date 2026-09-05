@@ -10,18 +10,15 @@ import type { PlantingListItem } from './types';
  *
  * 「植え付け → 収穫の目安」までの進み具合を 1 本の帯で見せる。
  *
- * ## 収穫の「窓」は作らない
+ * ## 収穫の「窓」（4.19 で追加）
  *
- * モックでは幅のある収穫窓（縞）を描いていたが、**その幅を出せるデータが無い**。
- * 手持ちは 2 つで、どちらも窓にならない:
- *
- * - `crop_guides.harvestAfterDays` — 植え付けからの**単一の日数**。幅を持たない
- * - `crop_calendars` の収穫窓 — 地域別だが**月単位**で、植え付け日と無関係
- *
- * 両者を混ぜると出典が矛盾しうる（暦の窓の外に目安日が落ちる）ので、
- * **目安日を 1 点として扱い、幅は持たせない**。「あと N 日で収穫の目安」とだけ言う。
- * 実績補正（`docs/検討-栽培体験の再設計.md` 機能 3）が入ったら、この点が
- * 「うちの値」に動く — そのときに初めて幅を語れるようになる。
+ * 初版は `crop_guides.harvestAfterDays`（単一の日数）しか無く、幅を出せるデータが
+ * 無かったので目安を 1 点として扱っていた。4.19 で `harvest_window_min/max_days`
+ * （収穫の幅・日数）を持ったので、**帯の右端を幅の最大に置き、最小から先を窓として描く**。
+ * 「あと N 日」は窓の最小まで、「採りどき」は窓に入ったら。
+ * 幅を持たない作物（旧データ・利用者が足した作物）は従来どおり 1 点で扱う。
+ * `crop_calendars` の収穫窓（月単位・地域別）とは混ぜない — 植え付け日と無関係なので
+ * 出典が矛盾しうる。
  *
  * ## 目安が無い栽培もある
  *
@@ -46,11 +43,16 @@ export interface PlantingProgress {
   harvestCount: number;
   /** 植え付けからの経過日数 */
   elapsedDays: number;
-  /** 収穫までの目安日数。マスターに無ければ null */
+  /**
+   * 帯の右端（日）。収穫の幅があればその最大、無ければ収穫の目安日数。
+   * マスターに無ければ null
+   */
   harvestAfterDays: number | null;
+  /** 収穫の幅（植え付けからの日数）。マスターが持たなければ null */
+  harvestWindow: { min: number; max: number } | null;
   /** 0〜1。目安を過ぎていても 1 で止める（帯が枠を越えない） */
   ratio: number | null;
-  /** 収穫の目安まであと何日か。過ぎていれば 0 以下 */
+  /** 収穫の目安（幅があればその最小）まであと何日か。過ぎていれば 0 以下 */
   daysToHarvest: number | null;
   /** 作業ログのあった経過日数（帯の下に打つドット・重複は畳む） */
   logDays: number[];
@@ -79,13 +81,29 @@ export async function getPlantingProgress(
     .select({
       plantingId: schema.plantings.id,
       harvestAfterDays: schema.cropGuides.harvestAfterDays,
+      windowMin: schema.cropGuides.harvestWindowMinDays,
+      windowMax: schema.cropGuides.harvestWindowMaxDays,
     })
     .from(schema.plantings)
     .innerJoin(schema.cropGuides, eq(schema.plantings.cropId, schema.cropGuides.cropId))
     .where(inArray(schema.plantings.id, plantingIds));
-  const harvestDays = new Map<string, number>();
-  for (const guide of guides as { plantingId: string; harvestAfterDays: number | null }[]) {
-    if (guide.harvestAfterDays != null) harvestDays.set(guide.plantingId, guide.harvestAfterDays);
+  const harvestDays = new Map<
+    string,
+    { target: number; window: { min: number; max: number } | null }
+  >();
+  for (const guide of guides as {
+    plantingId: string;
+    harvestAfterDays: number | null;
+    windowMin: number | null;
+    windowMax: number | null;
+  }[]) {
+    // 幅は最小 < 最大で両方そろっているときだけ使う（片方だけの行は 1 点扱い）
+    const window =
+      guide.windowMin != null && guide.windowMax != null && guide.windowMin < guide.windowMax
+        ? { min: guide.windowMin, max: guide.windowMax }
+        : null;
+    const target = window?.max ?? guide.harvestAfterDays;
+    if (target != null) harvestDays.set(guide.plantingId, { target, window });
   }
 
   // 収穫の記録がある栽培（next-action と同じく「初収穫」を状態の切り替え点にする）
@@ -113,7 +131,11 @@ export async function getPlantingProgress(
   }
 
   for (const planting of plantings) {
-    const target = harvestDays.get(planting.id) ?? null;
+    const guide = harvestDays.get(planting.id) ?? null;
+    const target = guide?.target ?? null;
+    const window = guide?.window ?? null;
+    // 「採りどき」の境界。幅があれば最小（そこから採れる）、無ければ目安日
+    const dueAt = window?.min ?? target;
     const elapsed = planting.elapsedDays;
 
     // 同じ日の作業は 1 つのドットに畳む（水やり 3 回で 3 個並べても読めない）
@@ -124,7 +146,7 @@ export async function getPlantingProgress(
     }
     const logDays = [...days].sort((a, b) => a - b).slice(-MAX_LOG_DOTS);
 
-    const daysToHarvest = target != null ? target - elapsed : null;
+    const daysToHarvest = dueAt != null ? dueAt - elapsed : null;
     const harvestCount = harvestCounts.get(planting.id) ?? 0;
     const state: ProgressState =
       target == null
@@ -141,6 +163,7 @@ export async function getPlantingProgress(
       harvestCount,
       elapsedDays: elapsed,
       harvestAfterDays: target,
+      harvestWindow: window,
       ratio: target && target > 0 ? Math.min(1, elapsed / target) : null,
       daysToHarvest,
       logDays,

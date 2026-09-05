@@ -21,7 +21,7 @@ jest.mock('../../services/garden-work.service', () => ({
   getMonthlyGardenWork: (...args: unknown[]) => mockGetWork(...args),
 }));
 
-import { MonthlyWorkCard } from '../MonthlyWorkCard';
+import { describeCropRow, MonthlyWorkCard, VISIBLE_PER_ROW } from '../MonthlyWorkCard';
 
 function work(overrides: Partial<MonthlyGardenWork> = {}): MonthlyGardenWork {
   return {
@@ -111,6 +111,43 @@ describe('MonthlyWorkCard', () => {
     fireEvent.press(screen.getByLabelText('地域を変更'));
 
     expect(mockPush).toHaveBeenCalledWith('/region');
+  });
+
+  it('1 行は 6 種まで。超えた分は「ほか N 種」に畳み、行を押すと今月で絞ったガイドへ（4.19）', async () => {
+    const names = [
+      'ダイコン',
+      'カブ',
+      'ニンジン',
+      'ホウレンソウ',
+      'コマツナ',
+      'シュンギク',
+      'ミズナ',
+      'ハクサイ',
+    ];
+    mockGetWork.mockResolvedValue(
+      work({ sow: names.map((name, i) => ({ cropId: `crop-${i}`, name })) }),
+    );
+    render(<MonthlyWorkCard />);
+
+    await waitFor(() =>
+      expect(
+        screen.getByText('ダイコン、カブ、ニンジン、ホウレンソウ、コマツナ、シュンギク、ほか2種'),
+      ).toBeTruthy(),
+    );
+    expect(screen.queryByText(/ミズナ/)).toBeNull();
+
+    fireEvent.press(screen.getByLabelText('まきどきの作物を作物ガイドで見る'));
+    expect(mockPush).toHaveBeenCalledWith('/crops?now=1');
+  });
+
+  it('describeCropRow は上限ちょうどなら畳まない', () => {
+    const crops = Array.from({ length: VISIBLE_PER_ROW }, (_, i) => ({
+      cropId: `c${i}`,
+      name: `作物${i}`,
+    }));
+    expect(describeCropRow(crops)).not.toMatch(/ほか/);
+    expect(describeCropRow([...crops, { cropId: 'x', name: '余り' }])).toMatch(/、ほか1種$/);
+    expect(describeCropRow([])).toBe('');
   });
 
   it('読み込みに失敗したら黙って出さない（ホームを壊さない）', async () => {
