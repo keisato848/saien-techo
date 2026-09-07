@@ -46,6 +46,31 @@ jest.mock('../../../../src/services/place.service', () => ({
   getPlaceList: () => Promise.resolve([]),
 }));
 
+// 連作チェック（R17）はフォームの中身。ここでは邪魔をしないよう黙らせる
+jest.mock('../../../../src/services/rotation.service', () => ({
+  ...jest.requireActual('../../../../src/services/rotation.service'),
+  checkRotation: () => Promise.resolve(null),
+}));
+
+// ケアスケジュールの提案（R26 / WBS 4.8）。判定は care-schedule.service の
+// テストが持つので、ここでは画面が「いつシートを出し、何を渡すか」だけを見る
+const mockSuggestCareSchedule = jest.fn();
+const mockApplyCareSchedule = jest.fn();
+jest.mock('../../../../src/services/care-schedule.service', () => ({
+  ...jest.requireActual('../../../../src/services/care-schedule.service'),
+  suggestCareSchedule: (...args: unknown[]) => mockSuggestCareSchedule(...args),
+  applyCareSchedule: (...args: unknown[]) => mockApplyCareSchedule(...args),
+}));
+
+const WATER_SUGGESTION = {
+  kind: 'water' as const,
+  scheduleKind: 'interval_days' as const,
+  intervalDays: 3,
+  hour: 7,
+  minute: 0,
+  reason: '乾かし気味に育てると甘くなる。',
+};
+
 import NewPlantingScreen from '../new';
 import EditPlantingScreen from '../[id]/edit';
 
@@ -79,6 +104,8 @@ beforeEach(() => {
   mockReplace.mockReset();
   mockParams = {};
   mockCreatePlanting.mockReset().mockResolvedValue('new-id');
+  mockSuggestCareSchedule.mockReset().mockResolvedValue([]);
+  mockApplyCareSchedule.mockReset().mockResolvedValue([]);
   mockUpdatePlanting.mockReset().mockResolvedValue(undefined);
   mockGetPlantingDetail.mockReset().mockResolvedValue(detail());
 });
@@ -123,6 +150,70 @@ describe('栽培を登録', () => {
         expect.objectContaining({ cropId: 'crop-nasu', cropName: 'ナス' }),
       ),
     );
+  });
+
+  // ─── ケアスケジュール自動提案（R26 / WBS 4.8）───────────────────────
+  it('提案があればシートを出し、まだ詳細へは送らない', async () => {
+    mockSuggestCareSchedule.mockResolvedValue([WATER_SUGGESTION]);
+    render(<NewPlantingScreen />);
+    await waitFor(() => expect(screen.getByText('栽培を追加')).toBeTruthy(), { timeout: 20_000 });
+
+    fireEvent.changeText(screen.getByPlaceholderText('トマト'), 'トマト');
+    fireEvent.press(screen.getByText('登録'));
+
+    await waitFor(() => expect(screen.getByText('水やり／3日おき 7:00')).toBeTruthy());
+    expect(mockSuggestCareSchedule).toHaveBeenCalledWith('new-id');
+
+    // 提案を出している間は遷移しない。トーストの 900ms を進めても動かないこと
+    jest.advanceTimersByTime(1000);
+    expect(mockReplace).not.toHaveBeenCalled();
+  });
+
+  it('選んだお知らせを作ってから詳細へ送る', async () => {
+    mockSuggestCareSchedule.mockResolvedValue([WATER_SUGGESTION]);
+    render(<NewPlantingScreen />);
+    await waitFor(() => expect(screen.getByText('栽培を追加')).toBeTruthy(), { timeout: 20_000 });
+
+    fireEvent.changeText(screen.getByPlaceholderText('トマト'), 'トマト');
+    fireEvent.press(screen.getByText('登録'));
+    await waitFor(() => expect(screen.getByLabelText('水やり 3日おき 7:00')).toBeTruthy());
+
+    fireEvent.press(screen.getByLabelText('水やり 3日おき 7:00'));
+    fireEvent.press(screen.getByLabelText('選んだお知らせを作る'));
+
+    await waitFor(() =>
+      expect(mockApplyCareSchedule).toHaveBeenCalledWith('new-id', [WATER_SUGGESTION]),
+    );
+    await waitFor(() => expect(mockReplace).toHaveBeenCalledWith('/plantings/new-id'));
+  });
+
+  it('「あとで」なら何も作らずに詳細へ送る', async () => {
+    mockSuggestCareSchedule.mockResolvedValue([WATER_SUGGESTION]);
+    render(<NewPlantingScreen />);
+    await waitFor(() => expect(screen.getByText('栽培を追加')).toBeTruthy(), { timeout: 20_000 });
+
+    fireEvent.changeText(screen.getByPlaceholderText('トマト'), 'トマト');
+    fireEvent.press(screen.getByText('登録'));
+    await waitFor(() => expect(screen.getByLabelText('あとで')).toBeTruthy());
+
+    fireEvent.press(screen.getByLabelText('あとで'));
+
+    await waitFor(() => expect(mockReplace).toHaveBeenCalledWith('/plantings/new-id'));
+    expect(mockApplyCareSchedule).not.toHaveBeenCalled();
+  });
+
+  // 提案が落ちても登録は済んでいる。ここで詰まると二重登録につながる
+  it('提案の取得に失敗しても、そのまま詳細へ送る', async () => {
+    mockSuggestCareSchedule.mockRejectedValue(new Error('DB not ready'));
+    render(<NewPlantingScreen />);
+    await waitFor(() => expect(screen.getByText('栽培を追加')).toBeTruthy(), { timeout: 20_000 });
+
+    fireEvent.changeText(screen.getByPlaceholderText('トマト'), 'トマト');
+    fireEvent.press(screen.getByText('登録'));
+
+    await waitFor(() => expect(mockCreatePlanting).toHaveBeenCalled());
+    jest.advanceTimersByTime(1000);
+    await waitFor(() => expect(mockReplace).toHaveBeenCalledWith('/plantings/new-id'));
   });
 
   it('キャンセルで戻る', async () => {

@@ -9,13 +9,14 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { Plus } from 'lucide-react-native';
 import { Controller, useForm } from 'react-hook-form';
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Colors, Typography } from '../constants/theme';
 import { getPlaceList } from '../services/place.service';
 import { elapsedDaysFrom, getPlantingTagNames } from '../services/planting.service';
+import { checkRotation, type RotationWarning } from '../services/rotation.service';
 import type { PlaceItem } from '../services/types';
 import {
   PLANTED_AS_LABEL,
@@ -28,10 +29,16 @@ import { FormField } from './FormField';
 import { KeyboardAvoider } from './KeyboardAvoider';
 import { PhotoPickerField } from './PhotoPickerField';
 import { PressableScale } from './PressableScale';
+import { RotationNotice } from './RotationNotice';
 import { TagSelector } from './TagSelector';
 
 interface PlantingFormProps {
   initialValues?: Partial<PlantingFormData>;
+  /**
+   * 編集中の栽培 ID。連作チェック（R17）で**自分自身を履歴から外す**ために要る。
+   * 渡さないと「南の畝のトマトを編集すると、そのトマト自身が去年の履歴として出る」
+   */
+  plantingId?: string;
   onSubmit: (data: PlantingFormData) => Promise<void>;
   onCancel: () => void;
   title: string;
@@ -42,8 +49,12 @@ function todayIso(): string {
   return new Date().toISOString();
 }
 
+/** 連作チェックを引くまでの待ち。打鍵が止まったと見なせる程度の短さ */
+const ROTATION_CHECK_DELAY_MS = 400;
+
 export function PlantingForm({
   initialValues,
+  plantingId,
   onSubmit,
   onCancel,
   title,
@@ -54,6 +65,7 @@ export function PlantingForm({
   const [places, setPlaces] = useState<PlaceItem[]>([]);
   const [availableTags, setAvailableTags] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
+  const [rotationWarning, setRotationWarning] = useState<RotationWarning | null>(null);
 
   const {
     control,
@@ -90,6 +102,38 @@ export function PlantingForm({
   const selectedPlaceId = watch('placeId');
   const plantedAs = watch('plantedAs');
   const plantedOn = watch('plantedOn');
+  const cropName = watch('cropName');
+
+  /**
+   * 連作チェック（R17 / WBS 4.5）。作物名・場所・植え付け日のどれかが変わるたびに引き直す。
+   *
+   * **少し待ってから引く。** 作物名は 1 文字ずつ変わるので、打鍵ごとに
+   * 作物マスターと過去の栽培を引くと入力が引っかかる。
+   * **失敗は握りつぶして「警告なし」にする。** 助言が取れないことで
+   * 登録そのものが止まってはいけない（R17 は保存を妨げない）。
+   */
+  useEffect(() => {
+    let cancelled = false;
+    const timer = setTimeout(() => {
+      void checkRotation({
+        cropName,
+        placeId: selectedPlaceId ?? null,
+        plantedOn,
+        excludePlantingId: plantingId,
+      })
+        .then((warning) => {
+          if (!cancelled) setRotationWarning(warning);
+        })
+        .catch(() => {
+          if (!cancelled) setRotationWarning(null);
+        });
+    }, ROTATION_CHECK_DELAY_MS);
+
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [cropName, selectedPlaceId, plantedOn, plantingId]);
 
   // 日数は planting.service に一本化する。ここで独自に数えると、
   // 同じ株が登録画面と一覧・提案文で違う日数になる（PR #90 の 33日目/34日）
@@ -235,6 +279,9 @@ export function PlantingForm({
             <Text style={styles.addPlaceText}>場所を追加</Text>
           </PressableScale>
         </View>
+
+        {/* 場所のすぐ下に置く。場所を選び直せば消える／変わることが分かる位置 */}
+        <RotationNotice warning={rotationWarning} />
 
         <View style={styles.group}>
           <Text style={styles.groupLabel}>写真</Text>

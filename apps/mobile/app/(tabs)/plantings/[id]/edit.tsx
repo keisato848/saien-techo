@@ -81,6 +81,8 @@ export default function EditPlantingScreen() {
     <View style={{ flex: 1, backgroundColor: Colors.bg }}>
       <PlantingForm
         initialValues={initialValues}
+        // 連作チェック（R17）で自分自身を履歴から外すために渡す
+        plantingId={id}
         onSubmit={handleSubmit}
         onCancel={() => router.back()}
         title="栽培を編集"
