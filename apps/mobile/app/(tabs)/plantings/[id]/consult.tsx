@@ -11,10 +11,15 @@
  *   **植物が写っていない判定（isPlant=false）は枠を消費しない** — 撮り損じで
  *   一度きりの無料枠が飛ぶのは理不尽（だいどこの not_a_dish と同じ扱い）。
  * - 免責（Q5）は結果の有無に関係なく常に画面下部に出す。
+ * - **アプリが持っている文脈を添える**（WBS 4.14 / #138）。品種・経過日数・場所は
+ *   この画面に出ているのにサーバーへ送っていなかった。送る中身の判断は
+ *   consult-context.service に書いてある。**AI 呼び出しは増えない**。
+ * - 送る文脈は**そのまま画面に出す**。何が送られるか分からないまま送信させるのは
+ *   「私設・ローカルファースト」に反する。
  */
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { Camera, ChevronLeft, ImageIcon, PlayCircle, Sparkles, X } from 'lucide-react-native';
-import { useCallback, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Image,
@@ -29,12 +34,20 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { FormField } from '../../../../src/components/FormField';
 import { KeyboardAvoider } from '../../../../src/components/KeyboardAvoider';
 import { PressableScale } from '../../../../src/components/PressableScale';
+import { QuestionChips } from '../../../../src/components/QuestionChips';
 import { Colors, Typography } from '../../../../src/constants/theme';
+import {
+  appendQuestionChip,
+  EMPTY_CONSULT_CONTEXT,
+  getConsultContext,
+  type ConsultContext,
+} from '../../../../src/services/consult-context.service';
 import { expoImagePickerPhotoCaptureAdapter } from '../../../../src/services/expo-photo-capture.adapter';
 import {
   CONFIDENCE_LABEL,
   CONSULT_DISCLAIMER,
   consultGarden,
+  consultQuestionAllowance,
   GardenConsultError,
   HEALTH_STATUS_LABEL,
   type GardenConsultResult,
@@ -59,6 +72,7 @@ export default function GardenConsultScreen() {
   const insets = useSafeAreaInsets();
 
   const [planting, setPlanting] = useState<PlantingDetail | null>(null);
+  const [context, setContext] = useState<ConsultContext>(EMPTY_CONSULT_CONTEXT);
   const [status, setStatus] = useState<FreemiumStatus | null>(null);
   const [imageUri, setImageUri] = useState<string | null>(null);
   const [question, setQuestion] = useState('');
@@ -68,7 +82,11 @@ export default function GardenConsultScreen() {
   const [errorText, setErrorText] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
-    setPlanting(await getPlantingDetail(id));
+    const detail = await getPlantingDetail(id);
+    setPlanting(detail);
+    // 文脈は栽培・場所・作業ログの読み取りだけ（推論は走らない）。
+    // 戻ってくるたび作り直すのは、直近の作業や経過日数がその間に動くため
+    setContext(await getConsultContext(detail));
     setStatus(await getFreemiumStatus());
   }, [id]);
 
@@ -91,6 +109,13 @@ export default function GardenConsultScreen() {
 
   const canConsult = Boolean(imageUri) && Boolean(status?.canInfer) && !consulting;
 
+  /*
+   * 入力欄の上限は**文脈のぶんだけ縮める**。サーバー（だいどこの Railway）の
+   * question は 1000 文字までで、文脈を前に畳むと合計がそこを超えうる。
+   * 超過分を送信時に黙って切ると、打った本人にも何が消えたか分からない。
+   */
+  const questionMaxLength = useMemo(() => consultQuestionAllowance(context.lines), [context.lines]);
+
   const handleConsult = useCallback(async () => {
     if (!imageUri || consulting) return;
     setConsulting(true);
@@ -101,6 +126,7 @@ export default function GardenConsultScreen() {
         imageUri,
         ...(planting?.cropName ? { cropName: planting.cropName } : {}),
         question,
+        contextLines: context.lines,
       });
       setResult(data);
       if (data.isPlant) {
@@ -117,7 +143,7 @@ export default function GardenConsultScreen() {
     } finally {
       setConsulting(false);
     }
-  }, [imageUri, consulting, planting?.cropName, question]);
+  }, [imageUri, consulting, planting?.cropName, question, context.lines]);
 
   /**
    * 枠切れの利用者が動画リワードで +1 回を得る（R14 の広告ボーナス・1 日 3 回まで）。
@@ -206,9 +232,30 @@ export default function GardenConsultScreen() {
           placeholder="例: 下葉が黄色くなってきた"
           multiline
           numberOfLines={3}
-          maxLength={1000}
+          maxLength={questionMaxLength}
           style={styles.questionInput}
         />
+
+        {/* 症状を言葉にできない人の入口。押すと相談文に足される（置き換えない） */}
+        <QuestionChips
+          chips={context.chips}
+          onSelect={(chip) => setQuestion((current) => appendQuestionChip(current, chip))}
+        />
+
+        {/* 送るものを隠さない。ここに出ている行がそのまま相談文に畳まれる */}
+        {context.lines.length > 0 ? (
+          <View style={styles.contextCard} testID="consult-context">
+            <Text style={styles.contextTitle}>写真といっしょに送る情報</Text>
+            {context.lines.map((line) => (
+              <Text key={line.label} style={styles.contextItem}>
+                {`${line.label}：${line.value}`}
+              </Text>
+            ))}
+            <Text style={styles.contextNote}>
+              手帳のメモや、写真に付いている位置情報は送りません。
+            </Text>
+          </View>
+        ) : null}
 
         {/* 無料枠。使い切りは submit を殺し、広告が出せるなら +1 回の導線を添える */}
         {quotaExhausted ? (
@@ -412,6 +459,28 @@ const styles = StyleSheet.create({
   },
   pickButtonText: { fontSize: Typography.size.sm, color: Colors.accentInk },
   questionInput: { minHeight: 84, textAlignVertical: 'top' },
+  contextCard: {
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: Colors.line,
+    backgroundColor: Colors.surface,
+    padding: 12,
+    marginBottom: 12,
+    gap: 4,
+  },
+  contextTitle: {
+    fontSize: Typography.size.sm,
+    color: Colors.ink,
+    fontWeight: Typography.weight.medium,
+    marginBottom: 2,
+  },
+  contextItem: { fontSize: Typography.size.xs, color: Colors.inkDim, lineHeight: 18 },
+  contextNote: {
+    marginTop: 4,
+    fontSize: Typography.size.xs,
+    color: Colors.inkDim,
+    lineHeight: 17,
+  },
   quotaLine: { fontSize: Typography.size.xs, color: Colors.inkDim, marginBottom: 10 },
   quotaCard: {
     borderRadius: 10,
