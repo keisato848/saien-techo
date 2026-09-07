@@ -42,11 +42,6 @@ jobs:
       - name: Test (mobile + shared)
         run: pnpm -r test
 
-      # Q-4: Coverage (informational — thresholds enforced in vitest config)
-      - name: Test coverage (server)
-        run: pnpm --filter server test -- --coverage
-        continue-on-error: true # まだカバレッジ閾値未設定のため警告のみ
-
   # S-3: Dependency audit
   audit:
     name: Security Audit
