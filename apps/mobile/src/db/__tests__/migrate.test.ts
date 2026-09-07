@@ -51,6 +51,21 @@ describe('database migrations', () => {
     expect(statements).toContain(`PRAGMA user_version = ${CURRENT_SCHEMA_VERSION}`);
   });
 
+  it('duplicate column 以外の ALTER の失敗は投げる（4.19 レビュー 26）', () => {
+    // 以前は全例外を握り潰していたので、列名を書き間違えても静かに追加されず、
+    // syncCropMaster の insert が no such column を投げて
+    // **起動不能の「DB Error」全画面**に到達しうる
+    expect(() =>
+      runMigrations({
+        execSync: (statement) => {
+          if (statement.startsWith('ALTER TABLE')) {
+            throw new Error('near "INTEGERR": syntax error');
+          }
+        },
+      }),
+    ).toThrow('syntax error');
+  });
+
   it('drops だいどこ由来のテーブル, bracketed by PRAGMA foreign_keys OFF/ON (WBS 2.9e)', () => {
     const statements: string[] = [];
 

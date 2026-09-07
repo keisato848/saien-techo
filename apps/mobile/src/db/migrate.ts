@@ -13,9 +13,6 @@ import { seedSamplePhotos } from './seed-photos';
 import {
   seedAppMeta,
   seedCareLogs,
-  seedCropCalendars,
-  seedCropGuides,
-  seedCrops,
   seedFamilies,
   seedHarvestPhotoReads,
   seedHarvests,
@@ -464,8 +461,12 @@ export function runMigrations(expoDb: { execSync: (sql: string) => void }): Migr
   for (const { table, columnDdl } of ADD_COLUMN_MIGRATIONS) {
     try {
       expoDb.execSync(`ALTER TABLE ${table} ADD COLUMN ${columnDdl}`);
-    } catch {
-      // column already exists (fresh install or already migrated)
+    } catch (error) {
+      // 握り潰してよいのは「もう列がある」だけ。全部飲むと、列名の綴りを
+      // 間違えても静かに追加されず、syncCropMaster の insert が
+      // no such column を投げて**起動不能の「DB Error」全画面**になる。
+      // 綴り誤り・型の書き間違いはここで落とす（schema-sql.test.ts が列名集合で見張る）
+      if (!/duplicate column name/i.test(String(error))) throw error;
     }
   }
   // v13: 写真パスを相対化する。
@@ -549,6 +550,15 @@ export async function ensureLocalIdentity(database: DB): Promise<void> {
 
 const CROP_MASTER_META_KEY = 'crop_master_version';
 
+/** 一度の INSERT に載せる行数。449 文を 10 文前後に畳む */
+const CROP_MASTER_INSERT_CHUNK = 50;
+
+function chunk<T>(rows: readonly T[], size: number): T[][] {
+  const chunks: T[][] = [];
+  for (let i = 0; i < rows.length; i += size) chunks.push(rows.slice(i, i + size));
+  return chunks;
+}
+
 /**
  * 作物マスター（栽培暦・作物ガイド）を投入する（R08/R09 / WBS 3.1）。
  *
@@ -556,7 +566,7 @@ const CROP_MASTER_META_KEY = 'crop_master_version';
  * CROP_MASTER_VERSION の差分で検知して入れ直す。
  *
  * 窓とガイドは「マスターに載っている作物の分だけ」削除 → 挿入で入れ替える。
- * 開発用サンプル（seed.ts の crop-tomato など）には触らない。
+ * マスターに無い作物（利用者が自由入力した crops 行）には触らない。
  */
 export async function syncCropMaster(database: DB): Promise<void> {
   const meta = await database
@@ -568,87 +578,102 @@ export async function syncCropMaster(database: DB): Promise<void> {
 
   const now = new Date().toISOString();
   const masterIds = CROP_MASTER.map((crop) => crop.id);
+  const calendarRows = CROP_MASTER.flatMap((crop) =>
+    crop.calendars.map((window) => ({
+      id: `${crop.id}-${window.region}-${window.kind}-${window.startMonth}`,
+      cropId: crop.id,
+      region: window.region,
+      kind: window.kind,
+      startMonth: window.startMonth,
+      endMonth: window.endMonth,
+    })),
+  );
+  const guideRows = CROP_MASTER.map((crop) => ({
+    cropId: crop.id,
+    spacingCm: crop.guide.spacingCm,
+    sunlight: crop.guide.sunlight,
+    wateringNote: crop.guide.wateringNote,
+    fertilizeAfterDays: crop.guide.fertilizeAfterDays,
+    harvestAfterDays: crop.guide.harvestAfterDays,
+    commonPests: JSON.stringify(crop.guide.commonPests),
+    tips: crop.guide.tips,
+    wateringIntervalDays: crop.guide.wateringIntervalDays,
+    germinationDays: crop.guide.germinationDays,
+    transplantAfterDays: crop.guide.transplantAfterDays,
+    fertilizeIntervalDays: crop.guide.fertilizeIntervalDays,
+    harvestWindowMinDays: crop.guide.harvestWindowDays?.min ?? null,
+    harvestWindowMaxDays: crop.guide.harvestWindowDays?.max ?? null,
+    harvestDurationDays: crop.guide.harvestDurationDays,
+    tempGerminationMin: crop.guide.temperature?.germination[0] ?? null,
+    tempGerminationMax: crop.guide.temperature?.germination[1] ?? null,
+    tempGrowthMin: crop.guide.temperature?.growth[0] ?? null,
+    tempGrowthMax: crop.guide.temperature?.growth[1] ?? null,
+    rotationYears: crop.guide.rotationYears,
+    tasks: JSON.stringify(crop.guide.tasks),
+    perennial: crop.perennial ? 1 : 0,
+    beginner: crop.editorial.beginner ? 1 : 0,
+    containerOk: crop.editorial.container.ok ? 1 : 0,
+    containerDepthCm: crop.editorial.container.ok ? crop.editorial.container.depthCm : null,
+  }));
 
-  for (const crop of CROP_MASTER) {
-    await database
-      .insert(schema.crops)
-      .values({
-        id: crop.id,
-        name: crop.name,
-        nameReading: crop.nameReading,
-        family: crop.family,
-        category: crop.category,
-        defaultUnit: crop.defaultUnit,
-        createdAt: now,
-        updatedAt: now,
-      })
-      .onConflictDoUpdate({
-        target: schema.crops.id,
-        set: {
+  // **原子性のためのトランザクション**（速度は副産物）。
+  // 暦とガイドは「消してから入れ直す」ので、途中で落ちると
+  // *窓が消えたまま版だけ上がった* 端末が生まれ、次の起動でも同版として
+  // スキップされて直らない。版の更新まで同じトランザクションに入れて、
+  // 「全部入ったときだけ版が上がる」を守る。
+  await database.run(sql`BEGIN`);
+  try {
+    for (const crop of CROP_MASTER) {
+      await database
+        .insert(schema.crops)
+        .values({
+          id: crop.id,
           name: crop.name,
           nameReading: crop.nameReading,
           family: crop.family,
           category: crop.category,
           defaultUnit: crop.defaultUnit,
+          createdAt: now,
           updatedAt: now,
-        },
-      });
-  }
-
-  await database
-    .delete(schema.cropCalendars)
-    .where(inArray(schema.cropCalendars.cropId, masterIds));
-  for (const crop of CROP_MASTER) {
-    for (const window of crop.calendars) {
-      await database.insert(schema.cropCalendars).values({
-        id: `${crop.id}-${window.region}-${window.kind}-${window.startMonth}`,
-        cropId: crop.id,
-        region: window.region,
-        kind: window.kind,
-        startMonth: window.startMonth,
-        endMonth: window.endMonth,
-      });
+        })
+        .onConflictDoUpdate({
+          target: schema.crops.id,
+          set: {
+            name: crop.name,
+            nameReading: crop.nameReading,
+            family: crop.family,
+            category: crop.category,
+            defaultUnit: crop.defaultUnit,
+            updatedAt: now,
+          },
+        });
     }
-  }
 
-  await database.delete(schema.cropGuides).where(inArray(schema.cropGuides.cropId, masterIds));
-  for (const crop of CROP_MASTER) {
-    await database.insert(schema.cropGuides).values({
-      cropId: crop.id,
-      spacingCm: crop.guide.spacingCm,
-      sunlight: crop.guide.sunlight,
-      wateringNote: crop.guide.wateringNote,
-      fertilizeAfterDays: crop.guide.fertilizeAfterDays,
-      harvestAfterDays: crop.guide.harvestAfterDays,
-      commonPests: JSON.stringify(crop.guide.commonPests),
-      tips: crop.guide.tips,
-      wateringIntervalDays: crop.guide.wateringIntervalDays,
-      germinationDays: crop.guide.germinationDays,
-      transplantAfterDays: crop.guide.transplantAfterDays,
-      fertilizeIntervalDays: crop.guide.fertilizeIntervalDays,
-      harvestWindowMinDays: crop.guide.harvestWindowDays?.min ?? null,
-      harvestWindowMaxDays: crop.guide.harvestWindowDays?.max ?? null,
-      harvestDurationDays: crop.guide.harvestDurationDays,
-      tempGerminationMin: crop.guide.temperature?.germination[0] ?? null,
-      tempGerminationMax: crop.guide.temperature?.germination[1] ?? null,
-      tempGrowthMin: crop.guide.temperature?.growth[0] ?? null,
-      tempGrowthMax: crop.guide.temperature?.growth[1] ?? null,
-      rotationYears: crop.guide.rotationYears,
-      tasks: JSON.stringify(crop.guide.tasks),
-      perennial: crop.perennial ? 1 : 0,
-      beginner: crop.editorial.beginner ? 1 : 0,
-      containerOk: crop.editorial.container.ok ? 1 : 0,
-      containerDepthCm: crop.editorial.container.ok ? crop.editorial.container.depthCm : null,
-    });
-  }
+    await database
+      .delete(schema.cropCalendars)
+      .where(inArray(schema.cropCalendars.cropId, masterIds));
+    for (const rows of chunk(calendarRows, CROP_MASTER_INSERT_CHUNK)) {
+      await database.insert(schema.cropCalendars).values(rows);
+    }
 
-  await database
-    .insert(schema.appMeta)
-    .values({ key: CROP_MASTER_META_KEY, value: String(CROP_MASTER_VERSION), updatedAt: now })
-    .onConflictDoUpdate({
-      target: schema.appMeta.key,
-      set: { value: String(CROP_MASTER_VERSION), updatedAt: now },
-    });
+    await database.delete(schema.cropGuides).where(inArray(schema.cropGuides.cropId, masterIds));
+    for (const rows of chunk(guideRows, CROP_MASTER_INSERT_CHUNK)) {
+      await database.insert(schema.cropGuides).values(rows);
+    }
+
+    await database
+      .insert(schema.appMeta)
+      .values({ key: CROP_MASTER_META_KEY, value: String(CROP_MASTER_VERSION), updatedAt: now })
+      .onConflictDoUpdate({
+        target: schema.appMeta.key,
+        set: { value: String(CROP_MASTER_VERSION), updatedAt: now },
+      });
+
+    await database.run(sql`COMMIT`);
+  } catch (error) {
+    await database.run(sql`ROLLBACK`);
+    throw error;
+  }
 }
 
 function isSubsetOfSeed(ids: string[], seedIds: Set<string>): boolean {
@@ -735,20 +760,10 @@ export async function seedDatabase(database: DB): Promise<void> {
     .insert(schema.families)
     .values([...seedFamilies])
     .onConflictDoNothing();
-  // ── さいえん手帳（WBS 1.5）─────────────────────────────────────────────
-  // 作物マスターの本番データ投入は WBS 3.1。ここは画面確認用の最小セット
-  await database
-    .insert(schema.crops)
-    .values([...seedCrops])
-    .onConflictDoNothing();
-  await database
-    .insert(schema.cropGuides)
-    .values([...seedCropGuides])
-    .onConflictDoNothing();
-  await database
-    .insert(schema.cropCalendars)
-    .values([...seedCropCalendars])
-    .onConflictDoNothing();
+  // 作物・栽培暦・作物ガイドはサンプルに持たない。**syncCropMaster が正**で、
+  // 起動時に seedDatabase より先に走る（useDatabase）。サンプル側にも 3 品目を
+  // 持っていた頃は、マスターの版を上げた直後のサンプルビルドにだけ
+  // `cal-basil-temperate-sow` のような**出典の無い窓**が残っていた。
   await database
     .insert(schema.places)
     .values([...seedPlaces])
