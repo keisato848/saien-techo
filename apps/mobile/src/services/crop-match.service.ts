@@ -2,6 +2,7 @@ import { and, eq, isNull, like } from 'drizzle-orm';
 
 import { getDb, isNativePlatform } from '../db/client';
 import * as schema from '../db/schema';
+import { updatePlantingFtsIndex } from './fts.service';
 
 /**
  * 作物名を作物マスターへ寄せる。
@@ -177,7 +178,11 @@ export async function backfillPlantingCropIds(): Promise<number> {
 
   const db = getDb();
   const rows = await db
-    .select({ id: schema.plantings.id, cropName: schema.plantings.cropName })
+    .select({
+      id: schema.plantings.id,
+      cropName: schema.plantings.cropName,
+      variety: schema.plantings.variety,
+    })
     .from(schema.plantings)
     .where(isNull(schema.plantings.cropId));
   if (rows.length === 0) return 0;
@@ -186,13 +191,29 @@ export async function backfillPlantingCropIds(): Promise<number> {
   if (master.length === 0) return 0;
 
   let filled = 0;
-  for (const row of rows as { id: string; cropName: string }[]) {
+  for (const row of rows as { id: string; cropName: string; variety: string | null }[]) {
     const matched = matchCropMaster(row.cropName, master);
     if (!matched.cropId) continue;
     await db
       .update(schema.plantings)
       .set({ cropId: matched.cropId, cropNameReading: matched.cropNameReading })
       .where(and(eq(schema.plantings.id, row.id), isNull(schema.plantings.cropId)));
+    // **読みを行に書いたら索引にも入れる。** 索引を放っておくと、埋め戻しで
+    // 「とまと」が付いた株が検索に出ないままになる（行と索引で読みが食い違う）
+    if (matched.cropNameReading) {
+      const tags = await db
+        .select({ name: schema.tags.name })
+        .from(schema.plantingTags)
+        .innerJoin(schema.tags, eq(schema.plantingTags.tagId, schema.tags.id))
+        .where(eq(schema.plantingTags.plantingId, row.id));
+      await updatePlantingFtsIndex(
+        row.id,
+        row.cropName,
+        matched.cropNameReading,
+        row.variety,
+        (tags as { name: string }[]).map((tag) => tag.name),
+      );
+    }
     filled += 1;
   }
   return filled;

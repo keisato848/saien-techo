@@ -283,6 +283,15 @@ describeIfSqlite('バックアップ対象（実 SQLite）', () => {
     expect(BACKUP_EXCLUDED_TABLES.filter((name) => !real.includes(name))).toEqual([]);
   });
 
+  it('作物マスターの 3 テーブルはバックアップに入れない（列の足し忘れで壊れるため）', () => {
+    // 4.19 で 18 列足したときに BACKUP_TABLES の columns を書き忘れ、
+    // 復元すると新しい列が全部 NULL になっていた。syncCropMaster が作り直せるので外す
+    for (const name of ['crops', 'crop_calendars', 'crop_guides']) {
+      expect(BACKUP_TABLE_NAMES).not.toContain(name);
+      expect(BACKUP_EXCLUDED_TABLES).toContain(name);
+    }
+  });
+
   it('存在しないテーブルを対象にしていない', () => {
     const real = realTableNames();
     const unknown = BACKUP_TABLE_NAMES.filter((name) => !real.includes(name));

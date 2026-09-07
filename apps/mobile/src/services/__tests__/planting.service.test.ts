@@ -31,6 +31,7 @@ import {
   resumePlanting,
   updatePlanting,
 } from '../planting.service';
+import { syncCropMaster } from '../../db/migrate';
 import { searchPlantingsByFts } from '../fts.service';
 import type { SavePlantingInput } from '../types';
 
@@ -499,5 +500,53 @@ describeIfSqlite('検索・絞り込み・並べ替え (R03 / WBS 1.7)', () => {
 
     expect(await names({ onlyEnded: true, query: 'きゅうり' })).toEqual(['キュウリ']);
     expect(await names({ query: 'きゅうり' })).toEqual([]);
+  });
+});
+
+describeIfSqlite('マスターから寄せた読みが検索の索引にも入る', () => {
+  beforeEach(async () => {
+    mockHandles = createTestDb();
+    seedFamily();
+    await syncCropMaster(mockHandles.db);
+  });
+
+  afterEach(() => mockHandles.close());
+
+  it('別名で登録しても、寄せた読みで検索に出る（cropNameReading を渡さない経路）', async () => {
+    // 「ミニトマト」はマスター名ではないが別名でトマトに寄る。行には「とまと」が入る。
+    // 以前は索引にだけ読みが入らず、「とまと」で検索しても出てこなかった
+    await createPlanting({
+      cropName: 'ミニトマト',
+      plantedOn: new Date().toISOString().slice(0, 10),
+      plantedAs: 'seedling',
+      tags: [],
+    });
+
+    const [row] = mockHandles.expoDb.getAllSync<{ crop_name_reading: string | null }>(
+      'SELECT crop_name_reading FROM plantings',
+    );
+    expect(row.crop_name_reading).toBe('とまと');
+
+    const hits = await searchPlantingsByFts('とまと');
+    expect(hits.length).toBe(1);
+  });
+
+  it('編集でも同じ（片方だけ直すと索引が空に戻る）', async () => {
+    const id = await createPlanting({
+      cropName: 'ナス',
+      cropNameReading: 'なす',
+      plantedOn: new Date().toISOString().slice(0, 10),
+      plantedAs: 'seedling',
+      tags: [],
+    });
+
+    await updatePlanting(id, {
+      cropName: 'シシトウ',
+      plantedOn: new Date().toISOString().slice(0, 10),
+      plantedAs: 'seedling',
+      tags: [],
+    });
+
+    expect((await searchPlantingsByFts('とうがらし')).length).toBe(1);
   });
 });

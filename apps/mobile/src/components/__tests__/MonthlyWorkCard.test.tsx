@@ -108,7 +108,7 @@ describe('MonthlyWorkCard', () => {
     render(<MonthlyWorkCard />);
     await waitFor(() => expect(screen.getByText('暖地')).toBeTruthy());
 
-    fireEvent.press(screen.getByLabelText('地域を変更'));
+    fireEvent.press(screen.getByLabelText('地域は暖地。変更する'));
 
     expect(mockPush).toHaveBeenCalledWith('/region');
   });
@@ -136,7 +136,11 @@ describe('MonthlyWorkCard', () => {
     );
     expect(screen.queryByText(/ミズナ/)).toBeNull();
 
-    fireEvent.press(screen.getByLabelText('まきどきの作物を作物ガイドで見る'));
+    fireEvent.press(
+      screen.getByLabelText(
+        'まきどき：ダイコン、カブ、ニンジン、ホウレンソウ、コマツナ、シュンギク、ほか2種。作物ガイドで見る',
+      ),
+    );
     expect(mockPush).toHaveBeenCalledWith('/crops?now=1');
   });
 
@@ -148,6 +152,31 @@ describe('MonthlyWorkCard', () => {
     expect(describeCropRow(crops)).not.toMatch(/ほか/);
     expect(describeCropRow([...crops, { cropId: 'x', name: '余り' }])).toMatch(/、ほか1種$/);
     expect(describeCropRow([])).toBe('');
+  });
+
+  it('行の読み上げラベルに作物名が入る（Pressable は子の Text を隠すため）', async () => {
+    mockGetWork.mockResolvedValue(
+      work({
+        sow: [
+          { cropId: 'crop-daikon', name: 'ダイコン' },
+          { cropId: 'crop-kabu', name: 'カブ' },
+        ],
+      }),
+    );
+    render(<MonthlyWorkCard />);
+
+    await waitFor(() =>
+      expect(screen.getByLabelText('まきどき：ダイコン、カブ。作物ガイドで見る')).toBeTruthy(),
+    );
+  });
+
+  it('地域バッジのラベルにも中身を入れる', async () => {
+    mockGetWork.mockResolvedValue(
+      work({ region: 'warm', sow: [{ cropId: 'crop-daikon', name: 'ダイコン' }] }),
+    );
+    render(<MonthlyWorkCard />);
+
+    await waitFor(() => expect(screen.getByLabelText('地域は暖地。変更する')).toBeTruthy());
   });
 
   it('読み込みに失敗したら黙って出さない（ホームを壊さない）', async () => {

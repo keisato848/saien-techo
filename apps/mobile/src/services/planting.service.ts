@@ -272,10 +272,13 @@ export async function createPlanting(input: SavePlantingInput): Promise<string> 
   });
 
   await replaceTags(db, schema, plantingId, input.tags);
+  // **行に書いたのと同じ読みを索引にも渡す。** 以前はここだけ `?? null` で、
+  // 「ミニトマト」のように別名で入力した栽培は行に「とまと」が入るのに索引が空になり、
+  // 「とまと」で検索しても出てこなかった（FTS は日本語を 1 トークンとして前方一致する）
   await updatePlantingFtsIndex(
     plantingId,
     input.cropName,
-    input.cropNameReading ?? null,
+    input.cropNameReading ?? matched.cropNameReading,
     emptyToNull(input.variety),
     input.tags,
   );
@@ -333,10 +336,11 @@ export async function updatePlanting(
   if (previousCover && previousCover !== nextCover) {
     await deleteGardenPhotoFiles([previousCover]);
   }
+  // createPlanting と同じ式にそろえる（片方だけ直すと編集で索引が空に戻る）
   await updatePlantingFtsIndex(
     plantingId,
     input.cropName,
-    input.cropNameReading ?? null,
+    input.cropNameReading ?? matched.cropNameReading,
     emptyToNull(input.variety),
     input.tags,
   );

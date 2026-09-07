@@ -55,6 +55,7 @@ import {
   identifyPhotoBatch,
   matchCropMaster,
   MAX_IDENTIFY_BATCH,
+  rankKnownCropNames,
   registrableDrafts,
   type PlantingDraft,
 } from '../planting-draft.service';
@@ -409,5 +410,41 @@ describeIfSqlite('実 SQLite での参照', () => {
     const master = await getCropMaster();
 
     expect(master.map((row) => row.name)).toEqual(['トマト']);
+  });
+});
+
+describe('rankKnownCropNames — サーバーへ渡す作物名の並び', () => {
+  // 上限 40 はサーバーの zod と揃えた契約。マスターが 50 品目になって
+  // 超えた分が落ちるようになったので、落ちる 10 品目を意味のあるものにする
+  const MANY = [
+    { id: 'crop-a', name: 'アスパラ', nameReading: 'あすぱら' },
+    { id: 'crop-b', name: 'ブロッコリー', nameReading: 'ぶろっこりー' },
+    { id: 'crop-c', name: 'チンゲンサイ', nameReading: 'ちんげんさい' },
+    { id: 'crop-d', name: 'ダイコン', nameReading: 'だいこん' },
+  ];
+
+  it('育てている作物が先頭に来る', () => {
+    const ranked = rankKnownCropNames(MANY, new Set(['crop-d']), new Set());
+    expect(ranked[0]).toBe('ダイコン');
+  });
+
+  it('次に今月の始めどき・採りどきが来る', () => {
+    const ranked = rankKnownCropNames(MANY, new Set(['crop-d']), new Set(['crop-c']));
+    expect(ranked.slice(0, 2)).toEqual(['ダイコン', 'チンゲンサイ']);
+  });
+
+  it('同じ優先度の中はマスターの順のまま（毎回同じ並びになる）', () => {
+    const ranked = rankKnownCropNames(MANY, new Set(), new Set());
+    expect(ranked).toEqual(['アスパラ', 'ブロッコリー', 'チンゲンサイ', 'ダイコン']);
+  });
+
+  it('作物を落とさない（並べ替えるだけ。切るのは送信側の上限）', () => {
+    const ranked = rankKnownCropNames(MANY, new Set(['crop-b']), new Set(['crop-a']));
+    expect([...ranked].sort()).toEqual([...MANY.map((c) => c.name)].sort());
+  });
+
+  it('育てている作物は季節より優先（庭を撮っている前提）', () => {
+    const ranked = rankKnownCropNames(MANY, new Set(['crop-d']), new Set(['crop-a', 'crop-d']));
+    expect(ranked[0]).toBe('ダイコン');
   });
 });
