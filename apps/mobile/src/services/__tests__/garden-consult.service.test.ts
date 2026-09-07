@@ -5,9 +5,13 @@
  * fetch と画像アダプタを注入し、ネットワークにも expo にも触れない。
  */
 import {
+  composeConsultQuestion,
   CONSULT_DISCLAIMER,
+  CONSULT_QUESTION_MAX_LENGTH,
   consultGarden,
+  consultQuestionAllowance,
   GardenConsultError,
+  type ConsultContextLine,
   type ConsultImageAdapter,
 } from '../garden-consult.service';
 
@@ -123,5 +127,65 @@ describe('免責文（Q5 / §8.4）', () => {
     const err = new GardenConsultError('x', true, 'transient');
     expect(err).toBeInstanceOf(Error);
     expect(err.retryable).toBe(true);
+  });
+});
+
+/**
+ * 栽培の文脈は `question` に畳んで送る（WBS 4.14 / #138）。
+ * サーバー（だいどこの Railway・決定⑨）の zod は知らないキーを捨てるので、
+ * 新しいフィールドを増やしても届かない。
+ */
+describe('composeConsultQuestion', () => {
+  const LINES: ConsultContextLine[] = [
+    { label: '品種', value: 'アイコ' },
+    { label: '経過', value: '苗から・42日目' },
+  ];
+
+  it('文脈を前に畳み、利用者の言葉は最後に置く', () => {
+    expect(composeConsultQuestion(LINES, '下葉が黄色い')).toBe(
+      [
+        '【栽培の状況】',
+        '・品種: アイコ',
+        '・経過: 苗から・42日目',
+        '【相談】',
+        '下葉が黄色い',
+      ].join('\n'),
+    );
+  });
+
+  it('相談文が空でも、写真だけの診断を頼む文を置く（サーバーの分岐に合わせる）', () => {
+    expect(composeConsultQuestion(LINES, '')).toContain('品種の推定と株の状態');
+  });
+
+  it('文脈が無いときは元の挙動（空なら送らない）', () => {
+    expect(composeConsultQuestion([], '下葉が黄色い')).toBe('下葉が黄色い');
+    expect(composeConsultQuestion(undefined, '  ')).toBeUndefined();
+    expect(composeConsultQuestion([], undefined)).toBeUndefined();
+  });
+
+  it('値が空の行は落とす（「品種: 」だけの行を送らない）', () => {
+    expect(composeConsultQuestion([{ label: '品種', value: ' ' }], 'あ')).toBe('あ');
+  });
+
+  it('サーバーの上限（1000 文字）を超えない', () => {
+    const composed = composeConsultQuestion(LINES, 'あ'.repeat(1200)) ?? '';
+    expect(composed.length).toBe(CONSULT_QUESTION_MAX_LENGTH);
+  });
+});
+
+describe('consultQuestionAllowance', () => {
+  it('文脈のぶんだけ入力欄の上限を縮める', () => {
+    const lines: ConsultContextLine[] = [{ label: '品種', value: 'アイコ' }];
+    const allowance = consultQuestionAllowance(lines);
+
+    expect(allowance).toBeLessThan(CONSULT_QUESTION_MAX_LENGTH);
+    // 上限いっぱいまで打っても、畳んだ結果がサーバーの上限に収まる
+    expect((composeConsultQuestion(lines, 'あ'.repeat(allowance)) ?? '').length).toBe(
+      CONSULT_QUESTION_MAX_LENGTH,
+    );
+  });
+
+  it('文脈が無いときはサーバーの上限そのもの', () => {
+    expect(consultQuestionAllowance([])).toBe(CONSULT_QUESTION_MAX_LENGTH);
   });
 });

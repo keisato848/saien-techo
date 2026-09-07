@@ -107,6 +107,71 @@ const expoConsultImageAdapter: ConsultImageAdapter = {
   },
 };
 
+// ─── 文脈の畳み込み（WBS 4.14）────────────────────────────────────────────────
+
+/**
+ * サーバー（garden.ts の zod）が受ける `question` の上限。
+ * **超えると 400 で弾かれる**ので、文脈を足すぶんはここから差し引いて考える。
+ */
+export const CONSULT_QUESTION_MAX_LENGTH = 1000;
+
+/** 相談文に添える 1 行（「品種: アイコ」）。画面にもこのまま出す */
+export interface ConsultContextLine {
+  label: string;
+  value: string;
+}
+
+const CONTEXT_HEADING = '【栽培の状況】';
+const QUESTION_HEADING = '【相談】';
+/**
+ * 相談文が空のときの本文。**サーバーの分岐に合わせてある** —
+ * question を送ると向こうは「写真と相談内容をもとに」の依頼文になり、
+ * 写真だけのときの「品種の推定と株の状態の診断」が落ちる。ここで言い直す。
+ */
+const NO_QUESTION_TEXT = '特にありません。写真から品種の推定と株の状態を見てください。';
+
+function contextPrefix(lines: readonly ConsultContextLine[]): string {
+  return [
+    CONTEXT_HEADING,
+    ...lines.map((line) => `・${line.label}: ${line.value}`),
+    QUESTION_HEADING,
+    '',
+  ].join('\n');
+}
+
+/**
+ * 栽培の文脈と利用者の相談文を 1 本のテキストにする。
+ *
+ * **新しいフィールドを増やさない。** サーバー（だいどこの Railway・決定⑨）の
+ * zod は知らないキーを捨てるので、`variety` のような列を足しても届かない。
+ * このリポジトリから `apps/server` を直しても本番には反映されない。
+ * 既にある `question` に畳むのが、サーバーを触らずに文脈を渡す唯一の道。
+ */
+export function composeConsultQuestion(
+  lines: readonly ConsultContextLine[] | undefined,
+  question: string | undefined,
+): string | undefined {
+  const asked = question?.trim() ?? '';
+  const context = (lines ?? []).filter((line) => line.value.trim().length > 0);
+  if (context.length === 0) {
+    // 文脈が無いときは元の挙動のまま（空なら送らない = 写真だけの診断）
+    return asked.length > 0 ? asked.slice(0, CONSULT_QUESTION_MAX_LENGTH) : undefined;
+  }
+  const body = asked.length > 0 ? asked : NO_QUESTION_TEXT;
+  return (contextPrefix(context) + body).slice(0, CONSULT_QUESTION_MAX_LENGTH);
+}
+
+/**
+ * 文脈を載せたうえで利用者が書ける残りの文字数。入力欄の maxLength に使う。
+ * 上限に当てるのは**入力の時点**にする — 送信時に黙って切ると、
+ * 打った本人にも何が消えたか分からない。
+ */
+export function consultQuestionAllowance(lines: readonly ConsultContextLine[] | undefined): number {
+  const context = (lines ?? []).filter((line) => line.value.trim().length > 0);
+  if (context.length === 0) return CONSULT_QUESTION_MAX_LENGTH;
+  return Math.max(0, CONSULT_QUESTION_MAX_LENGTH - contextPrefix(context).length);
+}
+
 // ─── 相談リクエスト ──────────────────────────────────────────────────────────
 
 export interface ConsultArgs {
@@ -116,6 +181,11 @@ export interface ConsultArgs {
   cropName?: string;
   /** 相談・症状の説明。空なら写真だけの診断 */
   question?: string;
+  /**
+   * アプリが持っている栽培の文脈（WBS 4.14）。`question` の前に畳んで送る。
+   * 中身の決め方は consult-context.service（何を送って何を送らないか）。
+   */
+  contextLines?: readonly ConsultContextLine[];
 }
 
 /**
@@ -135,7 +205,7 @@ export async function consultGarden(
     throw new GardenConsultError('写真を読み込めませんでした', false);
   }
 
-  const question = args.question?.trim();
+  const question = composeConsultQuestion(args.contextLines, args.question);
   const cropName = args.cropName?.trim();
 
   const controller = new AbortController();

@@ -46,6 +46,12 @@ jest.mock('../../../../src/services/garden-consult.service', () => ({
   consultGarden: (...args: unknown[]) => mockConsultGarden(...args),
 }));
 
+const mockGetConsultContext = jest.fn();
+jest.mock('../../../../src/services/consult-context.service', () => ({
+  ...jest.requireActual('../../../../src/services/consult-context.service'),
+  getConsultContext: (...args: unknown[]) => mockGetConsultContext(...args),
+}));
+
 const mockCapturePhoto = jest.fn();
 jest.mock('../../../../src/services/photo-capture.service', () => ({
   capturePhoto: (...args: unknown[]) => mockCapturePhoto(...args),
@@ -63,6 +69,15 @@ const PLANTING = {
   cropName: 'ミニトマト',
   variety: 'アイコ',
   elapsedDays: 42,
+};
+
+/** 相談画面が添える文脈（WBS 4.14）。中身の作り方は consult-context.service のテスト */
+const CONTEXT = {
+  lines: [
+    { label: '品種', value: 'アイコ' },
+    { label: '経過', value: '苗から・42日目' },
+  ],
+  chips: ['アブラムシかもしれません', '葉が黄色くなってきた'],
 };
 
 const STATUS_OK = {
@@ -88,6 +103,7 @@ beforeEach(() => {
   mockShowRewardedAd.mockReset();
   mockConsultGarden.mockReset();
   mockCapturePhoto.mockReset();
+  mockGetConsultContext.mockReset().mockResolvedValue(CONTEXT);
 });
 
 async function pickPhoto() {
@@ -121,6 +137,7 @@ describe('AI 相談画面', () => {
         imageUri: 'file:///tmp/leaf.jpg',
         cropName: 'ミニトマト',
         question: '下葉が黄色い',
+        contextLines: CONTEXT.lines,
       }),
     );
     await screen.findByText('窒素不足');
@@ -280,5 +297,75 @@ describe('AI 相談画面', () => {
 
     fireEvent.press(screen.getByLabelText('作業ログに記録する'));
     expect(mockPush).toHaveBeenCalledWith('/plantings/p1/care-logs/new');
+  });
+  // ─── WBS 4.14（#138）: 文脈の自動付与と質問チップ ────────────────────────
+
+  it('画面が持っている文脈をサービスへ渡す（写真だけでも送る）', async () => {
+    mockConsultGarden.mockResolvedValue({ isPlant: true, plantGuess: 'ミニトマト' });
+
+    render(<GardenConsultScreen />);
+    await screen.findByText(/ミニトマト/);
+    await pickPhoto();
+    fireEvent.press(screen.getByLabelText('AI に相談する'));
+
+    await waitFor(() =>
+      expect(mockConsultGarden).toHaveBeenCalledWith(
+        expect.objectContaining({ contextLines: CONTEXT.lines }),
+      ),
+    );
+  });
+
+  it('送る文脈を画面に出す（何が送られるか分からないまま送信させない）', async () => {
+    render(<GardenConsultScreen />);
+
+    await screen.findByTestId('consult-context');
+    expect(screen.getByText('品種：アイコ')).toBeTruthy();
+    expect(screen.getByText('経過：苗から・42日目')).toBeTruthy();
+    expect(screen.getByText(/位置情報は送りません/)).toBeTruthy();
+  });
+
+  it('質問チップを押すと相談文に入り、そのまま送られる', async () => {
+    mockConsultGarden.mockResolvedValue({ isPlant: true });
+
+    render(<GardenConsultScreen />);
+    fireEvent.press(await screen.findByLabelText('アブラムシかもしれませんを相談文に入れる'));
+    await pickPhoto();
+    fireEvent.press(screen.getByLabelText('AI に相談する'));
+
+    await waitFor(() =>
+      expect(mockConsultGarden).toHaveBeenCalledWith(
+        expect.objectContaining({ question: 'アブラムシかもしれません' }),
+      ),
+    );
+  });
+
+  it('チップは自由入力を消さず、行として足す', async () => {
+    mockConsultGarden.mockResolvedValue({ isPlant: true });
+
+    render(<GardenConsultScreen />);
+    await screen.findByText(/ミニトマト/);
+    fireEvent.changeText(
+      screen.getByPlaceholderText('例: 下葉が黄色くなってきた'),
+      '先週から増えている',
+    );
+    fireEvent.press(screen.getByLabelText('葉が黄色くなってきたを相談文に入れる'));
+    await pickPhoto();
+    fireEvent.press(screen.getByLabelText('AI に相談する'));
+
+    await waitFor(() =>
+      expect(mockConsultGarden).toHaveBeenCalledWith(
+        expect.objectContaining({ question: '先週から増えている\n葉が黄色くなってきた' }),
+      ),
+    );
+  });
+
+  it('文脈が空なら、その案内も出さない', async () => {
+    mockGetConsultContext.mockResolvedValue({ lines: [], chips: [] });
+
+    render(<GardenConsultScreen />);
+    await screen.findByText(/ミニトマト/);
+
+    expect(screen.queryByTestId('consult-context')).toBeNull();
+    expect(screen.queryByText('よくある相談から選ぶ')).toBeNull();
   });
 });
