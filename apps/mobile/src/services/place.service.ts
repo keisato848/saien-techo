@@ -173,6 +173,14 @@ export async function deletePlace(placeId: string): Promise<{ deleted: boolean }
     .limit(1);
   if (used.length > 0) return { deleted: false };
 
+  // **作付け計画からの参照は外すだけ。** `planting_plans.place_id` は places への
+  // 外部キーなので、残したまま消すと削除が落ちる（`PRAGMA foreign_keys = ON`）。
+  // 栽培（実績）と違って計画は「まだやっていない予定」なので、場所を消せなくする
+  // 理由が無い。場所だけ未設定に戻して計画は残す
+  await db
+    .update(schema.plantingPlans)
+    .set({ placeId: null, updatedAt: nowIso() })
+    .where(eq(schema.plantingPlans.placeId, placeId));
   await db.delete(schema.places).where(eq(schema.places.id, placeId));
   return { deleted: true };
 }

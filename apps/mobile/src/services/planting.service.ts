@@ -441,6 +441,14 @@ export async function deletePlanting(plantingId: string): Promise<void> {
   await db.delete(schema.harvests).where(eq(schema.harvests.plantingId, plantingId));
   await db.delete(schema.careLogs).where(eq(schema.careLogs.plantingId, plantingId));
   await db.delete(schema.plantingTags).where(eq(schema.plantingTags.plantingId, plantingId));
+  // **作付け計画の紐づけを外してから消す。** `planting_plans.planting_id` は
+  // plantings への外部キーで、アプリは `PRAGMA foreign_keys = ON`（db/client.ts）。
+  // 紐づいたまま消すと FOREIGN KEY constraint failed で削除そのものが落ちる。
+  // 計画は「予定の記録」なので、変換先の栽培が消えても計画自体は残す
+  await db
+    .update(schema.plantingPlans)
+    .set({ plantingId: null, updatedAt: nowIso() })
+    .where(eq(schema.plantingPlans.plantingId, plantingId));
   await db.delete(schema.plantings).where(eq(schema.plantings.id, plantingId));
 
   await removePlantingFtsEntry(plantingId);

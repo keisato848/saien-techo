@@ -37,7 +37,8 @@ type DB = ExpoSQLiteDatabase<typeof schema>;
 // v13: 写真パスの相対化
 // v14: crops.category と crop_guides の 4.19 列（水やり間隔・発芽・定植・追肥間隔・
 //      収穫の幅と期間・適温・連作年数・作業・多年草・編集者判断 — #180）
-export const CURRENT_SCHEMA_VERSION = 14;
+// v15: planting_plans（作付け計画 — R25 / #38）
+export const CURRENT_SCHEMA_VERSION = 15;
 
 const DEFAULT_USER_ID = 'user-kei';
 const DEFAULT_FAMILY_ID = 'family-001';
@@ -342,6 +343,28 @@ const CREATE_TABLES_SQL = `
   );
 
   CREATE INDEX IF NOT EXISTS idx_garden_shopping_family_checked ON garden_shopping_items(family_id, checked);
+
+  -- R25 作付け計画（v15 / #38）。日ではなく年 + 月で持つ理由は schema.ts のコメント
+  CREATE TABLE IF NOT EXISTS planting_plans (
+    id TEXT PRIMARY KEY,
+    family_id TEXT NOT NULL REFERENCES families(id),
+    crop_id TEXT REFERENCES crops(id),
+    crop_name TEXT NOT NULL,
+    crop_name_reading TEXT,
+    variety TEXT,
+    place_id TEXT REFERENCES places(id),
+    planned_year INTEGER NOT NULL,
+    planned_month INTEGER NOT NULL,
+    planned_kind TEXT NOT NULL DEFAULT 'plant',
+    note TEXT,
+    planting_id TEXT REFERENCES plantings(id),
+    converted_at TEXT,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_planting_plans_family_when
+    ON planting_plans(family_id, planned_year, planned_month);
 
   -- R03 栽培一覧・検索。recipe_fts と同じ方式（正規化は fts.service.ts を流用）
   CREATE VIRTUAL TABLE IF NOT EXISTS planting_fts USING fts5(

@@ -206,6 +206,28 @@ const BACKUP_TABLES = [
       'checked_at',
     ],
   },
+  {
+    // R25 作付け計画（#38）。利用者が自分で立てた予定で、作物マスターと違って
+    // 取り直しがきかない。plantings を参照するので並びはその後ろ
+    name: 'planting_plans',
+    columns: [
+      'id',
+      'family_id',
+      'crop_id',
+      'crop_name',
+      'crop_name_reading',
+      'variety',
+      'place_id',
+      'planned_year',
+      'planned_month',
+      'planned_kind',
+      'note',
+      'planting_id',
+      'converted_at',
+      'created_at',
+      'updated_at',
+    ],
+  },
 ] as const;
 
 type BackupTableName = (typeof BACKUP_TABLES)[number]['name'];

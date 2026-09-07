@@ -264,6 +264,27 @@ describeIfSqlite('planting.service (real SQLite)', () => {
       expect(await getPlantingList({ includeEnded: true })).toHaveLength(0);
     });
 
+    it('作付け計画から紐づいていても消せる（計画は残り、紐づけだけ外れる）', async () => {
+      // planting_plans.planting_id は plantings への外部キー。PRAGMA foreign_keys = ON なので
+      // 紐づいたまま消すと削除そのものが落ちる
+      const id = await createPlanting(baseInput);
+      const now = new Date().toISOString();
+      mockHandles.expoDb.runSync(
+        `INSERT INTO planting_plans (id, family_id, crop_name, planned_year, planned_month, planned_kind, planting_id, converted_at, created_at, updated_at)
+         VALUES ('plan-1', ?, 'トマト', 2026, 4, 'plant', ?, ?, ?, ?)`,
+        [FAMILY_ID, id, now, now, now],
+      );
+
+      await expect(deletePlanting(id)).resolves.not.toThrow();
+
+      const [plan] = mockHandles.expoDb.getAllSync<{ planting_id: string | null }>(
+        'SELECT planting_id FROM planting_plans WHERE id = ?',
+        ['plan-1'],
+      );
+      expect(plan).toBeTruthy();
+      expect(plan.planting_id).toBeNull();
+    });
+
     it('FTS からも消える', async () => {
       const id = await createPlanting(baseInput);
       await deletePlanting(id);
