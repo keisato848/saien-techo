@@ -9,9 +9,10 @@
  * 2. 育てているもの — 自分の畑への入口
  * 3. つぎの作業（R10）— アプリからの提案。ホームで唯一のアクセント面
  * 4. 今月の菜園仕事（R08）— 季節の情報
- * 5. さいきんの記録（R05）— 履歴
+ * 5. 去年の今ごろ（R27）— 去年の同じ時期の振り返り
+ * 6. さいきんの記録（R05）— 履歴
  *
- * 「予定 → 自分の畑 → 提案 → 季節 → 履歴」。もとは「予定 → 提案 → 自分の畑 →
+ * 「予定 → 自分の畑 → 提案 → 季節 → 振り返り → 履歴」。もとは「予定 → 提案 → 自分の畑 →
  * 季節 → 履歴」だった。「つぎの作業」は栽培ごとに複数行出るため縦に伸び
  * （実機で 3 件ぶんあると 1 画面に収まらない）、その下にあった「育てているもの」
  * が初期表示で画面外に落ち、実利用者が進行帯（ProgressBand）にたどり着けなかった
@@ -19,8 +20,14 @@
  * 「つぎの作業」より前へ上げた。予定を提案より上に置く理由（自分で設定した予定の
  * 方が確度が高い）は変えていない。アクセント面（ホームで唯一の強い面）も
  * 引き続き「つぎの作業」に残す。
- * 今日のリマインダー・つぎの作業・今月の菜園仕事は中身が無ければカードごと
- * 消えるので、多くの日はもっと少ない枚数に収まる。
+ * 今日のリマインダー・つぎの作業・今月の菜園仕事・去年の今ごろは中身が無ければ
+ * カードごと消えるので、多くの日はもっと少ない枚数に収まる。
+ *
+ * 「去年の今ごろ」（WBS 4.9）を季節と履歴のあいだに置いたのは、これが行動では
+ * なく振り返りだから。上へ入れると 2026-09-01 の事故（カードが伸びて進行帯が
+ * 画面外に落ちた）を繰り返す。下の「さいきんの記録」は件数ぶん際限なく伸びる
+ * ので、その後ろへ回すと事実上たどり着けない。初年度は
+ * last-year.service の判断でカードごと出ない。
  *
  * ## 栽培 0 件のとき（WBS 3.5 で判断）
  *
@@ -42,6 +49,7 @@ import { ProgressBand } from '../../src/components/ProgressBand';
 import { NextActionCard } from '../../src/components/NextActionCard';
 import { PressableScale } from '../../src/components/PressableScale';
 import { HarvestReadCard } from '../../src/components/HarvestReadCard';
+import { LastYearCard } from '../../src/components/LastYearCard';
 import { TodayReminderCard } from '../../src/components/TodayReminderCard';
 import { Colors, Typography } from '../../src/constants/theme';
 import { CARE_KIND_LABEL } from '../../src/services/care-log.service';
@@ -229,6 +237,9 @@ export default function HomeScreen() {
 
           {/* 今月の菜園仕事（R08 / WBS 3.2）。栽培暦 × 地域帯 */}
           <MonthlyWorkCard />
+
+          {/* 去年の今ごろ（R27 / WBS 4.9）。去年の記録が無ければ出ない */}
+          <LastYearCard />
 
           <View style={styles.section}>
             <Text style={styles.sectionLabel}>さいきんの記録</Text>

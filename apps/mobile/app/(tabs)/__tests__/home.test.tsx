@@ -7,7 +7,8 @@
  * 自分の畑 → 季節 → 履歴」（docs/画面設計.md S01）だったが、「つぎの作業」が
  * 複数行で縦に伸び「育てているもの」が画面外に落ちるという実利用者の指摘を受けて
  * 2026-09-01 に「育てているもの」を「つぎの作業」より前へ上げた（index.tsx 冒頭
- * の doc コメント参照）。
+ * の doc コメント参照）。2026-09-07 に「去年の今ごろ」（R27 / WBS 4.9）が
+ * 季節と履歴のあいだへ入った。
  */
 import { configure, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import { StyleSheet } from 'react-native';
@@ -70,6 +71,9 @@ jest.mock('../../../src/components/NextActionCard', () => ({
 }));
 jest.mock('../../../src/components/MonthlyWorkCard', () => ({
   MonthlyWorkCard: mockMarkerCard('＝今月の菜園仕事＝'),
+}));
+jest.mock('../../../src/components/LastYearCard', () => ({
+  LastYearCard: mockMarkerCard('＝去年の今ごろ＝'),
 }));
 
 import HomeScreen, { formatDayLabel } from '../index';
@@ -152,7 +156,7 @@ describe('ホーム（S01 / WBS 3.5）', () => {
       mockGetPlantingList.mockResolvedValue([planting()]);
     });
 
-    it('予定 → 自分の畑 → 提案 → 季節 → 履歴 の順に並べる', async () => {
+    it('予定 → 自分の畑 → 提案 → 季節 → 振り返り → 履歴 の順に並べる', async () => {
       render(<HomeScreen />);
       await waitFor(() => expect(screen.getByText('育てているもの')).toBeTruthy());
 
@@ -163,6 +167,9 @@ describe('ホーム（S01 / WBS 3.5）', () => {
         '育てているもの',
         'つぎの作業',
         '今月の菜園仕事',
+        // 振り返りは行動ではないので季節の下。ただし「さいきんの記録」は
+        // 件数ぶん際限なく伸びるので、その後ろへ回すとたどり着けない（WBS 4.9）
+        '去年の今ごろ',
         'さいきんの記録',
       );
 
