@@ -11,8 +11,6 @@
   "scripts": {
     "agent:init": "pnpm agent:preflight && pnpm agent:hooks:install && pnpm agent:customizations:test",
     "dev:mobile": "pnpm --filter mobile start",
-    "dev:server": "pnpm --filter server dev",
-    "build:server": "pnpm --filter server build",
     "agent:android:build:device": "node scripts/agent/build-android.mjs --arch arm64-v8a",
     "agent:android:build:emulator": "node scripts/agent/build-android.mjs --arch x86_64",
     "agent:android:build:play": "node scripts/agent/build-android.mjs --bundle",
