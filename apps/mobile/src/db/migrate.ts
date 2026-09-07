@@ -34,7 +34,10 @@ type DB = ExpoSQLiteDatabase<typeof schema>;
 //      同じ kind でも春秋 2 つの窓を持てるように）
 // v11: だいどこ由来テーブルを DROP（WBS 2.9e。処分表は docs/WBS.md §2.9）
 // v12: harvest_photo_reads（「写真から記録」の読み取り状態 — #143）
-export const CURRENT_SCHEMA_VERSION = 13;
+// v13: 写真パスの相対化
+// v14: crops.category と crop_guides の 4.19 列（水やり間隔・発芽・定植・追肥間隔・
+//      収穫の幅と期間・適温・連作年数・作業・多年草・編集者判断 — #180）
+export const CURRENT_SCHEMA_VERSION = 14;
 
 const DEFAULT_USER_ID = 'user-kei';
 const DEFAULT_FAMILY_ID = 'family-001';
@@ -144,6 +147,7 @@ const CREATE_TABLES_SQL = `
     name TEXT NOT NULL,
     name_reading TEXT,
     family TEXT,
+    category TEXT,
     default_unit TEXT,
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL
@@ -169,7 +173,24 @@ const CREATE_TABLES_SQL = `
     fertilize_after_days INTEGER,
     harvest_after_days INTEGER,
     common_pests TEXT,
-    tips TEXT
+    tips TEXT,
+    watering_interval_days INTEGER,
+    germination_days INTEGER,
+    transplant_after_days INTEGER,
+    fertilize_interval_days INTEGER,
+    harvest_window_min_days INTEGER,
+    harvest_window_max_days INTEGER,
+    harvest_duration_days INTEGER,
+    temp_germination_min INTEGER,
+    temp_germination_max INTEGER,
+    temp_growth_min INTEGER,
+    temp_growth_max INTEGER,
+    rotation_years INTEGER,
+    tasks TEXT,
+    perennial INTEGER,
+    beginner INTEGER,
+    container_ok INTEGER,
+    container_depth_cm INTEGER
   );
 
   CREATE TABLE IF NOT EXISTS places (
@@ -337,7 +358,31 @@ const CREATE_TABLES_SQL = `
 // EXISTS — the duplicate-column error on re-run is expected and swallowed).
 // v7 で追加した recipes.cover_photo_path / steps.photo_path は、両テーブルごと
 // WBS 2.9e で DROP した。今は空だが、将来の列追加のためにしくみは残す。
-const ADD_COLUMN_MIGRATIONS: { table: string; columnDdl: string }[] = [];
+/** v14（WBS 4.19）。既存端末へ列を足す。CREATE_TABLES_SQL と同じ列を並べる */
+const CROP_GUIDE_V14_COLUMNS = [
+  'watering_interval_days INTEGER',
+  'germination_days INTEGER',
+  'transplant_after_days INTEGER',
+  'fertilize_interval_days INTEGER',
+  'harvest_window_min_days INTEGER',
+  'harvest_window_max_days INTEGER',
+  'harvest_duration_days INTEGER',
+  'temp_germination_min INTEGER',
+  'temp_germination_max INTEGER',
+  'temp_growth_min INTEGER',
+  'temp_growth_max INTEGER',
+  'rotation_years INTEGER',
+  'tasks TEXT',
+  'perennial INTEGER',
+  'beginner INTEGER',
+  'container_ok INTEGER',
+  'container_depth_cm INTEGER',
+] as const;
+
+const ADD_COLUMN_MIGRATIONS: { table: string; columnDdl: string }[] = [
+  { table: 'crops', columnDdl: 'category TEXT' },
+  ...CROP_GUIDE_V14_COLUMNS.map((columnDdl) => ({ table: 'crop_guides', columnDdl })),
+];
 
 /**
  * だいどこ専用だったテーブル（WBS 2.9e で DROP）。
@@ -509,6 +554,7 @@ export async function syncCropMaster(database: DB): Promise<void> {
         name: crop.name,
         nameReading: crop.nameReading,
         family: crop.family,
+        category: crop.category,
         defaultUnit: crop.defaultUnit,
         createdAt: now,
         updatedAt: now,
@@ -519,6 +565,7 @@ export async function syncCropMaster(database: DB): Promise<void> {
           name: crop.name,
           nameReading: crop.nameReading,
           family: crop.family,
+          category: crop.category,
           defaultUnit: crop.defaultUnit,
           updatedAt: now,
         },
@@ -552,6 +599,23 @@ export async function syncCropMaster(database: DB): Promise<void> {
       harvestAfterDays: crop.guide.harvestAfterDays,
       commonPests: JSON.stringify(crop.guide.commonPests),
       tips: crop.guide.tips,
+      wateringIntervalDays: crop.guide.wateringIntervalDays,
+      germinationDays: crop.guide.germinationDays,
+      transplantAfterDays: crop.guide.transplantAfterDays,
+      fertilizeIntervalDays: crop.guide.fertilizeIntervalDays,
+      harvestWindowMinDays: crop.guide.harvestWindowDays?.min ?? null,
+      harvestWindowMaxDays: crop.guide.harvestWindowDays?.max ?? null,
+      harvestDurationDays: crop.guide.harvestDurationDays,
+      tempGerminationMin: crop.guide.temperature?.germination[0] ?? null,
+      tempGerminationMax: crop.guide.temperature?.germination[1] ?? null,
+      tempGrowthMin: crop.guide.temperature?.growth[0] ?? null,
+      tempGrowthMax: crop.guide.temperature?.growth[1] ?? null,
+      rotationYears: crop.guide.rotationYears,
+      tasks: JSON.stringify(crop.guide.tasks),
+      perennial: crop.perennial ? 1 : 0,
+      beginner: crop.editorial.beginner ? 1 : 0,
+      containerOk: crop.editorial.container.ok ? 1 : 0,
+      containerDepthCm: crop.editorial.container.ok ? crop.editorial.container.depthCm : null,
     });
   }
 

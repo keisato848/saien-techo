@@ -14,8 +14,8 @@ import type { PlantingProgress } from '../services/growth-progress.service';
  * - **下の小さなドット = 作業ログ。** 記録すると帯に印が増える
  * - **凡例は置かない。** ホームで凡例が要る色分けは、その時点で複雑すぎる
  *
- * **幅のある「収穫窓」は描かない。** 幅を出せるデータが無いため
- * （理由は growth-progress.service の冒頭）。目安は 1 点として右端に置く。
+ * **収穫の「窓」**（4.19）: マスターが収穫の幅を持つ作物は、幅の最小から右端までを
+ * 収穫色の薄い帯で示す。幅を持たない作物は従来どおり右端の 1 点が目安。
  */
 interface ProgressBandProps {
   progress: PlantingProgress;
@@ -37,6 +37,11 @@ export function ProgressBand({ progress, width }: ProgressBandProps) {
   const target = progress.harvestAfterDays ?? 1;
   // 満杯の帯では今日マーカーが意味を持たず、右端で切れて欠けにも見えるので出さない
   const showToday = progress.ratio < 1;
+  // 収穫の窓。帯の右端 = 幅の最大なので、最小の位置から右端まで
+  const windowStart =
+    progress.harvestWindow != null
+      ? Math.round((progress.harvestWindow.min / target) * width)
+      : null;
 
   return (
     <View style={styles.root}>
@@ -50,6 +55,18 @@ export function ProgressBand({ progress, width }: ProgressBandProps) {
           rx={BAR_H / 2}
           fill={Colors.surfaceInput}
         />
+        {/* 収穫の窓（あれば）。塗りの下に敷いて「ここから採れる」を示す */}
+        {windowStart != null ? (
+          <Rect
+            x={windowStart}
+            y={BAR_Y}
+            width={Math.max(0, width - windowStart)}
+            height={BAR_H}
+            rx={BAR_H / 2}
+            fill={Colors.harvestSoft}
+            testID="progress-band-window"
+          />
+        ) : null}
         {/* 済み。目安を過ぎたら収穫色にして「採りどき」を目で分かるようにする */}
         <Rect
           x={0}

@@ -52,12 +52,22 @@ describeIfSqlite('crop-guide.service (real SQLite)', () => {
   }
 
   describe('getCropGuideList', () => {
-    it('30 作物を読み仮名順で返す', async () => {
+    it('全品目を読み仮名順で返す（分類・多年草・編集者判断つき）', async () => {
       const list = await getCropGuideList(at(8));
 
       expect(list).toHaveLength(CROP_MASTER.length);
       const readings = list.map((c) => c.nameReading ?? '');
       expect(readings).toEqual([...readings].sort());
+      const nira = list.find((c) => c.cropId === 'crop-nira');
+      expect(nira).toEqual(
+        expect.objectContaining({
+          category: 'allium',
+          perennial: true,
+          beginner: true,
+          containerOk: true,
+        }),
+      );
+      expect(list.find((c) => c.cropId === 'crop-hakusai')?.containerOk).toBe(false);
     });
 
     it('8 月の中間地: ダイコンは始めどき・トマトは採りどき', async () => {
@@ -127,6 +137,50 @@ describeIfSqlite('crop-guide.service (real SQLite)', () => {
 
     it('存在しない作物は null', async () => {
       expect(await getCropGuideDetail('crop-nothing')).toBeNull();
+    });
+
+    it('4.19 の列（幅・適温・作業・編集者判断）と、この作物の出典が返る', async () => {
+      const detail = await getCropGuideDetail('crop-tomato');
+      expect(detail?.category).toBe('fruit');
+      expect(detail?.perennial).toBe(false);
+      expect(detail?.guide?.harvestWindow).toEqual({ min: 50, max: 70 });
+      expect(detail?.guide?.fertilizeIntervalDays).toBe(20);
+      expect(detail?.guide?.temperature).toEqual({ germination: [25, 30], growth: [20, 25] });
+      expect(detail?.guide?.rotationYears).toBe(4);
+      expect(detail?.guide?.tasks.map((t) => t.kind)).toEqual(['stake', 'sucker', 'pinch']);
+      expect(detail?.editorial).toEqual({
+        beginner: true,
+        containerOk: true,
+        containerDepthCm: 30,
+      });
+      expect(detail?.references.map((r) => r.id)).toEqual([
+        'maff-sehi',
+        'ja-hokkaido',
+        'nagano-kasai-ondo',
+        'okinawa-tokusai',
+      ]);
+    });
+
+    it('多年草（ニラ）は収穫日数と幅が null で perennial=true', async () => {
+      const detail = await getCropGuideDetail('crop-nira');
+      expect(detail?.perennial).toBe(true);
+      expect(detail?.guide?.harvestAfterDays).toBeNull();
+      expect(detail?.guide?.harvestWindow).toBeNull();
+    });
+
+    it('マスターに無い作物（開発サンプルの残骸）は出典を全体の一覧で返し、編集者判断は null', async () => {
+      const now = new Date().toISOString();
+      mockHandles.expoDb.runSync(
+        'INSERT INTO crops (id, name, created_at, updated_at) VALUES (?, ?, ?, ?)',
+        ['crop-sample', 'サンプル', now, now],
+      );
+      mockHandles.expoDb.runSync(
+        `INSERT INTO crop_guides (crop_id, spacing_cm, harvest_after_days, common_pests) VALUES ('crop-sample', 10, 30, '[]')`,
+      );
+      const detail = await getCropGuideDetail('crop-sample');
+      expect(detail?.references.length).toBeGreaterThan(1);
+      expect(detail?.editorial).toBeNull();
+      expect(detail?.guide?.tasks).toEqual([]);
     });
 
     it('壊れた commonPests でも落ちない（空配列で返す）', async () => {

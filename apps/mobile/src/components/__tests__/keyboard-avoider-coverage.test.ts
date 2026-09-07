@@ -46,6 +46,9 @@ const EXEMPT: Record<string, string> = {
   'app/(tabs)/plantings/index.tsx':
     '検索欄は画面の最上部にあり、その下に隠れて困るボタンが無い（結果は一覧なのでスクロールで届く）。' +
     'FlatList に keyboardShouldPersistTaps を入れてあるので、1 タップ目が消費されることもない。',
+  'app/(tabs)/crops/index.tsx':
+    '検索欄は画面の最上部（見出しの直下）にあり、その下は作物の一覧だけ。隠れて困るボタンが無く、' +
+    '一覧はスクロールで届く。ScrollView に keyboardShouldPersistTaps を入れてあるので 1 タップ目も消費されない。',
   'app/(tabs)/materials/shopping.tsx':
     '追加欄と「追加」ボタンは画面上部のバーで横並び。キーボードが覆うのは下の一覧だけで、' +
     '一覧はスクロールで届く。',

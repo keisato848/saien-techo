@@ -18,8 +18,10 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { Colors, Typography } from '../constants/theme';
 import {
+  careLogKindForAction,
   describeNextAction,
   getNextActions,
+  nextActionLabel,
   snoozeNextAction,
   type NextAction,
 } from '../services/next-action.service';
@@ -45,22 +47,26 @@ export function NextActionCard() {
   const hiddenCount = actions.length - visibleActions.length;
 
   const record = (action: NextAction) => {
+    // 収穫は収穫記録へ、追肥・作業（摘芯・支柱…）は作業ログへ（種類を引き継ぐ）
     router.push(
       action.kind === 'harvest'
         ? `/plantings/${action.plantingId}/harvests/new`
-        : `/plantings/${action.plantingId}/care-logs/new?kind=fertilize`,
+        : `/plantings/${action.plantingId}/care-logs/new?kind=${careLogKindForAction(action.kind)}`,
     );
   };
 
   const later = (action: NextAction) => {
-    void snoozeNextAction(action.plantingId, action.kind).then(load);
+    void snoozeNextAction(action.plantingId, action.kind, action.thresholdDays).then(load);
   };
 
   return (
     <View style={styles.card} testID="next-action-card">
       <Text style={styles.title}>つぎの作業</Text>
       {visibleActions.map((action) => (
-        <View key={`${action.plantingId}-${action.kind}`} style={styles.row}>
+        <View
+          key={`${action.plantingId}-${action.kind}-${action.thresholdDays}`}
+          style={styles.row}
+        >
           <View style={styles.rowText}>
             <Text style={styles.crop}>{action.cropName}</Text>
             <Text style={styles.description}>{describeNextAction(action)}</Text>
@@ -69,7 +75,7 @@ export function NextActionCard() {
             <Pressable
               style={styles.recordButton}
               onPress={() => record(action)}
-              accessibilityLabel={`${action.cropName}の${action.kind === 'harvest' ? '収穫' : '追肥'}を記録する`}
+              accessibilityLabel={`${action.cropName}の${nextActionLabel(action)}を記録する`}
             >
               <Text style={styles.recordText}>記録する</Text>
             </Pressable>

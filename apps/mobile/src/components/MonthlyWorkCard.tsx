@@ -1,9 +1,14 @@
 /**
- * 「今月の菜園仕事」カード — R08 / WBS 3.2
+ * 「今月の菜園仕事」カード — R08 / WBS 3.2・4.19
  *
  * ホームに置く。今月まける・植えられる・採れる作物を地域帯に合わせて出す。
  * 右上の地域ラベルから設定（/region）へ飛べる — 「うちは寒冷地なのに」に
  * その場で気づいて直せるように。
+ *
+ * **1 行に出すのは VISIBLE_PER_ROW 種まで**、残りは「ほか N 種」に畳む（4.19）。
+ * マスターが 50 品目になり、5 月のまきどきは 15 種を超える。全部並べると
+ * カードが縦に伸びて、下の「育てているもの」が画面外に落ちる（NextActionCard と同じ判断）。
+ * 行を押すと作物ガイドを「今月」で絞った状態で開き、畳んだ分はそこで見られる。
  */
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useState } from 'react';
@@ -11,7 +16,11 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { Colors, Typography } from '../constants/theme';
 import { CROP_MASTER_ATTRIBUTION } from '../db/crop-master';
-import { getMonthlyGardenWork, type MonthlyGardenWork } from '../services/garden-work.service';
+import {
+  getMonthlyGardenWork,
+  type MonthlyGardenWork,
+  type MonthlyWorkCrop,
+} from '../services/garden-work.service';
 import { REGION_LABEL } from '../services/region.service';
 
 const ROWS = [
@@ -19,6 +28,16 @@ const ROWS = [
   { key: 'plant', label: '植えどき' },
   { key: 'harvest', label: '採りどき' },
 ] as const;
+
+/** 1 行に名前で出す上限。これを超える分は「ほか N 種」 */
+export const VISIBLE_PER_ROW = 6;
+
+/** 行の文言。「ダイコン、カブ、…、ほか 3 種」。純関数にして畳み方をテストで固定する */
+export function describeCropRow(crops: readonly MonthlyWorkCrop[]): string {
+  const visible = crops.slice(0, VISIBLE_PER_ROW).map((crop) => crop.name);
+  const hidden = crops.length - visible.length;
+  return hidden > 0 ? `${visible.join('、')}、ほか${hidden}種` : visible.join('、');
+}
 
 export function MonthlyWorkCard() {
   const router = useRouter();
@@ -52,12 +71,17 @@ export function MonthlyWorkCard() {
 
       {ROWS.map(({ key, label }) =>
         work[key].length > 0 ? (
-          <View key={key} style={styles.row}>
+          <Pressable
+            key={key}
+            style={styles.row}
+            onPress={() => router.push('/crops?now=1')}
+            accessibilityLabel={`${label}の作物を作物ガイドで見る`}
+          >
             <Text style={[styles.rowLabel, key === 'harvest' && styles.rowLabelHarvest]}>
               {label}
             </Text>
-            <Text style={styles.rowCrops}>{work[key].map((crop) => crop.name).join('、')}</Text>
-          </View>
+            <Text style={styles.rowCrops}>{describeCropRow(work[key])}</Text>
+          </Pressable>
         ) : null,
       )}
 

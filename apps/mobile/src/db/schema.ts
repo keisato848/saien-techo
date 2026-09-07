@@ -99,6 +99,9 @@ export const crops = sqliteTable('crops', {
   nameReading: text('name_reading'),
   // 科（ナス科・ウリ科）。R17 連作障害チェックの判定キー
   family: text('family'),
+  // 分類（leaf/root/fruit/bean/tuber/allium/herb/tree）。ガイド一覧のセクションと検索の絞り込み。
+  // マスター作物だけが持つ。利用者が作った作物は null（WBS 4.19）
+  category: text('category'),
   defaultUnit: text('default_unit'),
   createdAt: text('created_at').notNull(),
   updatedAt: text('updated_at').notNull(),
@@ -143,10 +146,41 @@ export const cropGuides = sqliteTable('crop_guides', {
   wateringNote: text('watering_note'),
   // R10「次の作業」の判定に使う経過日数
   fertilizeAfterDays: integer('fertilize_after_days'),
+  // 多年草（perennial=1）は null — 「翌年から」なので日数を持たない（WBS 4.19）
   harvestAfterDays: integer('harvest_after_days'),
   // JSON 配列
   commonPests: text('common_pests'),
   tips: text('tips'),
+  // ─── WBS 4.19 で足した列（v14）。既存端末は ADD COLUMN で null から始まり、
+  //     syncCropMaster が CROP_MASTER_VERSION の差分で埋める ───
+  // 水やりの目安間隔（日）。R26 ケアスケジュールの既定値
+  wateringIntervalDays: integer('watering_interval_days'),
+  // 発芽までの日数
+  germinationDays: integer('germination_days'),
+  // 種まきから定植までの日数（苗物だけ）。R33 の材料
+  transplantAfterDays: integer('transplant_after_days'),
+  // 2 回目以降の追肥間隔（日）
+  fertilizeIntervalDays: integer('fertilize_interval_days'),
+  // 収穫の幅（最短・最長）。進行帯の「窓」
+  harvestWindowMinDays: integer('harvest_window_min_days'),
+  harvestWindowMaxDays: integer('harvest_window_max_days'),
+  // 初収穫から採り続けられる日数
+  harvestDurationDays: integer('harvest_duration_days'),
+  // 発芽適温・生育適温（℃）
+  tempGerminationMin: integer('temp_germination_min'),
+  tempGerminationMax: integer('temp_germination_max'),
+  tempGrowthMin: integer('temp_growth_min'),
+  tempGrowthMax: integer('temp_growth_max'),
+  // 連作を避ける年数。R17
+  rotationYears: integer('rotation_years'),
+  // 作物ごとの作業（摘芯・支柱・土寄せ…）。JSON 配列 [{kind, afterDays, note?}]
+  tasks: text('tasks'),
+  // 1=多年草
+  perennial: integer('perennial'),
+  // 出典なしの編集者判断（一覧の絞り込みと登録時の助言にだけ使う）
+  beginner: integer('beginner'),
+  containerOk: integer('container_ok'),
+  containerDepthCm: integer('container_depth_cm'),
 });
 
 // ─── Place（場所・区画）──────────────────────────────────────────────────
