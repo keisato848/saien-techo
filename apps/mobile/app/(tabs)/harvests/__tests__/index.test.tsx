@@ -179,3 +179,35 @@ describe('収穫アルバム — 絞り込み', () => {
     expect(mockGetHarvestAlbum.mock.calls[0][0]).toMatchObject({ plantingId: 'p7' });
   });
 });
+
+describe('収穫アルバム — ふりかえりへの導線', () => {
+  it('収穫があればふりかえりを開ける', async () => {
+    mockGetHarvestCropNames.mockResolvedValue(['トマト']);
+    mockGetHarvestAlbum.mockResolvedValue([cell({ key: 'c1' })]);
+    render(<HarvestAlbumScreen />);
+    await waitFor(() => expect(screen.getByLabelText('収穫のふりかえり')).toBeTruthy());
+
+    fireEvent.press(screen.getByLabelText('収穫のふりかえり'));
+
+    expect(mockPush).toHaveBeenCalledWith('/harvests/stats');
+  });
+
+  // 開いても空の画面しか無いので、まだ何も採れていないうちは誘わない
+  it('収穫が 1 件も無ければ出さない', async () => {
+    render(<HarvestAlbumScreen />);
+
+    await waitFor(() => expect(screen.getByText('まだ収穫がありません')).toBeTruthy());
+    expect(screen.queryByLabelText('収穫のふりかえり')).toBeNull();
+  });
+
+  // 栽培から絞り込んで開いたアルバムは 1 株の話。ふりかえりは 1 年ぶん全体の話
+  it('栽培から絞り込んで開いたときは出さない', async () => {
+    mockParams = { plantingId: 'p7' };
+    mockGetHarvestCropNames.mockResolvedValue(['トマト']);
+    mockGetHarvestAlbum.mockResolvedValue([cell({ key: 'c1' })]);
+    render(<HarvestAlbumScreen />);
+
+    await waitFor(() => expect(screen.getByLabelText('トマトの収穫')).toBeTruthy());
+    expect(screen.queryByLabelText('収穫のふりかえり')).toBeNull();
+  });
+});

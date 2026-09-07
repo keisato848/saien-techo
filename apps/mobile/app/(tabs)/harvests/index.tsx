@@ -9,7 +9,7 @@
  * 一覧から消えてしまう。
  */
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
-import { ShoppingBasket } from 'lucide-react-native';
+import { ChartColumn, ShoppingBasket } from 'lucide-react-native';
 import { useCallback, useState } from 'react';
 import { Image, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -78,8 +78,25 @@ export default function HarvestAlbumScreen() {
   return (
     <View style={styles.root}>
       <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
-        <Text style={styles.title}>収穫</Text>
-        {total > 0 ? <Text style={styles.count}>{total}</Text> : null}
+        {/* タイトルと件数だけベースラインで揃える。ボタンまで baseline に混ぜると
+            アイコン入りの行の底が揃わず、端末で 1〜2px ずれて見える */}
+        <View style={styles.headerTitleRow}>
+          <Text style={styles.title}>収穫</Text>
+          {total > 0 ? <Text style={styles.count}>{total}</Text> : null}
+        </View>
+        {/* 収穫が 1 件も無いうちは出さない（開いても空の画面しか無い）。
+            栽培から絞り込んで開いているときも出さない — あちらは 1 株の話で、
+            ふりかえりは 1 年ぶん全体の話（R18 / #32） */}
+        {cropNames.length > 0 && !plantingId ? (
+          <PressableScale
+            style={styles.statsButton}
+            onPress={() => router.push('/harvests/stats')}
+            accessibilityLabel="収穫のふりかえり"
+          >
+            <ChartColumn size={14} color={Colors.harvest} />
+            <Text style={styles.statsButtonText}>ふりかえり</Text>
+          </PressableScale>
+        ) : null}
       </View>
 
       {cropNames.length > 1 ? (
@@ -189,11 +206,12 @@ const styles = StyleSheet.create({
   readCard: { marginHorizontal: 16, marginBottom: 12 },
   header: {
     flexDirection: 'row',
-    alignItems: 'baseline',
+    alignItems: 'center',
     gap: 10,
     paddingHorizontal: SCREEN_PADDING,
     paddingBottom: 12,
   },
+  headerTitleRow: { flex: 1, flexDirection: 'row', alignItems: 'baseline', gap: 10 },
   title: {
     fontSize: Typography.size.lg,
     fontWeight: Typography.weight.medium,
@@ -204,6 +222,18 @@ const styles = StyleSheet.create({
     color: Colors.harvest,
     fontVariant: ['tabular-nums'],
   },
+  statsButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: Colors.harvestLine,
+    backgroundColor: Colors.harvestSoft,
+  },
+  statsButtonText: { fontSize: Typography.size.xs, color: Colors.harvest },
   filtersScroll: { flexGrow: 0, flexShrink: 0 },
   filters: { gap: 8, paddingHorizontal: SCREEN_PADDING, paddingBottom: 12 },
   chip: {
