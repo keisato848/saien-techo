@@ -87,6 +87,22 @@ describeIfSqlite('care-log.service (real SQLite)', () => {
       expect(log?.photoUris).toEqual([]);
     });
 
+    // v16: kind は 6 語彙しか無く、支柱・土寄せ・間引き・防虫ネットが揃って
+    // `other` に潰れる。「つぎの作業」からの記録は作業そのものを残す（4.19 レビュー 6）
+    it('栽培暦の作業（taskKind）を残せる。手書きは NULL のまま', async () => {
+      const fromSuggestion = await createCareLog({
+        plantingId,
+        kind: 'other',
+        taskKind: 'hill',
+      });
+      const byHand = await createCareLog({ plantingId, kind: 'other' });
+
+      expect((await getCareLog(fromSuggestion))?.taskKind).toBe('hill');
+      expect((await getCareLog(byHand))?.taskKind).toBeNull();
+      const list = await getCareLogs(plantingId);
+      expect(list.find((log) => log.id === fromSuggestion)?.taskKind).toBe('hill');
+    });
+
     it('日時は未指定なら「今」になる', async () => {
       const before = Date.now();
       const id = await createCareLog({ plantingId, kind: 'water' });

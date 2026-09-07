@@ -25,6 +25,8 @@ import {
   getNextActions,
   getNextActionsForPlanting,
   nextActionLabel,
+  nextActionRecordHref,
+  nextActionRecordLabel,
   snoozeNextAction,
   type NextAction,
 } from '../next-action.service';
@@ -145,11 +147,11 @@ describeIfSqlite('next-action.service (real SQLite)', () => {
     expect((await getNextActions(NOW)).some((a) => a.kind === 'fertilize')).toBe(false);
   });
 
-  it('シーズンの終わり（収穫の目安 + 採れる期間）を過ぎたら 2 回目の追肥は出さない', async () => {
-    // トマト: 収穫 60 日 + 採れる期間 90 日 = 150 日。160 日目
-    seedPlanting('p1', 'crop-tomato', 'トマト', 160);
+  it('シーズンの終わり（収穫の幅の最大 + 採れる期間）を過ぎたら 2 回目の追肥は出さない', async () => {
+    // トマト: 収穫の幅の最大 70 日 + 採れる期間 90 日 = 160 日。165 日目
+    seedPlanting('p1', 'crop-tomato', 'トマト', 165);
     const fertilizedAt = new Date(NOW);
-    fertilizedAt.setDate(fertilizedAt.getDate() - 60);
+    fertilizedAt.setDate(fertilizedAt.getDate() - 65);
     mockHandles.expoDb.runSync(
       'INSERT INTO care_logs (id, planting_id, kind, logged_at, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)',
       ['c1', 'p1', 'fertilize', fertilizedAt.toISOString(), NOW.toISOString(), NOW.toISOString()],
@@ -276,6 +278,223 @@ describeIfSqlite('next-action.service (real SQLite)', () => {
   });
 });
 
+describeIfSqlite('作業の済み判定（v16 / 4.19 レビュー 6）', () => {
+  beforeEach(async () => {
+    mockHandles = createTestDb();
+    seedBase();
+    await syncCropMaster(mockHandles.db);
+  });
+
+  afterEach(() => mockHandles.close());
+
+  /** 作業ログを 1 件入れる。taskKind を渡さなければ手書き（v16 より前）扱い */
+  function seedCareLog(kind: string, taskKind: string | null = null): void {
+    mockHandles.expoDb.runSync(
+      'INSERT INTO care_logs (id, planting_id, kind, task_kind, logged_at, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
+      [
+        `c-${kind}-${taskKind ?? 'raw'}`,
+        'p1',
+        kind,
+        taskKind,
+        NOW.toISOString(),
+        NOW.toISOString(),
+        NOW.toISOString(),
+      ],
+    );
+  }
+
+  // ソラマメは間引きと支柱がどちらも 130 日目。kind に潰すとどちらも `other` になり、
+  // 片方を記録しただけで**もう片方まで「済み」に化けて消えていた**
+  it('同じ日の別の作業を記録しても、もう片方は消えない（ソラマメ 間引き 130 / 支柱 130）', async () => {
+    seedPlanting('p1', 'crop-soramame', 'ソラマメ', 132);
+
+    expect((await getNextActions(NOW)).map((a) => a.kind)).toEqual(['stake', 'thin', 'fertilize']);
+
+    // 「間引きを記録する」から記録すると task_kind が残る
+    seedCareLog('other', 'thin');
+
+    expect((await getNextActions(NOW)).map((a) => a.kind)).toEqual(['stake', 'fertilize']);
+  });
+
+  it('task_kind を持つログは kind の一致では済みにしない（別の作業まで消えない）', async () => {
+    seedPlanting('p1', 'crop-soramame', 'ソラマメ', 132);
+    // 防虫ネットを「その他」で記録しても、間引き・支柱は残る
+    seedCareLog('other', 'net');
+
+    expect((await getNextActions(NOW)).map((a) => a.kind)).toEqual(['stake', 'thin', 'fertilize']);
+  });
+
+  it('task_kind が NULL の手書きログは従来どおり kind の一致で済みとみなす', async () => {
+    // v16 より前に記録した「その他」。既存データが一斉に「未済」へ戻らないための逃げ道
+    seedPlanting('p1', 'crop-soramame', 'ソラマメ', 132);
+    seedCareLog('other');
+
+    expect((await getNextActions(NOW)).map((a) => a.kind)).toEqual(['fertilize']);
+  });
+});
+
+describeIfSqlite('同じ作業が 2 回ある作物（4.19 レビュー 12）', () => {
+  beforeEach(async () => {
+    mockHandles = createTestDb();
+    seedBase();
+    await syncCropMaster(mockHandles.db);
+  });
+
+  afterEach(() => mockHandles.close());
+
+  // カブは間引きが 10 日と 20 日。20〜24 日目は両方が猶予の中に入る
+  it('カブ 22 日目は間引きが 2 件出る（目安日で見分ける）', async () => {
+    seedPlanting('p1', 'crop-kabu', 'カブ', 22);
+
+    const thins = (await getNextActions(NOW)).filter((a) => a.kind === 'thin');
+    expect(thins.map((a) => a.thresholdDays).sort((a, b) => a - b)).toEqual([10, 20]);
+  });
+
+  it('猶予の境目（目安日 + 14 は出る / + 15 は出ない）', async () => {
+    seedPlanting('p1', 'crop-kabu', 'カブ', 24); // 10 + 14
+    expect(
+      (await getNextActions(NOW)).some((a) => a.kind === 'thin' && a.thresholdDays === 10),
+    ).toBe(true);
+
+    const nextDay = new Date(NOW);
+    nextDay.setDate(nextDay.getDate() + 1); // 25 日目 = 10 + 15
+    expect(
+      (await getNextActions(nextDay)).some((a) => a.kind === 'thin' && a.thresholdDays === 10),
+    ).toBe(false);
+  });
+});
+
+describeIfSqlite('2 回目以降の追肥（4.19 レビュー 4・13）', () => {
+  beforeEach(async () => {
+    mockHandles = createTestDb();
+    seedBase();
+    await syncCropMaster(mockHandles.db);
+  });
+
+  afterEach(() => mockHandles.close());
+
+  function seedFertilizeLog(daysAgo: number): void {
+    const at = new Date(NOW);
+    at.setDate(at.getDate() - daysAgo);
+    mockHandles.expoDb.runSync(
+      'INSERT INTO care_logs (id, planting_id, kind, logged_at, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)',
+      [`c-${daysAgo}`, 'p1', 'fertilize', at.toISOString(), NOW.toISOString(), NOW.toISOString()],
+    );
+  }
+
+  function seedReminder(id: string, kind: string, enabled: number): void {
+    mockHandles.expoDb.runSync(
+      'INSERT INTO reminders (id, planting_id, kind, schedule_kind, interval_days, hour, minute, enabled, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      [id, 'p1', kind, 'interval_days', 20, 8, 0, enabled, NOW.toISOString(), NOW.toISOString()],
+    );
+  }
+
+  // ハクサイは採れる期間を持たない（一度で採り切る）。以前は seasonEnd が null になり、
+  // **いちばん止めたい作物ほど止まらなかった**
+  it('採れる期間を持たない作物も、収穫の幅の最大を過ぎたら止まる（ハクサイ 90 日）', async () => {
+    // ハクサイ: 追肥 20 日おき・収穫の幅 70〜90 日
+    seedPlanting('p1', 'crop-hakusai', 'ハクサイ', 95);
+    seedFertilizeLog(40);
+
+    expect((await getNextActions(NOW)).some((a) => a.kind === 'fertilize')).toBe(false);
+  });
+
+  it('幅の中ならまだ出す（ハクサイ 85 日目）', async () => {
+    seedPlanting('p1', 'crop-hakusai', 'ハクサイ', 85);
+    seedFertilizeLog(40);
+
+    expect((await getNextActions(NOW)).some((a) => a.kind === 'fertilize')).toBe(true);
+  });
+
+  it('一度で採り切る作物は、初収穫を記録したら追肥を止める', async () => {
+    seedPlanting('p1', 'crop-hakusai', 'ハクサイ', 85);
+    seedFertilizeLog(40);
+    mockHandles.expoDb.runSync(
+      'INSERT INTO harvests (id, planting_id, harvested_at, created_at, updated_at) VALUES (?, ?, ?, ?, ?)',
+      ['h1', 'p1', NOW.toISOString(), NOW.toISOString(), NOW.toISOString()],
+    );
+
+    expect((await getNextActions(NOW)).some((a) => a.kind === 'fertilize')).toBe(false);
+  });
+
+  it('猶予（2 週間）を過ぎたらいったん引っ込み、次の間隔でまた出る', async () => {
+    // トマト: 20 日おき。前回の追肥から 25 日 → 出る
+    seedPlanting('p1', 'crop-tomato', 'トマト', 45);
+    seedFertilizeLog(25);
+    expect((await getNextActions(NOW)).some((a) => a.kind === 'fertilize')).toBe(true);
+
+    // 11 日後（前回から 36 日）は 20+14 を過ぎているので引っ込む
+    const overdue = new Date(NOW);
+    overdue.setDate(overdue.getDate() + 11);
+    expect((await getNextActions(overdue)).some((a) => a.kind === 'fertilize')).toBe(false);
+
+    // 15 日後（前回から 40 日 = 間隔 2 回ぶん）でまた出る
+    const nextCycle = new Date(NOW);
+    nextCycle.setDate(nextCycle.getDate() + 15);
+    expect((await getNextActions(nextCycle)).some((a) => a.kind === 'fertilize')).toBe(true);
+  });
+
+  // care-schedule.service が追肥のリマインダーを提案するので、この衝突は現実に起きる
+  it('追肥のリマインダーがある栽培では 2 回目以降を出さない', async () => {
+    seedPlanting('p1', 'crop-tomato', 'トマト', 45);
+    seedFertilizeLog(25);
+    seedReminder('r1', 'fertilize', 1);
+
+    expect((await getNextActions(NOW)).some((a) => a.kind === 'fertilize')).toBe(false);
+  });
+
+  it('止めてあるリマインダー・別の種類のリマインダーは邪魔しない', async () => {
+    seedPlanting('p1', 'crop-tomato', 'トマト', 45);
+    seedFertilizeLog(25);
+    seedReminder('r1', 'fertilize', 0);
+    seedReminder('r2', 'water', 1);
+
+    expect((await getNextActions(NOW)).some((a) => a.kind === 'fertilize')).toBe(true);
+  });
+
+  it('初回の追肥はリマインダーがあっても出す（シーズンで一度きりの別物）', async () => {
+    seedPlanting('p1', 'crop-tomato', 'トマト', 25);
+    seedReminder('r1', 'fertilize', 1);
+
+    expect((await getNextActions(NOW)).some((a) => a.kind === 'fertilize')).toBe(true);
+  });
+});
+
+describeIfSqlite('並び（4.19 レビュー 5）', () => {
+  beforeEach(async () => {
+    mockHandles = createTestDb();
+    seedBase();
+    await syncCropMaster(mockHandles.db);
+  });
+
+  afterEach(() => mockHandles.close());
+
+  // 経過日数の降順だけで並べていた頃は、目安 10 日以内の作業が常に最下位に沈み、
+  // カードの表示上限（2 件）に一度も乗らないまま猶予 14 日で消えていた
+  it('猶予が先に切れる作業を先に出す（古い栽培の追肥より、若い栽培の防虫ネット）', async () => {
+    seedPlanting('p1', 'crop-tomato', 'トマト', 45); // 追肥（初回・20 日）
+    seedPlanting('p2', 'crop-hakusai', 'ハクサイ', 3); // 防虫ネット（1 日・残り 12 日）
+
+    const order = (await getNextActions(NOW)).map((a) => `${a.plantingId}:${a.kind}`);
+    expect(order.indexOf('p2:net')).toBeLessThan(order.indexOf('p1:fertilize'));
+  });
+
+  it('猶予が同じなら、取り返しのつかない作業（支柱）が間引きより先', async () => {
+    // ソラマメ: 間引きも支柱も 130 日目
+    seedPlanting('p1', 'crop-soramame', 'ソラマメ', 132);
+
+    const kinds = (await getNextActions(NOW)).map((a) => a.kind);
+    expect(kinds.indexOf('stake')).toBeLessThan(kinds.indexOf('thin'));
+  });
+
+  it('収穫はいちばん先のまま（採り遅れは数日で味が落ちる）', async () => {
+    seedPlanting('p1', 'crop-kabu', 'カブ', 50);
+    seedPlanting('p2', 'crop-hakusai', 'ハクサイ', 3);
+
+    expect((await getNextActions(NOW))[0].kind).toBe('harvest');
+  });
+});
+
 describe('describeNextAction', () => {
   it('R10 の受け入れ基準の文面', () => {
     expect(
@@ -316,6 +535,39 @@ describe('describeNextAction', () => {
       }),
     ).toBe('土寄せの時期です（植え付けから36日・目安 約35日）');
   });
+
+  // 幅の最大を持ったのに「適期に入りました」しか言えず、
+  // 採りどきが終わっても同じ文が出続けていた（4.19 レビュー 10）
+  describe('収穫は幅で 3 通り', () => {
+    function harvest(elapsedDays: number, windowMaxDays?: number): NextAction {
+      return {
+        plantingId: 'p1',
+        cropName: 'ダイコン',
+        kind: 'harvest',
+        elapsedDays,
+        thresholdDays: 60,
+        ...(windowMaxDays != null ? { windowMaxDays } : {}),
+      };
+    }
+
+    it('窓の中', () => {
+      expect(describeNextAction(harvest(65, 80))).toBe(
+        '収穫適期に入りました（目安 60〜80日・いま65日目）',
+      );
+    });
+
+    it('窓を過ぎたら咎めずに終わりが近いことを言う', () => {
+      expect(describeNextAction(harvest(90, 80))).toBe(
+        'そろそろ終わり（目安 60〜80日・いま90日目）かたくなる前に',
+      );
+    });
+
+    it('幅を持たない旧データは今までどおり', () => {
+      expect(describeNextAction(harvest(65))).toBe(
+        '収穫適期に入りました（目安 約60日・いま65日目）',
+      );
+    });
+  });
 });
 
 describe('作業の記録先とラベル', () => {
@@ -335,5 +587,32 @@ describe('作業の記録先とラベル', () => {
     expect(nextActionLabel({ kind: 'fertilize' })).toBe('追肥');
     expect(nextActionLabel({ kind: 'hill' })).toBe('土寄せ');
     expect(nextActionLabel({ kind: 'fruit-thin' })).toBe('摘果');
+  });
+
+  // カブの間引きは 10 日と 20 日の 2 回あり、20〜24 日目は両方が猶予の中に入る。
+  // 名前だけだとラベルが同一になり、読み上げでも区別できない（4.19 レビュー 12）
+  it('読み上げラベルは作業だけ目安日を添えて一意にする', () => {
+    expect(nextActionRecordLabel({ kind: 'thin', thresholdDays: 20 })).toBe('間引き（20日目安）');
+    expect(nextActionRecordLabel({ kind: 'thin', thresholdDays: 10 })).toBe('間引き（10日目安）');
+    // 収穫・追肥は栽培ごとに 1 件しか出ないので添えない
+    expect(nextActionRecordLabel({ kind: 'harvest', thresholdDays: 45 })).toBe('収穫');
+    expect(nextActionRecordLabel({ kind: 'fertilize', thresholdDays: 20 })).toBe('追肥');
+  });
+
+  // kind だけを渡していた頃は、土寄せも間引きも防虫ネットも
+  // タイムラインに「その他」としか残らなかった（4.19 レビュー 6）
+  it('記録の遷移先は kind に加えて task と note を渡す', () => {
+    expect(nextActionRecordHref({ plantingId: 'p1', kind: 'harvest' })).toBe(
+      '/plantings/p1/harvests/new',
+    );
+    expect(nextActionRecordHref({ plantingId: 'p1', kind: 'fertilize' })).toBe(
+      '/plantings/p1/care-logs/new?kind=fertilize',
+    );
+    expect(nextActionRecordHref({ plantingId: 'p1', kind: 'hill' })).toBe(
+      '/plantings/p1/care-logs/new?kind=other&task=hill',
+    );
+    expect(nextActionRecordHref({ plantingId: 'p1', kind: 'sucker', note: '脇芽をかく' })).toBe(
+      `/plantings/p1/care-logs/new?kind=prune&task=sucker&note=${encodeURIComponent('脇芽をかく')}`,
+    );
   });
 });

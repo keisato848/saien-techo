@@ -14,6 +14,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { Alert, StyleSheet, Text } from 'react-native';
 
 import { CareLogForm, type CareLogFormValues } from '../../../../../src/components/CareLogForm';
+import type { CropTaskKind } from '../../../../../src/db/crop-master';
 import { Loading } from '../../../../../src/components/Loading';
 import { PressableScale } from '../../../../../src/components/PressableScale';
 import { Colors, Typography } from '../../../../../src/constants/theme';
@@ -27,11 +28,16 @@ export default function EditCareLogScreen() {
   const { logId } = useLocalSearchParams<{ id: string; logId: string }>();
   const router = useRouter();
   const [initialValues, setInitialValues] = useState<CareLogFormValues | null>(null);
+  // 栽培暦の作業（v16）はフォームで編集しないが、**保存で消さない**。
+  // 渡し忘れると「つぎの作業」から記録したログが、メモを直しただけで
+  // ただの「その他」に戻り、提案がまた出てくる
+  const [taskKind, setTaskKind] = useState<CropTaskKind | null>(null);
 
   useEffect(() => {
     let cancelled = false;
     // 前のログの内容を一瞬でも出さない（出すと useState がそれで固まる）
     setInitialValues(null);
+    setTaskKind(null);
 
     void (async () => {
       const log = await getCareLog(logId);
@@ -40,6 +46,7 @@ export default function EditCareLogScreen() {
         router.back();
         return;
       }
+      setTaskKind(log.taskKind);
       setInitialValues({
         kind: log.kind,
         loggedAt: log.loggedAt,
@@ -57,13 +64,14 @@ export default function EditCareLogScreen() {
     async (values: CareLogFormValues) => {
       await updateCareLog(logId, {
         kind: values.kind,
+        taskKind,
         loggedAt: values.loggedAt,
         note: values.note,
         photoUris: values.photoUris,
       });
       router.back();
     },
-    [logId, router],
+    [logId, router, taskKind],
   );
 
   const handleDelete = useCallback(() => {

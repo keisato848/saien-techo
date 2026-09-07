@@ -38,7 +38,8 @@ type DB = ExpoSQLiteDatabase<typeof schema>;
 // v14: crops.category と crop_guides の 4.19 列（水やり間隔・発芽・定植・追肥間隔・
 //      収穫の幅と期間・適温・連作年数・作業・多年草・編集者判断 — #180）
 // v15: planting_plans（作付け計画 — R25 / #38）
-export const CURRENT_SCHEMA_VERSION = 15;
+// v16: care_logs.task_kind（栽培暦の作業を「その他」に潰さない — 4.19 レビュー 6）
+export const CURRENT_SCHEMA_VERSION = 16;
 
 const DEFAULT_USER_ID = 'user-kei';
 const DEFAULT_FAMILY_ID = 'family-001';
@@ -242,6 +243,8 @@ const CREATE_TABLES_SQL = `
     id TEXT PRIMARY KEY,
     planting_id TEXT NOT NULL REFERENCES plantings(id),
     kind TEXT NOT NULL,
+    -- v16: 栽培暦の作業（CropTaskKind）。手書きのログは NULL
+    task_kind TEXT,
     logged_at TEXT NOT NULL,
     note TEXT,
     created_at TEXT NOT NULL,
@@ -405,6 +408,9 @@ const CROP_GUIDE_V14_COLUMNS = [
 const ADD_COLUMN_MIGRATIONS: { table: string; columnDdl: string }[] = [
   { table: 'crops', columnDdl: 'category TEXT' },
   ...CROP_GUIDE_V14_COLUMNS.map((columnDdl) => ({ table: 'crop_guides', columnDdl })),
+  // v16。既存の行は NULL のまま = 「手書きのログ」扱いで、
+  // next-action の済み判定が今までどおり kind で見る（既存データが未済に戻らない）
+  { table: 'care_logs', columnDdl: 'task_kind TEXT' },
 ];
 
 /**
