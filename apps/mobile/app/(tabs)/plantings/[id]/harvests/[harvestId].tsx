@@ -7,9 +7,9 @@
  * 挟まないと前の収穫の内容が残ったまま次の収穫を編集することになる。
  */
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { Trash2 } from 'lucide-react-native';
+import { Share2, Trash2 } from 'lucide-react-native';
 import { useCallback, useEffect, useState } from 'react';
-import { Alert, StyleSheet, Text } from 'react-native';
+import { Alert, StyleSheet, Text, View } from 'react-native';
 
 import { HarvestForm, type HarvestFormValues } from '../../../../../src/components/HarvestForm';
 import { Loading } from '../../../../../src/components/Loading';
@@ -128,16 +128,40 @@ export default function EditHarvestScreen() {
       readCropName={cropName}
       readHint={draft ? draftHint(draft, cropName) : undefined}
       footer={
-        <PressableScale style={styles.deleteButton} onPress={handleDelete}>
-          <Trash2 size={16} color={Colors.danger} />
-          <Text style={styles.deleteText}>削除する</Text>
-        </PressableScale>
+        <View style={styles.footer}>
+          {/* 共有は外向きの操作なので、保存・削除と同じ重さでは置かない。
+              押した先（share.tsx）で何が出るか見せてから初めて共有シートが開く */}
+          <PressableScale
+            style={styles.shareButton}
+            onPress={() => router.push(`/plantings/${id}/harvests/share?harvestId=${harvestId}`)}
+            accessibilityLabel="この収穫を共有する"
+          >
+            <Share2 size={16} color={Colors.accentInk} />
+            <Text style={styles.shareText}>共有する</Text>
+          </PressableScale>
+          <PressableScale style={styles.deleteButton} onPress={handleDelete}>
+            <Trash2 size={16} color={Colors.danger} />
+            <Text style={styles.deleteText}>削除する</Text>
+          </PressableScale>
+        </View>
       }
     />
   );
 }
 
 const styles = StyleSheet.create({
+  footer: { gap: 10, marginTop: 8 },
+  shareButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 13,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: Colors.accentLine,
+  },
+  shareText: { fontSize: Typography.size.base, color: Colors.accentInk },
   deleteButton: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -147,7 +171,6 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     borderWidth: 1,
     borderColor: Colors.dangerLine,
-    marginTop: 8,
   },
   deleteText: { fontSize: Typography.size.base, color: Colors.danger },
 });
