@@ -223,6 +223,19 @@ export default function PlantingDetailScreen() {
           <InfoRow label="植え付け日" value={formatDateLabel(planting.plantedOn)} />
           <InfoRow label="種 / 苗" value={PLANTED_AS_LABEL[planting.plantedAs]} />
           <InfoRow label="場所" value={planting.placeName ?? '未設定'} />
+          {/* 作物ガイドへ（4.19 レビュー 17）。適温・連作年数・作業の目安・虫と病気・出典は
+              ガイド詳細にしか無いのに、栽培詳細からそこへ行く道が無かった。
+              手入力の栽培（cropId が無い／マスター外）では行ごと出さない */}
+          {planting.cropId?.startsWith('crop-') ? (
+            <Pressable
+              style={styles.infoRow}
+              onPress={() => router.push(`/crops/${planting.cropId}`)}
+              accessibilityLabel={`${planting.cropName}のガイドをみる`}
+            >
+              <Text style={styles.infoLabel}>育て方</Text>
+              <Text style={styles.infoLink}>{planting.cropName}のガイド →</Text>
+            </Pressable>
+          ) : null}
         </View>
 
         {planting.tags.length > 0 ? (
@@ -577,6 +590,7 @@ const styles = StyleSheet.create({
   },
   infoLabel: { fontSize: Typography.size.sm, color: Colors.inkDim },
   infoValue: { fontSize: Typography.size.base, color: Colors.ink },
+  infoLink: { fontSize: Typography.size.base, color: Colors.accentInk },
   tags: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   noteCard: {
     borderRadius: 12,

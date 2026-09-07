@@ -164,6 +164,32 @@ describe('栽培詳細 — 表示', () => {
     expect(screen.getByText('苗から')).toBeTruthy();
   });
 
+  /**
+   * 4.19 レビュー 17: 適温・連作年数・作業の目安・虫と病気・出典はガイド詳細にしか無いのに、
+   * 栽培詳細からそこへ行く道が無かった。
+   */
+  it('マスターの作物なら作物ガイドへの導線を出す', async () => {
+    render(<PlantingDetailScreen />);
+    await waitFor(() => expect(screen.getByText('トマトのガイド →')).toBeTruthy());
+
+    fireEvent.press(screen.getByLabelText('トマトのガイドをみる'));
+
+    expect(mockPush).toHaveBeenCalledWith('/crops/crop-tomato');
+  });
+
+  it('手入力の栽培（cropId なし・マスター外）はガイドの行ごと出さない', async () => {
+    mockGetPlantingDetail.mockResolvedValue(detail({ cropId: null }));
+    const { unmount } = render(<PlantingDetailScreen />);
+    await waitFor(() => expect(screen.getByText('ベランダ')).toBeTruthy());
+    expect(screen.queryByText('育て方')).toBeNull();
+    unmount();
+
+    mockGetPlantingDetail.mockResolvedValue(detail({ cropId: 'sample-tomato' }));
+    render(<PlantingDetailScreen />);
+    await waitFor(() => expect(screen.getByText('ベランダ')).toBeTruthy());
+    expect(screen.queryByText('育て方')).toBeNull();
+  });
+
   it('場所が未設定なら「未設定」と出す（空欄にしない）', async () => {
     mockGetPlantingDetail.mockResolvedValue(detail({ placeName: null, placeId: null }));
     render(<PlantingDetailScreen />);

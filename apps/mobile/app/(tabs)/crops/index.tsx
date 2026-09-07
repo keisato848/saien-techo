@@ -1,18 +1,20 @@
 /**
  * S17: 作物ガイド一覧 — R09 / WBS 3.3・4.19
  *
- * マスター作物を**分類ごと**に読み仮名順で。今月の「始めどき」「採りどき」を印で添える —
- * ガイドを開く動機のほとんどは「いま何が始められるか」なので、
+ * マスター作物を**分類ごと**に読み仮名順で。今月の「まきどき」「植えどき」「採りどき」を
+ * 印で添える — ガイドを開く動機のほとんどは「いま何が始められるか」なので、
  * 一覧の時点で今月の目星が付くようにする。
  *
- * 4.19 で 50 品目になったので、検索欄と絞り込み（今月・初心者向け・プランター）を足した。
- * 「今月の菜園仕事」カードの行から来たときは `?now=1` で「今月」を最初から効かせる。
+ * 4.19 で 50 品目になったので、検索欄と絞り込み（時期・初心者向け・プランター）を足した。
+ * 「今月の菜園仕事」カードの行から来たときは `?now=sow|plant|harvest` で
+ * **押した行と同じ種別**を最初から効かせる（レビュー 19: 以前は 3 行とも `?now=1` で
+ * 同じ 26〜38 品目に飛び、絞り込みとして働いていなかった）。
  * 検索は名前・読み仮名・別名（店頭の呼び方）に当てる。カタカナで打っても
  * ひらがなで打っても当たるよう、読みは両方に寄せて比べる。
  */
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
-import { ChevronLeft, Search } from 'lucide-react-native';
-import { useCallback, useMemo, useState } from 'react';
+import { ChevronLeft, Search, X } from 'lucide-react-native';
+import { memo, useCallback, useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -28,14 +30,33 @@ import {
 import { getCropGuideList, type CropGuideListItem } from '../../../src/services/crop-guide.service';
 import { CROP_NAME_ALIASES } from '../../../src/services/crop-match.service';
 
-type Filter = 'all' | 'now' | 'beginner' | 'container';
+export type Filter = 'all' | 'sow' | 'plant' | 'harvest' | 'beginner' | 'container';
 
 const FILTERS: { key: Filter; label: string }[] = [
   { key: 'all', label: 'すべて' },
-  { key: 'now', label: '今月' },
+  { key: 'sow', label: 'まきどき' },
+  { key: 'plant', label: '植えどき' },
+  { key: 'harvest', label: '採りどき' },
   { key: 'beginner', label: '初心者向け' },
   { key: 'container', label: 'プランター' },
 ];
+
+const FILTER_LABEL: Record<Filter, string> = {
+  all: 'すべて',
+  sow: 'まきどき',
+  plant: '植えどき',
+  harvest: '採りどき',
+  beginner: '初心者向け',
+  container: 'プランター',
+};
+
+/** 今月の時期で絞るチップ（残りは編集者判断なので「今月」の文言を使わない） */
+const SEASONAL: readonly Filter[] = ['sow', 'plant', 'harvest'];
+
+/** `?now=` の値 → 初期チップ。'1'（4.19 第 1 段）の後方互換は捨てた */
+export function filterFromParam(now: string | undefined): Filter {
+  return now === 'sow' || now === 'plant' || now === 'harvest' ? now : 'all';
+}
 
 /** カタカナ → ひらがな（読み仮名との比較用） */
 function toHiragana(text: string): string {
@@ -58,8 +79,12 @@ export function matchesQuery(crop: CropGuideListItem, query: string): boolean {
 
 export function matchesFilter(crop: CropGuideListItem, filter: Filter): boolean {
   switch (filter) {
-    case 'now':
-      return crop.startNow || crop.harvestNow;
+    case 'sow':
+      return crop.sowNow;
+    case 'plant':
+      return crop.plantNow;
+    case 'harvest':
+      return crop.harvestNow;
     case 'beginner':
       return crop.beginner;
     case 'container':
@@ -69,13 +94,86 @@ export function matchesFilter(crop: CropGuideListItem, filter: Filter): boolean 
   }
 }
 
+/**
+ * ヘッダーの件数。絞り込んでいるあいだは母数も出す（レビュー 11: 常に「50品目」だと
+ * 1 月の「まきどき」8 件でも 50 と読めて、0 件の原因が分からない）
+ */
+export function describeCount(total: number, visible: number): string {
+  return total === visible ? `${total}品目` : `${total}品目中 ${visible}件`;
+}
+
+/**
+ * 0 件の理由。検索語だけ・チップだけ・両方で文言を変える（レビュー 11）。
+ * 以前は 1 つの文言で「別の呼び方で探して」と検索語に原因を断定していたが、
+ * 1 月の「まきどき」該当は 50 品目中 8 件しかなく、冬はチップだけで 0 件になる。
+ */
+export function describeEmpty(query: string, filter: Filter): string {
+  const q = query.trim();
+  const seasonal = SEASONAL.includes(filter);
+  if (q && filter !== 'all') {
+    return seasonal
+      ? `「${q}」は今月の${FILTER_LABEL[filter]}にありませんでした。`
+      : `「${q}」は「${FILTER_LABEL[filter]}」の中にありませんでした。`;
+  }
+  if (q) return `「${q}」に当たる作物がありませんでした。別の呼び方で探してみてください。`;
+  if (seasonal) return `今月${FILTER_LABEL[filter]}の作物はありません。`;
+  if (filter !== 'all') return `「${FILTER_LABEL[filter]}」に当てはまる作物はありません。`;
+  return 'ガイドを読み込めませんでした。アプリを開き直してみてください。';
+}
+
+/**
+ * 行の読み上げラベル。Pressable は既定で 1 つの要素になり、ラベルを付けた時点で
+ * 子の Text（科・多年草・印）が読まれなくなる（レビュー 34a・MonthlyWorkCard と同じ理由）
+ */
+export function describeCropRowLabel(crop: CropGuideListItem): string {
+  const parts = [
+    crop.family ?? '',
+    crop.perennial ? '多年草' : '',
+    crop.sowNow ? 'まきどき' : '',
+    crop.plantNow ? '植えどき' : '',
+    crop.harvestNow ? '採りどき' : '',
+  ].filter(Boolean);
+  return parts.length > 0 ? `${crop.name}のガイド。${parts.join('、')}` : `${crop.name}のガイド`;
+}
+
+/**
+ * 1 行。50 品目（将来 100）が検索の 1 文字ごとに作り直されるのを避けるため memo で切る
+ * （レビュー 31a）。onPress は画面側で useCallback して同一参照を渡す
+ */
+const CropRow = memo(function CropRow({
+  crop,
+  onPress,
+}: {
+  crop: CropGuideListItem;
+  onPress: (cropId: string) => void;
+}) {
+  const handlePress = useCallback(() => onPress(crop.cropId), [onPress, crop.cropId]);
+  return (
+    <PressableScale
+      style={styles.row}
+      onPress={handlePress}
+      accessibilityLabel={describeCropRowLabel(crop)}
+    >
+      <View style={styles.rowText}>
+        <Text style={styles.name}>{crop.name}</Text>
+        <Text style={styles.meta}>
+          {[crop.family ?? '', crop.perennial ? '多年草' : ''].filter(Boolean).join('・')}
+        </Text>
+      </View>
+      {crop.sowNow ? <Text style={[styles.badge, styles.badgeStart]}>まきどき</Text> : null}
+      {crop.plantNow ? <Text style={[styles.badge, styles.badgeStart]}>植えどき</Text> : null}
+      {crop.harvestNow ? <Text style={[styles.badge, styles.badgeHarvest]}>採りどき</Text> : null}
+    </PressableScale>
+  );
+});
+
 export default function CropGuideListScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const params = useLocalSearchParams<{ now?: string }>();
   const [crops, setCrops] = useState<CropGuideListItem[] | null>(null);
   const [query, setQuery] = useState('');
-  const [filter, setFilter] = useState<Filter>(params.now === '1' ? 'now' : 'all');
+  const [filter, setFilter] = useState<Filter>(filterFromParam(params.now));
 
   useFocusEffect(
     useCallback(() => {
@@ -86,8 +184,17 @@ export default function CropGuideListScreen() {
     }, []),
   );
 
-  const sections = useMemo(() => {
-    if (!crops) return [];
+  const openCrop = useCallback((cropId: string) => router.push(`/crops/${cropId}`), [router]);
+
+  const clearFilters = useCallback(() => {
+    setQuery('');
+    setFilter('all');
+  }, []);
+
+  const isFiltered = filter !== 'all' || query.trim().length > 0;
+
+  const { sections, visibleCount } = useMemo(() => {
+    if (!crops) return { sections: [], visibleCount: 0 };
     const visible = crops.filter(
       (crop) => matchesQuery(crop, query) && matchesFilter(crop, filter),
     );
@@ -107,7 +214,7 @@ export default function CropGuideListScreen() {
     }
     const other = byCategory.get('other');
     if (other && other.length > 0) ordered.push({ key: 'other', label: 'その他', crops: other });
-    return ordered;
+    return { sections: ordered, visibleCount: visible.length };
   }, [crops, query, filter]);
 
   return (
@@ -117,7 +224,12 @@ export default function CropGuideListScreen() {
           <ChevronLeft size={22} color={Colors.ink} />
         </Pressable>
         <Text style={styles.title}>作物ガイド</Text>
-        {crops ? <Text style={styles.count}>{crops.length}品目</Text> : null}
+        {crops ? (
+          // 絞り込むたびに件数が変わる。読み上げ利用者にも変化を伝える（レビュー 34c）
+          <Text style={styles.count} accessibilityLiveRegion="polite">
+            {describeCount(crops.length, visibleCount)}
+          </Text>
+        ) : null}
       </View>
 
       <View style={styles.searchBox}>
@@ -132,6 +244,11 @@ export default function CropGuideListScreen() {
           returnKeyType="search"
           accessibilityLabel="作物を検索"
         />
+        {query.length > 0 ? (
+          <Pressable onPress={() => setQuery('')} hitSlop={10} accessibilityLabel="検索を消す">
+            <X size={16} color={Colors.inkDim} />
+          </Pressable>
+        ) : null}
       </View>
 
       <View style={styles.filters}>
@@ -157,33 +274,28 @@ export default function CropGuideListScreen() {
       ) : (
         <ScrollView contentContainerStyle={styles.body} keyboardShouldPersistTaps="handled">
           {sections.length === 0 ? (
-            <Text style={styles.empty}>見つかりませんでした。別の呼び方で探してみてください。</Text>
+            <View style={styles.emptyBox}>
+              <Text style={styles.empty}>{describeEmpty(query, filter)}</Text>
+              {isFiltered ? (
+                // 中央寄せの中に置くので PressableScale は使わない（flex が潰れる実績）
+                <Pressable
+                  style={styles.clearButton}
+                  onPress={clearFilters}
+                  accessibilityRole="button"
+                  accessibilityLabel="絞り込みを解除"
+                >
+                  <Text style={styles.clearText}>絞り込みを解除</Text>
+                </Pressable>
+              ) : null}
+            </View>
           ) : null}
           {sections.map((section) => (
             <View key={section.key} style={styles.section}>
-              <Text style={styles.sectionTitle}>{section.label}</Text>
+              <Text style={styles.sectionTitle} accessibilityRole="header">
+                {section.label}
+              </Text>
               {section.crops.map((crop) => (
-                <PressableScale
-                  key={crop.cropId}
-                  style={styles.row}
-                  onPress={() => router.push(`/crops/${crop.cropId}`)}
-                  accessibilityLabel={`${crop.name}のガイド`}
-                >
-                  <View style={styles.rowText}>
-                    <Text style={styles.name}>{crop.name}</Text>
-                    <Text style={styles.meta}>
-                      {[crop.family ?? '', crop.perennial ? '多年草' : '']
-                        .filter(Boolean)
-                        .join('・')}
-                    </Text>
-                  </View>
-                  {crop.startNow ? (
-                    <Text style={[styles.badge, styles.badgeStart]}>始めどき</Text>
-                  ) : null}
-                  {crop.harvestNow ? (
-                    <Text style={[styles.badge, styles.badgeHarvest]}>採りどき</Text>
-                  ) : null}
-                </PressableScale>
+                <CropRow key={crop.cropId} crop={crop} onPress={openCrop} />
               ))}
             </View>
           ))}
@@ -210,7 +322,7 @@ const styles = StyleSheet.create({
     fontWeight: Typography.weight.medium,
     color: Colors.ink,
   },
-  count: { fontSize: Typography.size.xs, color: Colors.inkDim },
+  count: { flex: 1, textAlign: 'right', fontSize: Typography.size.xs, color: Colors.inkDim },
   searchBox: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -231,7 +343,9 @@ const styles = StyleSheet.create({
   filters: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 8,
+    alignItems: 'flex-start',
+    rowGap: 8,
+    columnGap: 8,
     paddingHorizontal: 16,
     paddingVertical: 10,
   },
@@ -257,11 +371,24 @@ const styles = StyleSheet.create({
     color: Colors.inkDim,
     paddingHorizontal: 2,
   },
+  emptyBox: { alignItems: 'center', gap: 12, paddingVertical: 24 },
   empty: {
     fontSize: Typography.size.sm,
     color: Colors.inkDim,
     textAlign: 'center',
-    paddingVertical: 24,
+  },
+  clearButton: {
+    paddingHorizontal: 16,
+    paddingVertical: 9,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: Colors.accentLine,
+    backgroundColor: Colors.accentSoft,
+  },
+  clearText: {
+    fontSize: Typography.size.sm,
+    fontWeight: Typography.weight.medium,
+    color: Colors.accentInk,
   },
   row: {
     flexDirection: 'row',

@@ -6,7 +6,7 @@
  * 「この作物を育てはじめる」で栽培登録へ、作物名を入れた状態で送る。
  */
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
-import { ChevronLeft, ExternalLink, Sprout } from 'lucide-react-native';
+import { ChevronDown, ChevronLeft, ChevronUp, ExternalLink, Sprout } from 'lucide-react-native';
 import { useCallback, useState } from 'react';
 import { Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -29,51 +29,98 @@ import { REGION_LABEL } from '../../../src/services/region.service';
 const KIND_LABEL = { sow: 'まきどき', plant: '植えどき', harvest: '採りどき' } as const;
 const SUNLIGHT_LABEL = { full: '日なた', partial: '半日陰' } as const;
 
+/** 札の重み。key は上部に最大 3 枚、caution は制約なので緑をやめる */
+export type GuideFactTone = 'key' | 'normal' | 'caution';
+
+export interface GuideFact {
+  text: string;
+  tone: GuideFactTone;
+}
+
+/** key に載せるのはこの 3 つまで（収穫まで・プランター可否と深さ・日照） */
+const MAX_KEY_FACTS = 3;
+
 /**
  * 「育て方の目安」に並べる短い札。純関数にして出し分けをテストで固定する。
- * 旧データ（4.19 の列が null）でも従来の 4 枚は出る。
+ * 旧データ（4.19 の列が null）でも従来の札は出る。
+ *
+ * 4.19 レビュー 21: 12 種を 1 本の配列にして全部同じ緑で描いていたため、
+ * 「プランター不向き」「連作は N 年あける」という**制約**が肯定的な事実と同じ色で並び、
+ * 「これから育てるか」を決める札（収穫まで・プランター可否・日照）が埋もれていた。
+ * 重みを 3 段に分け、key → normal → caution の順で返す。
+ * 適温は折りたたみへ移した — 4.13（気温の助言）が入るまで利用者の行動が変わらない。
  */
-export function guideFacts(detail: CropGuideDetail): string[] {
+export function guideFacts(detail: CropGuideDetail): GuideFact[] {
   const guide = detail.guide;
   if (!guide) return [];
-  const facts: string[] = [];
-  if (guide.spacingCm != null) facts.push(`株間 ${guide.spacingCm}cm`);
-  if (guide.sunlight) facts.push(SUNLIGHT_LABEL[guide.sunlight]);
-  if (guide.germinationDays != null) facts.push(`発芽 約${guide.germinationDays}日`);
-  if (guide.transplantAfterDays != null) facts.push(`定植 約${guide.transplantAfterDays}日後`);
-  if (guide.fertilizeAfterDays != null) {
-    facts.push(
-      guide.fertilizeIntervalDays != null
-        ? `追肥 約${guide.fertilizeAfterDays}日後・以後${guide.fertilizeIntervalDays}日おき`
-        : `追肥 約${guide.fertilizeAfterDays}日後`,
-    );
-  }
+  const key: GuideFact[] = [];
+  const normal: GuideFact[] = [];
+  const caution: GuideFact[] = [];
+
+  // key ①いつ採れるか
   if (detail.perennial) {
-    facts.push('翌年から収穫（多年草）');
+    key.push({ text: '翌年から収穫（多年草）', tone: 'key' });
   } else if (guide.harvestWindow) {
-    facts.push(`収穫 約${guide.harvestWindow.min}〜${guide.harvestWindow.max}日後`);
+    key.push({
+      text: `収穫 約${guide.harvestWindow.min}〜${guide.harvestWindow.max}日後`,
+      tone: 'key',
+    });
   } else if (guide.harvestAfterDays != null) {
-    facts.push(`収穫 約${guide.harvestAfterDays}日後`);
+    key.push({ text: `収穫 約${guide.harvestAfterDays}日後`, tone: 'key' });
   }
-  if (guide.harvestDurationDays != null) facts.push(`採れる期間 約${guide.harvestDurationDays}日`);
-  if (guide.temperature) {
-    const [g0, g1] = guide.temperature.germination;
-    const [t0, t1] = guide.temperature.growth;
-    facts.push(`発芽 ${g0}〜${g1}℃・生育 ${t0}〜${t1}℃`);
-  }
-  if (guide.rotationYears != null) {
-    facts.push(guide.rotationYears === 0 ? '連作OK' : `連作は${guide.rotationYears}年あける`);
-  }
-  if (guide.wateringIntervalDays != null) facts.push(`水やり ${guide.wateringIntervalDays}日おき`);
+  // key ②ベランダで育つか。不向きは制約なので caution
   if (detail.editorial) {
-    if (detail.editorial.beginner) facts.push('初心者向け');
-    facts.push(
-      detail.editorial.containerOk
-        ? `プランター 深さ${detail.editorial.containerDepthCm ?? 20}cm〜`
-        : 'プランター不向き',
-    );
+    if (detail.editorial.containerOk) {
+      key.push({
+        text: `プランター 深さ${detail.editorial.containerDepthCm ?? 20}cm〜`,
+        tone: 'key',
+      });
+    } else {
+      caution.push({ text: 'プランター不向き', tone: 'caution' });
+    }
   }
-  return facts;
+  // key ③置き場所
+  if (guide.sunlight) key.push({ text: SUNLIGHT_LABEL[guide.sunlight], tone: 'key' });
+
+  if (guide.spacingCm != null) normal.push({ text: `株間 ${guide.spacingCm}cm`, tone: 'normal' });
+  if (guide.germinationDays != null) {
+    normal.push({ text: `発芽 約${guide.germinationDays}日`, tone: 'normal' });
+  }
+  if (guide.transplantAfterDays != null) {
+    normal.push({ text: `定植 約${guide.transplantAfterDays}日後`, tone: 'normal' });
+  }
+  if (guide.fertilizeAfterDays != null) {
+    normal.push({
+      text:
+        guide.fertilizeIntervalDays != null
+          ? `追肥 約${guide.fertilizeAfterDays}日後・以後${guide.fertilizeIntervalDays}日おき`
+          : `追肥 約${guide.fertilizeAfterDays}日後`,
+      tone: 'normal',
+    });
+  }
+  if (guide.harvestDurationDays != null) {
+    normal.push({ text: `採れる期間 約${guide.harvestDurationDays}日`, tone: 'normal' });
+  }
+  if (guide.wateringIntervalDays != null) {
+    normal.push({ text: `水やり ${guide.wateringIntervalDays}日おき`, tone: 'normal' });
+  }
+  if (detail.editorial?.beginner) normal.push({ text: '初心者向け', tone: 'normal' });
+  if (guide.rotationYears != null) {
+    // 連作 OK は制約ではないので普通の札のまま
+    if (guide.rotationYears === 0) normal.push({ text: '連作OK', tone: 'normal' });
+    else caution.push({ text: `連作は${guide.rotationYears}年あける`, tone: 'caution' });
+  }
+
+  return [...key.slice(0, MAX_KEY_FACTS), ...normal, ...caution];
+}
+
+/** 適温の 1 行。折りたたみの中身。純関数にして書式をテストで固定する */
+export function formatTemperature(
+  temperature: NonNullable<NonNullable<CropGuideDetail['guide']>['temperature']>,
+): string {
+  const [g0, g1] = temperature.germination;
+  const [t0, t1] = temperature.growth;
+  return `発芽 ${g0}〜${g1}℃・生育 ${t0}〜${t1}℃`;
 }
 
 export default function CropGuideDetailScreen() {
@@ -81,6 +128,7 @@ export default function CropGuideDetailScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const [detail, setDetail] = useState<CropGuideDetail | null | undefined>(undefined);
+  const [detailsOpen, setDetailsOpen] = useState(false);
 
   useFocusEffect(
     useCallback(() => {
@@ -156,8 +204,8 @@ export default function CropGuideDetailScreen() {
             <Text style={styles.cardTitle}>育て方の目安</Text>
             <View style={styles.factsRow}>
               {facts.map((fact) => (
-                <Text key={fact} style={styles.fact}>
-                  {fact}
+                <Text key={fact.text} style={[styles.fact, FACT_TONE_STYLE[fact.tone]]}>
+                  {fact.text}
                 </Text>
               ))}
             </View>
@@ -188,6 +236,34 @@ export default function CropGuideDetailScreen() {
               <View style={styles.guideBlock}>
                 <Text style={styles.guideLabel}>コツ</Text>
                 <Text style={styles.guideText}>{guide.tips}</Text>
+              </View>
+            ) : null}
+            {/* 適温は札から降ろして折りたたみへ（レビュー 21）。数字を見ても
+                4.13（気温に応じた助言）が入るまで利用者の行動が変わらない */}
+            {guide.temperature ? (
+              <View style={styles.guideBlock}>
+                <Pressable
+                  onPress={() => setDetailsOpen((open) => !open)}
+                  hitSlop={6}
+                  accessibilityRole="button"
+                  accessibilityState={{ expanded: detailsOpen }}
+                  accessibilityLabel="くわしい数値"
+                >
+                  <View style={styles.moreRow}>
+                    <Text style={styles.moreLabel}>くわしい数値</Text>
+                    {detailsOpen ? (
+                      <ChevronUp size={14} color={Colors.inkDim} />
+                    ) : (
+                      <ChevronDown size={14} color={Colors.inkDim} />
+                    )}
+                  </View>
+                </Pressable>
+                {detailsOpen ? (
+                  <>
+                    <Text style={styles.guideLabel}>適温</Text>
+                    <Text style={styles.guideText}>{formatTemperature(guide.temperature)}</Text>
+                  </>
+                ) : null}
               </View>
             ) : null}
           </View>
@@ -298,16 +374,33 @@ const styles = StyleSheet.create({
   },
   fact: {
     fontSize: Typography.size.xs,
-    color: Colors.accentInk,
     borderWidth: 1,
-    borderColor: Colors.accentLine,
     borderRadius: 10,
     paddingHorizontal: 8,
     paddingVertical: 3,
     overflow: 'hidden',
     alignSelf: 'flex-start',
   },
+  // key: 塗って先頭に。normal: 枠だけ。caution: 制約なので緑をやめる
+  factKey: {
+    color: Colors.accentInk,
+    borderColor: Colors.accentLine,
+    backgroundColor: Colors.accentSoft,
+    fontWeight: Typography.weight.medium,
+  },
+  factNormal: {
+    color: Colors.inkDim,
+    borderColor: Colors.line,
+    backgroundColor: Colors.surface,
+  },
+  factCaution: {
+    color: Colors.danger,
+    borderColor: Colors.dangerLine,
+    backgroundColor: Colors.dangerSoft,
+  },
   guideBlock: { gap: 3 },
+  moreRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  moreLabel: { fontSize: Typography.size.xs, color: Colors.inkDim },
   guideLabel: { fontSize: Typography.size.xs, color: Colors.inkDim },
   guideText: { fontSize: Typography.size.sm, color: Colors.ink, lineHeight: 20 },
   startButton: {
@@ -335,3 +428,10 @@ const styles = StyleSheet.create({
   },
   disclaimer: { fontSize: 10, color: Colors.inkDim, lineHeight: 15, marginTop: 2 },
 });
+
+/** 札の重み → スタイル。styles の後ろに置く必要がある */
+const FACT_TONE_STYLE = {
+  key: styles.factKey,
+  normal: styles.factNormal,
+  caution: styles.factCaution,
+};

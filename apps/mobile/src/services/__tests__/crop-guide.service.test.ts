@@ -89,6 +89,41 @@ describeIfSqlite('crop-guide.service (real SQLite)', () => {
       expect(hakusai?.startNow).toBe(true);
     });
 
+    /**
+     * 4.19 レビュー 19: 一覧の絞り込みが「まきどき」「植えどき」に割れた。
+     * startNow は両方の OR として残す（作付け計画フォームが使う）。
+     */
+    it('まきどきと植えどきを別々の印で返す（8 月の中間地）', async () => {
+      await setRegion('temperate');
+      const byId = new Map((await getCropGuideList(at(8))).map((c) => [c.cropId, c]));
+
+      // ダイコンは 8〜9 月が種まきだけ、ジャガイモは 8〜9 月が植え付けだけ
+      expect(byId.get('crop-daikon')).toEqual(
+        expect.objectContaining({ sowNow: true, plantNow: false, startNow: true }),
+      );
+      expect(byId.get('crop-jagaimo')).toEqual(
+        expect.objectContaining({ sowNow: false, plantNow: true, startNow: true }),
+      );
+      // ハクサイは 8 月にまく人も苗を植える人もいる（両方の窓がある）
+      expect(byId.get('crop-hakusai')).toEqual(
+        expect.objectContaining({ sowNow: true, plantNow: true, startNow: true }),
+      );
+      expect(byId.get('crop-tomato')).toEqual(
+        expect.objectContaining({ sowNow: false, plantNow: false, startNow: false }),
+      );
+    });
+
+    it('他地域の暦は印に混ざらない（SQL で地域を絞っている）', async () => {
+      // 寒冷地のトマトは 5〜6 月が植えどき。中間地（4〜5 月）で 6 月に引いても付かない
+      await setRegion('temperate');
+      const temperate = await getCropGuideList(at(6));
+      expect(temperate.find((c) => c.cropId === 'crop-tomato')?.plantNow).toBe(false);
+
+      await setRegion('cold');
+      const cold = await getCropGuideList(at(6));
+      expect(cold.find((c) => c.cropId === 'crop-tomato')?.plantNow).toBe(true);
+    });
+
     it('ガイドの無い作物（開発サンプルの残骸）は一覧に出さない', async () => {
       const now = new Date().toISOString();
       mockHandles.expoDb.runSync(
