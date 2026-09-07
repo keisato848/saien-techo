@@ -27,6 +27,15 @@ jest.mock('../../services/planting.service', () => ({
   getPlantingTagNames: () => mockTags(),
 }));
 
+// 連作チェック（R17）はフォームの入力が変わるたびに走る。ここでは
+// 「どんな引数で引いたか」と「返ってきた警告をどう出すか」だけを見たいので
+// 判定そのものは rotation.service のテストに任せる（文言の関数は実物を使う）
+const mockCheckRotation = jest.fn<Promise<unknown>, unknown[]>(() => Promise.resolve(null));
+jest.mock('../../services/rotation.service', () => ({
+  ...jest.requireActual('../../services/rotation.service'),
+  checkRotation: (...args: unknown[]) => mockCheckRotation(...args),
+}));
+
 jest.mock('../../services/photo-storage.service', () => ({
   persistRecipePhoto: jest.fn(),
 }));
@@ -47,6 +56,7 @@ describe('PlantingForm', () => {
     mockPush.mockReset();
     mockPlaces.mockReset().mockResolvedValue([]);
     mockTags.mockReset().mockResolvedValue([]);
+    mockCheckRotation.mockReset().mockResolvedValue(null);
   });
 
   it('作物名が空だと保存できず、エラーを出す', async () => {
@@ -196,5 +206,78 @@ describe('PlantingForm', () => {
     const { onCancel } = setup();
     fireEvent.press(screen.getByText('キャンセル'));
     expect(onCancel).toHaveBeenCalledTimes(1);
+  });
+});
+
+// ─── 連作障害チェック（R17 / WBS 4.5）───────────────────────────────────
+describe('PlantingForm の連作チェック', () => {
+  const warning = {
+    cropName: 'トマト',
+    family: 'ナス科',
+    rotationYears: 4,
+    placeName: '南の畝',
+    history: [
+      {
+        plantingId: 'p-nasu',
+        cropName: 'ナス',
+        plantedOn: '2025-05-01T00:00:00.000Z',
+        endedAt: '2025-10-01T00:00:00.000Z',
+        growing: false,
+        yearsAgo: 1,
+      },
+    ],
+  };
+
+  beforeEach(() => {
+    mockPush.mockReset();
+    mockPlaces.mockReset().mockResolvedValue([]);
+    mockTags.mockReset().mockResolvedValue([]);
+    mockCheckRotation.mockReset().mockResolvedValue(null);
+  });
+
+  it('作物名・場所・植え付け日を渡して引く。編集時は自分自身を除く', async () => {
+    mockPlaces.mockResolvedValue([{ id: 'place-1', name: '南の畝', kind: 'row' }]);
+    setup({ plantingId: 'p-me', initialValues: { cropName: 'トマト' } });
+
+    await waitFor(() => expect(screen.getByText('南の畝')).toBeTruthy());
+    fireEvent.press(screen.getByText('南の畝'));
+
+    await waitFor(
+      () =>
+        expect(mockCheckRotation).toHaveBeenCalledWith(
+          expect.objectContaining({
+            cropName: 'トマト',
+            placeId: 'place-1',
+            excludePlantingId: 'p-me',
+          }),
+        ),
+      { timeout: 5000 },
+    );
+  });
+
+  it('当たれば注意書きを出すが、保存は止めない', async () => {
+    mockCheckRotation.mockResolvedValue(warning);
+    const { onSubmit } = setup({ initialValues: { cropName: 'トマト' } });
+
+    await waitFor(() => expect(screen.getByTestId('rotation-notice')).toBeTruthy(), {
+      timeout: 5000,
+    });
+    expect(
+      screen.getByText('南の畝では去年ナス（ナス科）を育てました。トマトは4年あけるのが目安です。'),
+    ).toBeTruthy();
+
+    fireEvent.press(screen.getByText('保存'));
+
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));
+  });
+
+  it('判定に失敗しても注意書きを出さず、入力は続けられる', async () => {
+    mockCheckRotation.mockRejectedValue(new Error('DB not ready'));
+    const { onSubmit } = setup({ initialValues: { cropName: 'トマト' } });
+
+    fireEvent.press(screen.getByText('保存'));
+
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));
+    expect(screen.queryByTestId('rotation-notice')).toBeNull();
   });
 });
