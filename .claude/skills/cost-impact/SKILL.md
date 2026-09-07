@@ -16,12 +16,12 @@ allowed-tools: Bash(railway variables --json*), Bash(git diff*), Bash(grep*), Re
 `scripts/agent/lib/docs-map.mjs` の `cost-impact` 規則に当たるファイルを編集すると、
 PostToolUse / Stop フックが本 Skill と §5 の更新を督促する。対象:
 
-| 触るもの                    | 典型例                                                                                |
-| --------------------------- | ------------------------------------------------------------------------------------- |
-| **推論の入口**              | `apps/mobile/src/services/{garden-consult,harvest-read,planting-identify}.service.ts` |
-| **無料枠・リワード**        | `usage.service.ts` / `identify-credit.service.ts` / `ad-reward*.ts`                   |
-| **サーバー接続先・広告 ID** | `apps/mobile/src/config.ts` / `apps/mobile/eas.json`                                  |
-| **サーバー側の上限**        | `rate-limit.ts`（だいどこ側。さいえん手帳の `apps/server` は死んでいる — #150）       |
+| 触るもの                    | 典型例                                                                                      |
+| --------------------------- | ------------------------------------------------------------------------------------------- |
+| **推論の入口**              | `apps/mobile/src/services/{garden-consult,harvest-read,planting-identify}.service.ts`       |
+| **無料枠・リワード**        | `usage.service.ts` / `identify-credit.service.ts` / `ad-reward*.ts`                         |
+| **サーバー接続先・広告 ID** | `apps/mobile/src/config.ts` / `apps/mobile/eas.json`                                        |
+| **サーバー側の上限**        | `rate-limit.ts`（**だいどこ側にしか無い**。さいえん手帳の `apps/server` は削除済み — #150） |
 
 フックに当たらなくても、**設計メモに「サーバーへ送る」「推論する」「広告で賄う」の
 いずれかが書かれたら**この Skill を回す。

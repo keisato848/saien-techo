@@ -1,6 +1,13 @@
 /**
  * App-wide configuration
  * SERVER_BASE_URL: Hono API server endpoint
+ *
+ * **サーバーの実装はこのリポジトリに無い。** 正は だいどこ側の
+ * `C:\Projects\daidoko/apps/server`（決定⑨で Railway インスタンスを共用している）。
+ * さいえん手帳にも `apps/server` があったが、どこにもデプロイされておらず中身も
+ * だいどこ由来のままで嘘の参照元になっていたため、WBS T6（#150）で削除した。
+ * 上限・env・エンドポイントの契約を確かめるときは だいどこ側を見ること
+ * （経緯と現行の天井は docs/インフラ・NW構成設計.md §0・§5-4）。
  */
 import { Platform } from 'react-native';
 
@@ -8,9 +15,15 @@ const isWeb = Platform.OS === 'web';
 
 // EXPO_PUBLIC_SERVER_URL を設定している場合はそちらを優先
 // 未設定時のデフォルト:
-//   Web (開発)  → localhost:3000
+//   Web (開発)  → localhost:3000。**ローカルで立てるのは だいどこ の apps/server**
+//                 （このリポジトリには無い）。手順は .claude/skills/emulator-verify §4
 //   Native      → だいどこの Railway 本番と共用（WBS 決定⑨ — 固定費を増やさない。
 //                 さいえん手帳が使うのは /api/v1/garden 配下のみ）
+//
+// **日次の上限に当たったときは HTTP 200 + `{ ok: false, error.code: 'RATE_LIMITED' }`** で返る
+// （サーバーがステータスを付けないため 429 ではない）。3 サービスとも `res.ok` を通り抜けて
+// `envelope.error.message` を出すので、利用者にはサーバーの日本語文言が出て
+// ステータス番号は見えない。上限そのものは Railway の env（#157）。
 export const SERVER_BASE_URL =
   process.env['EXPO_PUBLIC_SERVER_URL'] ??
   (isWeb ? 'http://localhost:3000' : 'https://daidoko-production.up.railway.app'); // daidoko-ref-ok

@@ -12,7 +12,8 @@ Use this file as the always-on workspace guide for GitHub Copilot in this reposi
 
 ## Architecture
 
-- Monorepo: `apps/mobile`, `apps/server`, `packages/shared`. Package manager is **pnpm**.
+- Monorepo: `apps/mobile`, `packages/shared`. Package manager is **pnpm**.
+- **No server in this repo.** AI inference runs on the shared daidoko Railway instance (decision ⑨); the server source lives in daidoko's `apps/server`. See README.md.
 - **Local-first.** No server OCR, server image analysis, or server AI fallback for sync on-device flows.
 - Agent calls via `AgentBridge.register()` / `AgentBridge.call()` only. No direct cross-agent invocation.
 - Hook logging via `HookLogger`. Do not bypass lifecycle hooks for new agent flows.

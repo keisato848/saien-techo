@@ -112,9 +112,12 @@ node scripts/agent/build-android.mjs --arch x86_64   # app.json/plugins 変更�
 
 ## 4. ローカルサーバー E2E（AI 相談）
 
+**サーバーの実装はこのリポジトリに無い**（WBS T6 / #150 で削除）。立てるのは
+**だいどこ側**のサーバー — 推論はもともとそちらの Railway と共用している（決定⑨）。
+
 ```bash
 # サーバー起動（.env は自動ロードされない — --env-file 必須）
-cd apps/server && pnpm exec tsx --env-file=.env src/index.ts
+cd /c/Projects/daidoko/apps/server && pnpm exec tsx --env-file=.env src/index.ts  # daidoko-ref-ok
 ```
 
 ```powershell
