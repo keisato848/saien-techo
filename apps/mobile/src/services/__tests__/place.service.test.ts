@@ -163,6 +163,26 @@ describeIfSqlite('place.service (real SQLite)', () => {
   });
 
   describe('deletePlace', () => {
+    it('作付け計画からだけ参照されていれば消せる（計画の場所が未設定に戻る）', async () => {
+      // 栽培（実績）と違い、計画は「まだやっていない予定」なので場所の削除を止めない。
+      // ただし planting_plans.place_id は places への外部キーなので、外さずに消すと落ちる
+      const id = await createPlace({ name: '南の畝', kind: 'row' });
+      const now = new Date().toISOString();
+      mockHandles.expoDb.runSync(
+        `INSERT INTO planting_plans (id, family_id, crop_name, planned_year, planned_month, planned_kind, place_id, created_at, updated_at)
+         VALUES ('plan-1', ?, 'トマト', 2026, 4, 'plant', ?, ?, ?)`,
+        [FAMILY_ID, id, now, now],
+      );
+
+      expect(await deletePlace(id)).toEqual({ deleted: true });
+
+      const [plan] = mockHandles.expoDb.getAllSync<{ place_id: string | null }>(
+        'SELECT place_id FROM planting_plans WHERE id = ?',
+        ['plan-1'],
+      );
+      expect(plan.place_id).toBeNull();
+    });
+
     it('未使用なら物理削除できる', async () => {
       const id = await createPlace({ name: '南の畝', kind: 'row' });
 
