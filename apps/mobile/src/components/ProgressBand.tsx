@@ -2,7 +2,10 @@ import { StyleSheet, View } from 'react-native';
 import Svg, { Circle, Path, Rect } from 'react-native-svg';
 
 import { Colors } from '../constants/theme';
-import type { PlantingProgress } from '../services/growth-progress.service';
+import {
+  describeProgressForA11y,
+  type PlantingProgress,
+} from '../services/growth-progress.service';
 
 /**
  * 進行帯 — 植え付けから収穫の目安までの進み具合を 1 本で見せる。
@@ -16,6 +19,11 @@ import type { PlantingProgress } from '../services/growth-progress.service';
  *
  * **収穫の「窓」**（4.19）: マスターが収穫の幅を持つ作物は、幅の最小から右端までを
  * 収穫色の薄い帯で示す。幅を持たない作物は従来どおり右端の 1 点が目安。
+ *
+ * **読み上げ**: Svg は中身を読み上げに出さないので、帯 1 枚を `progressbar` として
+ * まとめて読ませる。文言は `describeProgressForA11y`（幅の制約を受けない）で、
+ * 目で見えている収穫の窓・作業ログ・今日の位置を言葉にする。
+ * カード側の `PressableScale` にはラベルを付けないこと — 付けると子の帯の情報が消える。
  */
 interface ProgressBandProps {
   progress: PlantingProgress;
@@ -44,7 +52,14 @@ export function ProgressBand({ progress, width }: ProgressBandProps) {
       : null;
 
   return (
-    <View style={styles.root}>
+    <View
+      style={styles.root}
+      accessible
+      accessibilityRole="progressbar"
+      accessibilityValue={{ min: 0, max: 100, now: Math.round(progress.ratio * 100) }}
+      accessibilityLabel={describeProgressForA11y(progress)}
+      testID="progress-band"
+    >
       <Svg width={width} height={HEIGHT}>
         {/* 残り */}
         <Rect

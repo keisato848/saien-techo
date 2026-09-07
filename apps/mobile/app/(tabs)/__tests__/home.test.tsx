@@ -197,6 +197,19 @@ describe('ホーム（S01 / WBS 3.5）', () => {
     });
   });
 
+  // 文字サイズ 130% で、カード内容幅 70px の 1 行（「あと120日」など）が切れた。
+  // カードは縦には伸ばしてよいので、上限を掛けるのはこの 2 つだけ（2026-09-07 レビュー 35）
+  describe('文字を大きくしても、作物名と日数は切れない', () => {
+    it('育てているもののカードは拡大率を 1.3 で止める', async () => {
+      mockGetPlantingList.mockResolvedValue([planting()]);
+      render(<HomeScreen />);
+      await waitFor(() => expect(screen.getByText('育てているもの')).toBeTruthy());
+
+      expect(screen.getByText('トマト').props.maxFontSizeMultiplier).toBe(1.3);
+      expect(screen.getByText('40日目').props.maxFontSizeMultiplier).toBe(1.3);
+    });
+  });
+
   describe('栽培ゼロの空状態', () => {
     it('ようこそを出す', async () => {
       render(<HomeScreen />);
