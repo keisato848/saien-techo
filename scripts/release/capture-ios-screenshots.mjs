@@ -65,6 +65,7 @@ import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import sharp from 'sharp';
 import { appIdentity } from '../agent/lib/app-identity.mjs';
+import { storeShots } from './lib/store-shots.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const DEFAULT_OUT = path.join(ROOT, 'docs/store/app-store/phone-screenshots');
@@ -91,35 +92,15 @@ const SPRINGBOARD_DISTANCE = 40; // これ以下なら「まだ SpringBoard を�
 const DUPLICATE_DISTANCE = 1.0; // これ以下なら実質同じ画面
 
 /**
- * ショット定義。route は Expo Router のパス（saientecho://<route> で開く）。
+ * ショット定義は Android 版と共通で、`lib/store-shots.mjs` が単一ソース。
+ * **ここに配列を複製しないこと** — 2 ストアで並びがずれると
+ * 「同じアプリの別の顔」ができる。掲載順（`storeOrder`）も同じ場所が持つ。
  *
- * **Android 版（capture-store-screenshots.mjs）と同じ画面構成・同じ順序に揃える。**
- * 掲載順の正は `docs/store/google-play/README.md` と
- * `scripts/release/update-play-screenshots.mjs` の ORDER 配列。
- * ずらすと 2 ストアで「同じアプリの別の顔」ができてしまう。
+ * **撮れたかはファイルサイズで判断する。** 中身が出ていれば 100KB 前後〜、
+ * **20KB 前後ならローディングのスピナーしか写っていない**
+ * （Android 側で 2026-08-22 に 8 枚全滅。既定の待ちが短かった）。
  */
-// **撮れたかはファイルサイズで判断する。** 中身が出ていれば 100KB 前後〜、
-// **20KB 前後ならローディングのスピナーしか写っていない**
-// （Android 側で 2026-08-22 に 8 枚全滅。既定の待ちが短かった）。
-const SHOTS = [
-  { file: '01-home.png', route: '', label: 'ホーム（今日の菜園）' },
-  { file: '02-plantings.png', route: 'plantings', label: '栽培一覧' },
-  { file: '03-planting-detail.png', route: `plantings/${PLANTING_ID}`, label: '栽培詳細' },
-  { file: '04-harvests.png', route: 'harvests', label: '収穫アルバム' },
-  { file: '05-crop-guide.png', route: 'crops', label: '作物ガイド' },
-  { file: '06-calendar.png', route: 'calendar', label: 'カレンダー' },
-  { file: '07-materials.png', route: 'materials', label: '資材の在庫' },
-  // 1.1 の目玉（#148）。シードが「読み取り済み 1・待ち 1」を用意している（I8 §2）
-  { file: '08-harvest-reads.png', route: 'harvests/reads', label: '写真から記録（読み取り待ち）' },
-  // 1.2 の目玉（#152）。**ドラフトは DB に持たないのでシードで埋められない** —
-  // 撮れるのは入口の空状態（「育てているものを撮って登録」）。
-  // 中身の詰まった画面が要るなら、リワードを見て実際に読み取らせるしかない。
-  { file: '09-planting-identify.png', route: 'plantings/identify', label: '写真から栽培を登録' },
-  // 1.2 の目玉（#161）。同じ栽培の写真を 2 枚並べて経過日数の差を出す。
-  // **栽培詳細では折り返しの下**にあるので、直リンクで撮る
-  // （simctl にスクロール手段が無く、Android だけスクロールすると両ストアで絵が変わる）。
-  { file: '10-growth-record.png', route: `plantings/${PLANTING_ID}/compare`, label: '成長記録' },
-];
+const SHOTS = storeShots(PLANTING_ID);
 
 const udid = args.udid ?? autoSelectBootedUdid();
 const outDir = args.out ? path.resolve(args.out) : DEFAULT_OUT;

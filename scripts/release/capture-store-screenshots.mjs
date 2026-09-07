@@ -35,6 +35,7 @@ import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { appIdentity } from '../agent/lib/app-identity.mjs';
+import { storeShots } from './lib/store-shots.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const DEFAULT_OUT = path.join(ROOT, 'docs/store/google-play/phone-screenshots');
@@ -45,39 +46,17 @@ const args = parseArgs(process.argv.slice(2));
 const PLANTING_ID = args.planting ?? 'planting-tomato-01';
 
 /**
- * ショット定義。route は Expo Router のパス（saientecho://<route> で開く）。
- * manual: true は自動化不可（既存ファイル維持）。順序 = Play 表示順。
+ * ショット定義は `lib/store-shots.mjs` が単一ソース。
+ * **ここに配列を復活させないこと** — 撮る側と載せる側で並びを二重管理していたせいで、
+ * 8 枚目を撮る側だけに足して 1 枚欠けたまま掲載しかけた
+ * （docs/レビュー記録/2026-08-22-release-1.1-retrospective.md A-4）。
  *
- * **並びは「何のアプリか」→「どう使うか」→「何が返ってくるか」の順。**
- * 1 枚目で伝わらないと 2 枚目は見てもらえないので、ホームを先頭に置く。
- * Play のスマホ用スクショは最大 8 枚。
+ * ここで撮るのは全ショット。**そのうち掲載するのは `storeOrder` を持つものだけ**で、
+ * 掲載順も store-shots.mjs 側が持つ（Play のスマホ用スクショは最大 8 枚）。
  *
  * だいどこ（レシピ蔵書庫・料理中モード・家族グループ）から WBS 3.8 で差し替えた。
  */
-const SHOTS = [
-  { file: '01-home.png', route: '', label: 'ホーム（今日の菜園）' },
-  { file: '02-plantings.png', route: 'plantings', label: '栽培一覧' },
-  {
-    file: '03-planting-detail.png',
-    route: `plantings/${PLANTING_ID}`,
-    label: '栽培詳細（やった！を記録）',
-  },
-  { file: '04-harvests.png', route: 'harvests', label: '収穫アルバム' },
-  { file: '05-crop-guide.png', route: 'crops', label: '作物ガイド' },
-  { file: '06-calendar.png', route: 'calendar', label: 'カレンダー' },
-  { file: '07-materials.png', route: 'materials', label: '資材の在庫' },
-  // 1.1 の目玉（#148）。**シードが「読み取り済み 1・待ち 1」をこの用途で用意している**
-  // （seed.ts の seedHarvestPhotoReads）ので、ルートを開くだけで撮れる。
-  { file: '08-harvest-reads.png', route: 'harvests/reads', label: '写真から記録（読み取り待ち）' },
-  // 1.2 の目玉（#152）。**ドラフトは DB に持たないのでシードで埋められない** —
-  // 撮れるのは入口の空状態（「育てているものを撮って登録」）。
-  // 中身の詰まった画面が要るなら、リワードを見て実際に読み取らせるしかない。
-  { file: '09-planting-identify.png', route: 'plantings/identify', label: '写真から栽培を登録' },
-  // 1.2 の目玉（#161）。同じ栽培の写真を 2 枚並べて経過日数の差を出す。
-  // **栽培詳細では折り返しの下**にあるので、直リンクで撮る
-  // （simctl にスクロール手段が無く、Android だけスクロールすると両ストアで絵が変わる）。
-  { file: '10-growth-record.png', route: `plantings/${PLANTING_ID}/compare`, label: '成長記録' },
-];
+const SHOTS = storeShots(PLANTING_ID);
 
 const adbPath = resolveAdb();
 const serial = args.serial ?? autoSelectSerial();

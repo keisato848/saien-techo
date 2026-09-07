@@ -40,8 +40,9 @@ description: Google Play ストア掲載（ja-JP のアプリ名・説明文・�
 **ストアに上げるのはキャプションを載せた `store-slides/`**（`compose-store-slides.mjs` の出力）。
 一覧で人が見るのは 1 枚目の上半分だけなので、そこに「解決される困りごと」を置く
 （見出しは機能名にしない。改行は `SLIDES` の配列で手で決める）。
-文言は Play と App Store で共通。表示順は `SLIDES` の順 = `update-play-screenshots.mjs` の
-ORDER 配列（**ファイル名の番号は撮影順で、表示順とは一致しない**。変えるときは両方更新）。
+文言は Play と App Store で共通。**表示順の正は `scripts/release/lib/store-shots.mjs` の
+`storeOrder`** ひとつ（撮る側・載せる側・キャプションが全部ここを読む）。
+**ファイル名の番号は撮影順で、表示順とは一致しない** — 並べ替えは `storeOrder` だけ直す。
 
 1. **掲載用の写真に差し替える**（任意 — 下の「本物の菜園写真」を参照）:
    `node scripts/release/use-store-photos.mjs --apply --from <写真ディレクトリ>`
@@ -85,7 +86,8 @@ ORDER 配列（**ファイル名の番号は撮影順で、表示順とは一致
   先に `submit-asc-version.mjs` でバージョンページを作ること
   （新バージョンは前バージョンのスクショを引き継ぐので、消してから上げ直す）
 - 表示種別は `APP_IPHONE_67`。**1320x2868 以外は弾く**
-- `ORDER` に書いたのに実体が無いものは**黙って飛ばさず、落としたことを出す**
+- 掲載順（`store-shots.mjs` の `storeOrder`）にあるのに実体が無いものは
+  **黙って飛ばさず、落としたことを出す**
 - アップロードは「予約 → `uploadOperations` のとおりに PUT → MD5 で確定」。
   **`assetDeliveryState` が COMPLETE になるまで待つ**（PATCH が通っただけでは終わりでない）
 
@@ -117,7 +119,8 @@ Metro がビルド時に静的解決し、`EXPO_PUBLIC_ENABLE_SAMPLE_DATA` を�
 
 ### キャプションの書き方（`compose-store-slides.mjs` の `SLIDES`）
 
-**単一ソースは `SLIDES` 配列ひとつ。** Play と App Store で同じ文言・同じ順を使う。
+**文言の単一ソースは `SLIDES` 配列ひとつ**（並び順の単一ソースは
+`scripts/release/lib/store-shots.mjs`）。Play と App Store で同じ文言・同じ順を使う。
 
 1. **1 枚目はアプリ全体の紹介（`type: 'hero'`）。** ストアの一覧で必ず見えるのはここだけ。
    個別機能より先に「何のアプリか」を言い切る。マーク＋アプリ名＋見出し＋
@@ -134,8 +137,11 @@ Metro がビルド時に静的解決し、`EXPO_PUBLIC_ENABLE_SAMPLE_DATA` を�
    **資材の写真読み取りは未実装**（#139）、栽培の写真一括登録は 1.2 で公開予定。
    だからヒーローは「3 つを 1 つの手帳に」＋「写真と AI が記録と相談を引き受ける」に留めている。
    **未公開バージョンの機能をスクショに出さない**（ストアの版と食い違う）
-6. **表示順は訴求の強さ順**（`SLIDES` の順 = `update-play-screenshots.mjs` の ORDER）。
-   **ファイル名の番号は撮影順で、表示順とは一致しない** — 変えるときは両方直す
+6. **表示順は訴求の強さ順。正は `scripts/release/lib/store-shots.mjs` の `storeOrder`**
+   （`SLIDES` は書き出すときにその順へ並べ替えられる。キャプションと掲載枠が
+   食い違えば `compose-store-slides.mjs` が落ちる）。
+   **ファイル名の番号は撮影順で、表示順とは一致しない** — 直すのは `storeOrder` だけ。
+   撮るが載せないショットは `storeOrder` を書かない（10 枚撮って 8 枚載せている）
 
 版面の決まりごと（触るときの前提）:
 
