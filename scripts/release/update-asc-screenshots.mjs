@@ -35,6 +35,7 @@ import { fileURLToPath } from 'node:url';
 
 import { appIdentity } from '../agent/lib/app-identity.mjs';
 import { ascAppId, ascDelete, ascGet, ascPatch, ascPost } from './lib/asc-api.mjs';
+import { storeUploadOrder } from './lib/store-shots.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const SHOTS_DIR = path.join(ROOT, 'docs/store/app-store/store-slides');
@@ -48,20 +49,11 @@ const DRY_RUN = process.argv.includes('--dry-run');
 const EDITABLE_STATES = new Set(['PREPARE_FOR_SUBMISSION', 'DEVELOPER_REJECTED', 'REJECTED']);
 
 /**
- * 表示順。**`compose-store-slides.mjs` の SLIDES と同じ順**にする
- * （ファイル名の番号は撮影順で、表示順とは一致しない）。
- * ここに書いたのに実体が無いものは**黙って飛ばさず、落としたことを出す**。
+ * 表示順。**正は `lib/store-shots.mjs` の `storeOrder`**（Play 側と同じ場所を読む
+ * ので、2 ストアで並びがずれない）。ファイル名の番号は撮影順で、表示順とは一致しない。
+ * ここに載るのに実体が無いものは**黙って飛ばさず、落としたことを出す**。
  */
-const ORDER = [
-  '01-home.png',
-  '09-planting-identify.png',
-  '03-planting-detail.png',
-  '10-growth-record.png',
-  '04-harvests.png',
-  '08-harvest-reads.png',
-  '05-crop-guide.png',
-  '07-materials.png',
-];
+const ORDER = storeUploadOrder();
 
 // ─── 検証（存在・PNG・寸法・10 枚以内） ──────────────────────────────────────
 const missing = ORDER.filter((f) => !fs.existsSync(path.join(SHOTS_DIR, f)));

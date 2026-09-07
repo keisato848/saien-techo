@@ -27,6 +27,8 @@ import { fileURLToPath } from 'node:url';
 
 import sharp from 'sharp';
 
+import { orderByStoreOrder } from './lib/store-shots.mjs';
+
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 
 // 若葉パレット（apps/mobile/src/constants/theme.ts）
@@ -40,14 +42,18 @@ const INK_DIM = '#5E6B52';
 const FONT = 'Yu Gothic UI, Yu Gothic, Meiryo, Noto Sans JP, sans-serif';
 
 /**
- * スライド定義。**Play と App Store で共通**（同じ約束を同じ順で見せる）。
+ * スライドのキャプション定義。**Play と App Store で共通**（同じ約束を同じ順で見せる）。
  *
- * 並び順 = 訴求の強さ順。**1 枚目はアプリ全体の紹介（ヒーロー）** — 一覧で必ず
+ * **並び順はここでは決めない** — 正は `lib/store-shots.mjs` の `storeOrder` で、
+ * 撮る側・載せる側と共有する（下の `SLIDES` で並べ替える）。ここに書くのは
+ * 「どの画面に何を言わせるか」だけ。
+ *
+ * その掲載順の考え方: **1 枚目はアプリ全体の紹介（ヒーロー）** — 一覧で必ず
  * 見えるのはここだけなので、個別機能より先に「何のアプリか」を言い切る。
  * 2〜5 枚目で記録と収穫（毎日使う理由）、6 枚目以降で調べもの・ふりかえり・
  * 買い物（続ける理由）。
  */
-const SLIDES = [
+const SLIDE_CAPTIONS = [
   // 1 枚目だけ**アプリ全体の紹介**（ヒーロー）。一覧で必ず見えるのはここだけなので、
   // 個別機能ではなく「何のアプリか」を先に言い切る。
   //
@@ -132,6 +138,12 @@ const SLIDES = [
     sub: ['残りが少なくなったら通知。そのまま買い物リストへ。', 'ホームセンターで迷わない。'],
   },
 ];
+
+/**
+ * 掲載順に並べ替えたスライド。**キャプションと掲載枠が食い違えばここで落ちる**
+ * （キャプションだけ足して `storeOrder` を振り忘れる、またはその逆）。
+ */
+const SLIDES = orderByStoreOrder(SLIDE_CAPTIONS);
 
 /** プラットフォームごとの版面。レイアウトは幅を基準にスケールする */
 const TARGETS = [

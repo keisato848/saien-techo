@@ -17,6 +17,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { createEditsClient, getAccessToken } from './lib/play-api.mjs';
+import { MAX_PLAY_PHONE_SCREENSHOTS, storeUploadOrder } from './lib/store-shots.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const SHOTS_DIR = path.join(ROOT, 'docs/store/google-play/store-slides');
@@ -25,23 +26,22 @@ const IMAGE_TYPE = 'phoneScreenshots';
 const DRY_RUN = process.argv.includes('--dry-run');
 
 /**
- * アップロード順（= Play の表示順）。**compose-store-slides.mjs の SLIDES と同じ順**。
+ * アップロード順（= Play の表示順）。**正は `lib/store-shots.mjs` の `storeOrder`** で、
+ * 撮る側（capture-*.mjs）と compose-store-slides.mjs も同じ場所を読む。
  * ファイル名の番号は撮影時の通し番号で、表示順とは一致しない
- * （「写真から記録」は訴求が強いので 5 番目に上げている）。
+ * （「写真から記録」は訴求が強いので 6 番目に上げている）。
+ *
+ * **ここに配列を書き戻さないこと。** 二重管理に戻すと、撮る側だけ直して
+ * 1 枚欠けたまま掲載する事故が再発する（2026-08-22 の A-4）。
  */
-const ORDER = [
-  '01-home.png',
-  '09-planting-identify.png',
-  '03-planting-detail.png',
-  '10-growth-record.png',
-  '04-harvests.png',
-  '08-harvest-reads.png',
-  '05-crop-guide.png',
-  '07-materials.png',
-];
+const ORDER = storeUploadOrder();
 
 // ─── 検証（存在・PNG・寸法・8枚以内） ────────────────────────────────────────
-if (ORDER.length > 8) throw new Error(`Play のスマホスクショは最大8枚（現在 ${ORDER.length}）`);
+if (ORDER.length > MAX_PLAY_PHONE_SCREENSHOTS) {
+  throw new Error(
+    `Play のスマホスクショは最大 ${MAX_PLAY_PHONE_SCREENSHOTS} 枚（現在 ${ORDER.length}）`,
+  );
+}
 const plan = ORDER.map((file) => {
   const p = path.join(SHOTS_DIR, file);
   if (!fs.existsSync(p)) throw new Error(`missing: ${file}`);

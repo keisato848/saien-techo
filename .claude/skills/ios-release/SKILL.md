@@ -108,8 +108,8 @@ node scripts/release/capture-ios-screenshots.mjs --udid <UDID>   # 9:41・満充
 - 出力 = `docs/store/app-store/phone-screenshots/`
 - 主サイズ = 6.9"（iPhone 16 Pro Max = 1320×2868）
 - **画面構成と順序は Android と揃える**（ホーム → 栽培一覧 → 栽培詳細 → 収穫アルバム →
-  作物ガイド → カレンダー → 資材）。正は `docs/store/google-play/README.md` と
-  `update-play-screenshots.mjs` の ORDER 配列。ずらすと 2 ストアで別の顔ができる
+  作物ガイド → カレンダー → 資材）。正は `scripts/release/lib/store-shots.mjs`
+  （撮る側・載せる側・キャプションが全部ここを読む）。ずらすと 2 ストアで別の顔ができる
 - **ストア公開物なのでユーザーに提示して承認を得る**
 - アップロードは ASC API で自動化できる（**Windows からで良い**）。取得だけが macOS 必須
 
