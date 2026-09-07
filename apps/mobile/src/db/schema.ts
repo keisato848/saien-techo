@@ -446,3 +446,50 @@ export const gardenShoppingItems = sqliteTable(
     familyCheckedIdx: index('idx_garden_shopping_family_checked').on(table.familyId, table.checked),
   }),
 );
+
+// ─── PlantingPlan（作付け計画）───────────────────────────────────────────
+// R25 / WBS 4.7。「来年の春に何を植えるか」を先に決めておく表。
+//
+// **日ではなく年 + 月で持つ。** 計画を立てる時点で日にちは決まらないし、
+// 判断材料の栽培暦（crop_calendars）も月単位でしか持っていない。
+// 日まで入れさせると、決まっていないことを決めさせたうえに
+// 「4/12 の予定を過ぎました」と精度の無い催促をすることになる。
+//
+// 実績（実際に植えたか）は plantingId で持つ。計画を消して栽培に置き換えると
+// 「今年は何を植えるつもりだったか」の一覧が年内に溶けてなくなるため、
+// 変換しても行は残し、済みとして見せる（R25 の「予定と実績」）。
+export const plantingPlans = sqliteTable(
+  'planting_plans',
+  {
+    id: text('id').primaryKey(),
+    familyId: text('family_id')
+      .notNull()
+      .references(() => families.id),
+    // plantings と同じ扱い。名前を正とし、マスターに当たれば cropId が付く
+    cropId: text('crop_id').references(() => crops.id),
+    cropName: text('crop_name').notNull(),
+    cropNameReading: text('crop_name_reading'),
+    variety: text('variety'),
+    placeId: text('place_id').references(() => places.id),
+    plannedYear: integer('planned_year').notNull(),
+    // 1〜12
+    plannedMonth: integer('planned_month').notNull(),
+    // sow=種まき / plant=植え付け。crop_calendars.kind と同じ語彙にして、
+    // 暦の窓をそのまま予定へ写せるようにしている
+    plannedKind: text('planned_kind').notNull().default('plant'),
+    note: text('note'),
+    // 実績。NULL = まだ植えていない
+    plantingId: text('planting_id').references(() => plantings.id),
+    convertedAt: text('converted_at'),
+    createdAt: text('created_at').notNull(),
+    updatedAt: text('updated_at').notNull(),
+  },
+  (table) => ({
+    // 一覧は「予定が近い順」が既定なので、家族 + 年月で引く
+    familyWhenIdx: index('idx_planting_plans_family_when').on(
+      table.familyId,
+      table.plannedYear,
+      table.plannedMonth,
+    ),
+  }),
+);

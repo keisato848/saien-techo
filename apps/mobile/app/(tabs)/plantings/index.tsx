@@ -8,7 +8,14 @@
  * 場所を見たいだけのときにキーボードが出る。
  */
 import { useFocusEffect, useRouter } from 'expo-router';
-import { ArrowUpDown, Plus, Search, SlidersHorizontal, X } from 'lucide-react-native';
+import {
+  ArrowUpDown,
+  CalendarRange,
+  Plus,
+  Search,
+  SlidersHorizontal,
+  X,
+} from 'lucide-react-native';
 import { useCallback, useState } from 'react';
 import {
   FlatList,
@@ -101,13 +108,24 @@ export default function PlantingListScreen() {
     <View style={styles.root}>
       <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
         <Text style={styles.title}>栽培</Text>
-        <PressableScale
-          style={styles.addButton}
-          onPress={() => router.push('/plantings/new')}
-          accessibilityLabel="栽培を追加"
-        >
-          <Plus size={18} color={Colors.onAccent} />
-        </PressableScale>
+        <View style={styles.headerActions}>
+          {/* 作付け計画（R25 / #38）。これから植えるものは栽培ではないので
+              一覧には混ぜず、隣の画面に分けている */}
+          <PressableScale
+            style={styles.planButton}
+            onPress={() => router.push('/plantings/plans')}
+            accessibilityLabel="作付け計画"
+          >
+            <CalendarRange size={18} color={Colors.inkDim} />
+          </PressableScale>
+          <PressableScale
+            style={styles.addButton}
+            onPress={() => router.push('/plantings/new')}
+            accessibilityLabel="栽培を追加"
+          >
+            <Plus size={18} color={Colors.onAccent} />
+          </PressableScale>
+        </View>
       </View>
 
       <View style={styles.searchRow}>
@@ -383,6 +401,17 @@ const styles = StyleSheet.create({
     fontSize: Typography.size.lg,
     fontWeight: Typography.weight.medium,
     color: Colors.ink,
+  },
+  headerActions: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  planButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: Colors.line,
+    backgroundColor: Colors.surface,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   addButton: {
     width: 36,
