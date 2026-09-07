@@ -33,6 +33,13 @@ jest.mock('../../../../src/services/place.service', () => ({
   getPlaceList: () => Promise.resolve([]),
 }));
 
+// 「つぎの作業」の件数バッジ（レビュー 9）。並び順・絞り込みはサービスの領分なので、
+// ここでは**画面が plantingId で数えて出すか**だけを見る
+const mockGetNextActions = jest.fn<Promise<unknown[]>, []>(() => Promise.resolve([]));
+jest.mock('../../../../src/services/next-action.service', () => ({
+  getNextActions: () => mockGetNextActions(),
+}));
+
 import PlantingListScreen from '../index';
 
 function planting(overrides: Partial<PlantingListItem> & { id: string }): PlantingListItem {
@@ -56,6 +63,7 @@ describe('栽培一覧', () => {
   beforeEach(() => {
     mockPush.mockReset();
     mockGetPlantingList.mockReset().mockResolvedValue([]);
+    mockGetNextActions.mockReset().mockResolvedValue([]);
   });
 
   it('記録が無ければ空状態を出す', async () => {
@@ -142,5 +150,47 @@ describe('栽培一覧', () => {
     render(<PlantingListScreen />);
 
     await waitFor(() => expect(screen.getByText(/収穫完了/)).toBeTruthy());
+  });
+
+  // ホームのカードは上位 2 件で畳み、残りを「ほか N 件 →」でこの一覧へ送る。
+  // 一覧が提案を参照していないと、飛んだ先で何も分からない
+  it('提案がある株には件数バッジを出す', async () => {
+    mockGetPlantingList.mockResolvedValue([
+      planting({ id: 'p1', cropName: 'トマト' }),
+      planting({ id: 'p2', cropName: 'ナス' }),
+    ]);
+    mockGetNextActions.mockResolvedValue([
+      {
+        plantingId: 'p1',
+        cropName: 'トマト',
+        kind: 'fertilize',
+        elapsedDays: 40,
+        thresholdDays: 30,
+      },
+      { plantingId: 'p1', cropName: 'トマト', kind: 'pinch', elapsedDays: 40, thresholdDays: 35 },
+      { plantingId: 'p2', cropName: 'ナス', kind: 'harvest', elapsedDays: 70, thresholdDays: 60 },
+    ]);
+    render(<PlantingListScreen />);
+
+    await waitFor(() => expect(screen.getByText(/つぎの作業 2件/)).toBeTruthy());
+    expect(screen.getByText(/つぎの作業 1件/)).toBeTruthy();
+    expect(screen.getByLabelText('つぎの作業が2件')).toBeTruthy();
+  });
+
+  it('提案が無い株にはバッジを出さない', async () => {
+    mockGetPlantingList.mockResolvedValue([planting({ id: 'p1', cropName: 'トマト' })]);
+    render(<PlantingListScreen />);
+
+    await waitFor(() => expect(screen.getByText('トマト')).toBeTruthy());
+    expect(screen.queryByText(/つぎの作業/)).toBeNull();
+  });
+
+  it('提案が引けなくても一覧は出す', async () => {
+    mockGetPlantingList.mockResolvedValue([planting({ id: 'p1', cropName: 'トマト' })]);
+    mockGetNextActions.mockRejectedValue(new Error('DB not ready'));
+    render(<PlantingListScreen />);
+
+    await waitFor(() => expect(screen.getByText('トマト')).toBeTruthy());
+    expect(screen.queryByText(/つぎの作業/)).toBeNull();
   });
 });

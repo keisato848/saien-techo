@@ -26,7 +26,7 @@ import {
   type CropCategory,
 } from '../../../src/db/crop-master';
 import { getCropGuideList, type CropGuideListItem } from '../../../src/services/crop-guide.service';
-import { CROP_NAME_ALIASES } from '../../../src/services/crop-match.service';
+import { CROP_NAME_ALIASES, toHiragana } from '../../../src/services/crop-match.service';
 
 type Filter = 'all' | 'now' | 'beginner' | 'container';
 
@@ -36,11 +36,6 @@ const FILTERS: { key: Filter; label: string }[] = [
   { key: 'beginner', label: '初心者向け' },
   { key: 'container', label: 'プランター' },
 ];
-
-/** カタカナ → ひらがな（読み仮名との比較用） */
-function toHiragana(text: string): string {
-  return text.replace(/[ァ-ヶ]/g, (ch) => String.fromCharCode(ch.charCodeAt(0) - 0x60));
-}
 
 /** 名前・読み・別名のどれかに当たるか。純関数にして絞り込みをテストで固定する */
 export function matchesQuery(crop: CropGuideListItem, query: string): boolean {
