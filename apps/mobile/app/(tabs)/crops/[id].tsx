@@ -128,7 +128,8 @@ export default function CropGuideDetailScreen() {
             <Pressable
               onPress={() => router.push('/region')}
               hitSlop={8}
-              accessibilityLabel="地域を変更"
+              // ラベルを付けると子の Text が読まれない（MonthlyWorkCard と同じ理由）
+              accessibilityLabel={`地域は${REGION_LABEL[detail.region]}。変更する`}
             >
               <Text style={styles.regionBadge}>{REGION_LABEL[detail.region]}</Text>
             </Pressable>

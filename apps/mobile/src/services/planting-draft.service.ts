@@ -34,10 +34,11 @@
  * 出す。サーバーが返さない場合が普通にある契約（自信が無ければ省略）なので、
  * その場合は撮影日をそのまま使う。**必ず直せる**（#139 の共通の作法）。
  */
-import { isNull } from 'drizzle-orm';
+import { and, isNull, like } from 'drizzle-orm';
 
 import { getDb, isNativePlatform } from '../db/client';
 import * as schema from '../db/schema';
+import { getMonthlyGardenWork } from './garden-work.service';
 import { consumeIdentifyCredit } from './identify-credit.service';
 import { getCropMaster, matchCropMaster, type CropMasterRow } from './crop-match.service';
 
@@ -111,6 +112,87 @@ export interface DraftProgress {
  * （成功時消費にすると、中断して再開するたびに無料で何度も送れてしまう）。
  * 残高が尽きたら、そこから先は `pending` のまま返す（手入力で登録できる）。
  */
+/**
+ * サーバーへ渡す作物名を選ぶ。
+ *
+ * **上限 40 はサーバー側の zod と揃えた契約**（`planting-identify.service.ts` の
+ * `MAX_KNOWN_CROPS`）。マスターが 4.19 で 50 品目になり、**上限を超えた 10 品目が
+ * 落ちるようになった**。落ちる 10 品目が DB の行順で決まっていたので、
+ * 「いま撮った写真に写っている可能性が高い作物」が落ちることがあった。
+ *
+ * 順番を意味のあるものにする:
+ *
+ * 1. **いま育てている作物** — 庭を撮っているのだから、写っている確率が一番高い
+ * 2. **今月が始めどき・採りどきの作物** — 買ってきた苗を撮る場面がこれ
+ * 3. 残り（マスターの順＝読み仮名順）
+ *
+ * 上限を上げるにはだいどこ側（`apps/server` の zod `.max(40)` と
+ * `identify-vision.ts` の `MAX_KNOWN_CROPS`）を**先に**デプロイする必要がある。
+ * クライアントだけ上げると 41 件以上が 400 で弾かれ、写真登録が全件失敗する。
+ * 上げるまでの間、この並べ替えが実質の対策になる。
+ */
+export function rankKnownCropNames(
+  master: CropMasterRow[],
+  growingCropIds: ReadonlySet<string>,
+  seasonalCropIds: ReadonlySet<string>,
+): string[] {
+  const rank = (row: CropMasterRow): number => {
+    if (growingCropIds.has(row.id)) return 0;
+    if (seasonalCropIds.has(row.id)) return 1;
+    return 2;
+  };
+  // 同じ優先度の中はマスターの順（読み仮名順）のまま。並びが毎回変わると
+  // 「前回は当たったのに今回は落ちた」が起きて原因を追えなくなる
+  return [...master]
+    .map((row, index) => ({ row, index }))
+    .sort((a, b) => rank(a.row) - rank(b.row) || a.index - b.index)
+    .map((entry) => entry.row.name);
+}
+
+/**
+ * 育成中の栽培に付いているマスター作物の id。
+ *
+ * **取れなくても送信は続ける。** 並べ替えは当たりやすさを上げるための補助で、
+ * ここで失敗して写真登録そのものを止める理由が無い（順番が素のマスター順に戻るだけ）。
+ */
+async function getGrowingCropIds(): Promise<Set<string>> {
+  if (!isNativePlatform) return new Set();
+  try {
+    const rows = await getDb()
+      .select({ cropId: schema.plantings.cropId })
+      .from(schema.plantings)
+      .where(and(isNull(schema.plantings.endedAt), like(schema.plantings.cropId, 'crop-%')));
+    return new Set(
+      (rows as { cropId: string | null }[])
+        .map((row) => row.cropId)
+        .filter((cropId): cropId is string => cropId != null),
+    );
+  } catch {
+    return new Set();
+  }
+}
+
+/** 今月の始めどき・採りどき（地域帯は利用者の設定） */
+async function getSeasonalCropIds(): Promise<Set<string>> {
+  if (!isNativePlatform) return new Set();
+  try {
+    const work = await getMonthlyGardenWork();
+    return new Set([...work.sow, ...work.plant, ...work.harvest].map((crop) => crop.cropId));
+  } catch {
+    // 文脈が取れなくても登録は続ける。順番が素のマスター順に戻るだけ
+    return new Set();
+  }
+}
+
+async function selectKnownCropNames(
+  master: CropMasterRow[],
+  context?: { growingCropIds?: ReadonlySet<string>; seasonalCropIds?: ReadonlySet<string> },
+): Promise<string[]> {
+  const growing = context?.growingCropIds ?? (await getGrowingCropIds());
+  const seasonal = context?.seasonalCropIds ?? (await getSeasonalCropIds());
+  return rankKnownCropNames(master, growing, seasonal);
+}
+
 export async function identifyPhotoBatch(
   imageUris: string[],
   onProgress?: (progress: DraftProgress) => void,
@@ -118,13 +200,14 @@ export async function identifyPhotoBatch(
     imageAdapter?: IdentifyImageAdapter;
     fetchFn?: typeof fetch;
     master?: CropMasterRow[];
+    context?: { growingCropIds?: ReadonlySet<string>; seasonalCropIds?: ReadonlySet<string> };
   },
 ): Promise<PlantingDraft[]> {
   const targets = imageUris.slice(0, MAX_IDENTIFY_BATCH);
   if (targets.length === 0) return [];
 
   const master = deps?.master ?? (await getCropMaster());
-  const knownCrops = master.map((row) => row.name);
+  const knownCrops = await selectKnownCropNames(master, deps?.context);
   const drafts: PlantingDraft[] = [];
 
   for (const imageUri of targets) {

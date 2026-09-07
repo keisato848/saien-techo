@@ -343,7 +343,7 @@ describe('作物ガイド詳細', () => {
     render(<CropGuideDetailScreen />);
     await waitFor(() => expect(screen.getByText('中間地')).toBeTruthy());
 
-    fireEvent.press(screen.getByLabelText('地域を変更'));
+    fireEvent.press(screen.getByLabelText('地域は中間地。変更する'));
 
     expect(mockPush).toHaveBeenCalledWith('/region');
   });

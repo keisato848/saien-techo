@@ -14,7 +14,7 @@ import * as FileSystem from 'expo-file-system/legacy';
 import { strFromU8, strToU8, unzipSync, zipSync } from 'fflate';
 
 import { getDb, getExpoDb, isNativePlatform } from '../db/client';
-import { rebuildPlantingFts } from '../db/migrate';
+import { rebuildPlantingFts, syncCropMaster } from '../db/migrate';
 import { resolvePhotoUri, toStoredPhotoPath } from './photo-path';
 
 const BACKUP_FORMAT = 'saien.local-backup';
@@ -71,27 +71,8 @@ const BACKUP_TABLES = [
 
   // ─── さいえん手帳（R01〜R12）─────────────────────────────────────────
   // 並びは外部キーの向きどおり。復元は上から INSERT、削除は下から DELETE する
-  {
-    name: 'crops',
-    columns: ['id', 'name', 'name_reading', 'family', 'default_unit', 'created_at', 'updated_at'],
-  },
-  {
-    name: 'crop_calendars',
-    columns: ['id', 'crop_id', 'region', 'kind', 'start_month', 'end_month'],
-  },
-  {
-    name: 'crop_guides',
-    columns: [
-      'crop_id',
-      'spacing_cm',
-      'sunlight',
-      'watering_note',
-      'fertilize_after_days',
-      'harvest_after_days',
-      'common_pests',
-      'tips',
-    ],
-  },
+  //
+  // **crops / crop_calendars / crop_guides はここに載せない**（BACKUP_EXCLUDED_TABLES 参照）。
   {
     name: 'places',
     columns: [
@@ -244,7 +225,22 @@ export const BACKUP_TABLE_NAMES: readonly string[] = BACKUP_TABLES.map((table) =
  * 該当していたが、WBS 2.9e でテーブルごと DROP したため今は空。
  * **新しいテーブルを黙って外さないための一覧**として残す（テストで突き合わせる）。
  */
-export const BACKUP_EXCLUDED_TABLES: readonly string[] = [];
+/**
+ * **意図的にバックアップへ入れないテーブル。**
+ *
+ * 作物マスターの 3 つ（crops / crop_calendars / crop_guides）は
+ * `syncCropMaster` がコードの `CROP_MASTER` から丸ごと作り直せる。利用者のデータではない。
+ *
+ * 入れていたときに何が起きたか（2026-09-07 に判明・4.19 で顕在化）:
+ * 列を足すたびにここの `columns` を書き足す必要があり、**4.19 の 18 列を書き忘れた**まま
+ * 通っていた。その状態で復元すると新しい列が全部 NULL になり、さらに `app_meta` ごと
+ * `crop_master_version` も書き戻るため `syncCropMaster` が「同版」と判断して入れ直さない。
+ * **復元しただけで進行帯の窓・作業の目安・適温が消え、次のリリースまで直らない。**
+ *
+ * 外したことで、列を足しても書き忘れが起きなくなり、バックアップも小さくなる。
+ * 代わりに**復元の直後に必ずマスターを入れ直す**（resyncCropMasterAfterRestore）。
+ */
+export const BACKUP_EXCLUDED_TABLES: readonly string[] = ['crops', 'crop_calendars', 'crop_guides'];
 
 export interface LocalBackupPayload {
   format: typeof BACKUP_FORMAT;
@@ -877,6 +873,24 @@ async function rebuildSearchIndexes(): Promise<void> {
   await rebuildPlantingFts(db);
 }
 
+/**
+ * 復元のあとに作物マスターを入れ直す。
+ *
+ * マスターの 3 テーブルはバックアップに入れていない（BACKUP_EXCLUDED_TABLES）が、
+ * `app_meta` は入れているので **`crop_master_version` が古い値に巻き戻る**ことがある。
+ * 巻き戻ったまま放置すると、次に版を上げるまで暦もガイドも古いままになる。
+ * 逆に同版のまま残ると `syncCropMaster` が即 return して、復元前の内容が残る。
+ *
+ * どちらの向きにも効くよう、**版の印を消してから**同期する。起動を待たずここで行うのは、
+ * 復元直後の画面（ホームの進行帯・今月の菜園仕事）がすぐ正しくなるようにするため。
+ */
+async function resyncCropMasterAfterRestore(): Promise<void> {
+  const db = getDb();
+  const expoDb = getExpoDb();
+  expoDb.runSync("DELETE FROM app_meta WHERE key = 'crop_master_version'");
+  await syncCropMaster(db);
+}
+
 export async function restoreLocalBackup(uri: string): Promise<BackupOperationResult> {
   assertNative();
   const raw = await FileSystem.readAsStringAsync(uri, { encoding: FileSystem.EncodingType.UTF8 });
@@ -889,6 +903,7 @@ export async function restoreLocalBackup(uri: string): Promise<BackupOperationRe
   normalizePhotoPaths(payload);
 
   replaceDatabase(payload);
+  await resyncCropMasterAfterRestore();
   await rebuildSearchIndexes();
 
   const fileName = uri.split('/').pop() ?? 'backup.json';

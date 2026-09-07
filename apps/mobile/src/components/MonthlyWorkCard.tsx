@@ -63,7 +63,7 @@ export function MonthlyWorkCard() {
         <Pressable
           onPress={() => router.push('/region')}
           hitSlop={8}
-          accessibilityLabel="地域を変更"
+          accessibilityLabel={`地域は${REGION_LABEL[work.region]}。変更する`}
         >
           <Text style={styles.region}>{REGION_LABEL[work.region]}</Text>
         </Pressable>
@@ -75,7 +75,10 @@ export function MonthlyWorkCard() {
             key={key}
             style={styles.row}
             onPress={() => router.push('/crops?now=1')}
-            accessibilityLabel={`${label}の作物を作物ガイドで見る`}
+            // **ラベルに中身を畳む。** Pressable は既定で 1 つのアクセシビリティ要素になり、
+            // ラベルを付けた時点で子の Text が読まれなくなる。行を押せるようにした 4.19 で、
+            // 読み上げ利用者から「何がまけるか」が丸ごと消えていた
+            accessibilityLabel={`${label}：${describeCropRow(work[key])}。作物ガイドで見る`}
           >
             <Text style={[styles.rowLabel, key === 'harvest' && styles.rowLabelHarvest]}>
               {label}
