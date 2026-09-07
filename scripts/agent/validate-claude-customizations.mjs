@@ -19,6 +19,8 @@ import { readdirSync, readFileSync, statSync, existsSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { extractRepoPathRefs, SELF_TEST } from './lib/repo-path-refs.mjs';
+
 const rootDir = resolve(fileURLToPath(new URL('../..', import.meta.url)));
 const claudeDir = join(rootDir, '.claude');
 const options = parseArgs(process.argv.slice(2));
@@ -563,6 +565,134 @@ function validateForeignIdentifiers() {
   }
 }
 
+// --- 手順書が指すパスの実在確認 ----------------------------------------------
+
+/** 走査対象。手順書と設計書（= 実行されないので、間違っても誰も落ちない場所） */
+const PATH_SCAN_ROOTS = ['.claude', 'docs'];
+
+/**
+ * 走査しないディレクトリと、その理由。**理由なしで足さないこと** —
+ * 除外を増やすほど、この検査は「何も見ていない」に近づく。
+ */
+const PATH_SCAN_SKIP = [
+  { prefix: 'docs/参考-daidoko/', reason: '移植元ドキュメントの写し。向こうのツリーを指す' }, // daidoko-ref-ok
+  { prefix: 'docs/レビュー記録/', reason: '当時の記録。過去のパスを後から書き換えない' },
+];
+
+/**
+ * `.gitignore` で無視される場所は**生成物**（`apps/mobile/android/`・ビルド出力・
+ * `.env`）なので、リポジトリに無くて当たり前。存在しないことを咎めない。
+ */
+function gitIgnoredPaths(paths) {
+  if (paths.length === 0) return new Set();
+  try {
+    const out = execFileSync('git', ['check-ignore', '--stdin'], {
+      cwd: rootDir,
+      input: paths.join('\n'),
+      encoding: 'utf8',
+    });
+    return new Set(
+      out
+        .split('\n')
+        .map((line) => line.trim())
+        .filter(Boolean),
+    );
+  } catch (error) {
+    // 1 件も一致しないと git は終了コード 1 を返す（エラーではない）。
+    // git が無い環境では stdout が空なので、結果として何も除外しない。
+    const out = typeof error?.stdout === 'string' ? error.stdout : '';
+    return new Set(
+      out
+        .split('\n')
+        .map((line) => line.trim())
+        .filter(Boolean),
+    );
+  }
+}
+
+function walkMarkdown(dir, out = []) {
+  if (!existsSync(dir)) return out;
+  for (const entry of readdirSync(dir)) {
+    if (entry === 'node_modules' || entry.startsWith('.git')) continue;
+    const full = join(dir, entry);
+    if (statSync(full).isDirectory()) walkMarkdown(full, out);
+    else if (entry.endsWith('.md')) out.push(full);
+  }
+  return out;
+}
+
+/** リポジトリ直下からの相対（POSIX 区切り） */
+function toRelative(fullPath) {
+  return fullPath.replace(rootDir, '').split(/[\\/]/).filter(Boolean).join('/');
+}
+
+/**
+ * 検査そのものが動いていることの確認（正・負の対照）。
+ *
+ * 「0 件だから合格」を信じるには、**検出できるはずのものを検出できる**ことを
+ * 先に確かめないといけない。このリポジトリでは検証コードのバグで
+ * 0 件を誤報しかけた実績が 2 回ある。
+ */
+function selfTestPathRefs() {
+  const missing = SELF_TEST.detected.filter(
+    (line) =>
+      extractRepoPathRefs(line).filter((ref) => !existsSync(join(rootDir, ref.path))).length === 0,
+  );
+  if (missing.length > 0) {
+    add(
+      'ERROR',
+      'path-ref-self-test',
+      'scripts/agent/lib/repo-path-refs.mjs',
+      `実在しないパスを検出できていない（抽出の条件が厳しすぎる）: ${missing.join(' / ')}`,
+    );
+  }
+
+  const falsePositives = SELF_TEST.ignored.filter(
+    (line) =>
+      extractRepoPathRefs(line).filter((ref) => !existsSync(join(rootDir, ref.path))).length > 0,
+  );
+  if (falsePositives.length > 0) {
+    add(
+      'ERROR',
+      'path-ref-self-test',
+      'scripts/agent/lib/repo-path-refs.mjs',
+      `パスでないものを拾っている（誤検出）: ${falsePositives.join(' / ')}`,
+    );
+  }
+}
+
+/**
+ * 手順書・設計書が書いているリポジトリ相対パスのうち、**実在しないもの**を落とす。
+ * 意図的な参照（未作成・移植元・停止中のスキル）は行末か先頭に `path-ref-ok: 理由` を書く。
+ */
+function validateRepoPathRefs() {
+  selfTestPathRefs();
+
+  const candidates = [];
+  for (const root of PATH_SCAN_ROOTS) {
+    for (const file of walkMarkdown(join(rootDir, root))) {
+      const rel = toRelative(file);
+      if (PATH_SCAN_SKIP.some((skip) => rel.startsWith(skip.prefix))) continue;
+      for (const ref of extractRepoPathRefs(readFileSync(file, 'utf8'))) {
+        if (existsSync(join(rootDir, ref.path))) continue;
+        candidates.push({ at: `${rel}:${ref.line}`, path: ref.path });
+      }
+    }
+  }
+
+  const ignored = gitIgnoredPaths([...new Set(candidates.map((c) => c.path))]);
+  for (const { at, path } of candidates) {
+    if (ignored.has(path)) continue;
+    add(
+      'ERROR',
+      'missing-path-ref',
+      at,
+      `\`${path}\` が存在しない。手順どおりに実行しても動かない。` +
+        '正しいパスへ直すか、意図した参照なら行末に `path-ref-ok`（理由つき）を書くこと',
+    );
+  }
+}
+
 // --- 実行 --------------------------------------------------------------------
 
 function parseArgs(argv) {
@@ -582,6 +712,7 @@ validateAgents();
 validateHooks();
 validateForeignIdentifiers();
 validateIgnoredSources();
+validateRepoPathRefs();
 
 const errors = findings.filter((finding) => finding.severity === 'ERROR');
 const warnings = findings.filter((finding) => finding.severity === 'WARN');
