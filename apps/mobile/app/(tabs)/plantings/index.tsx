@@ -34,6 +34,7 @@ import { EmptyState } from '../../../src/components/EmptyState';
 import { Loading } from '../../../src/components/Loading';
 import { PressableScale } from '../../../src/components/PressableScale';
 import { Colors, Typography } from '../../../src/constants/theme';
+import { getNextActions } from '../../../src/services/next-action.service';
 import { getPlaceList } from '../../../src/services/place.service';
 import {
   getPlantingList,
@@ -54,6 +55,7 @@ export default function PlantingListScreen() {
   const [plantings, setPlantings] = useState<PlantingListItem[]>([]);
   const [places, setPlaces] = useState<PlaceItem[]>([]);
   const [allTags, setAllTags] = useState<string[]>([]);
+  const [actionCounts, setActionCounts] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
 
   const [filter, setFilter] = useState<Filter>('growing');
@@ -89,6 +91,30 @@ export default function PlantingListScreen() {
         setPlaces(await getPlaceList());
         setAllTags(await getPlantingTagNames());
       })();
+    }, []),
+  );
+
+  /**
+   * 行に添える「つぎの作業」の件数（レビュー 9 / R10）。
+   *
+   * ホームのカードは上位 2 件だけ出し、残りは「ほか N 件 →」でこの一覧へ送る。
+   * ところが**一覧は提案を一切参照していなかった**ので、飛んだ先で
+   * 「どの株に何が溜まっているのか」が分からなかった。
+   *
+   * 並び順や件数の絞り込みはサービス側の領分。ここは plantingId で数えるだけにする。
+   * 失敗しても一覧は出す（提案は補助であって、栽培を見る妨げにしない）。
+   */
+  useFocusEffect(
+    useCallback(() => {
+      void getNextActions()
+        .then((actions) => {
+          const counts: Record<string, number> = {};
+          for (const action of actions) {
+            counts[action.plantingId] = (counts[action.plantingId] ?? 0) + 1;
+          }
+          setActionCounts(counts);
+        })
+        .catch(() => setActionCounts({}));
     }, []),
   );
 
@@ -270,6 +296,14 @@ export default function PlantingListScreen() {
                     .filter(Boolean)
                     .join(' ・ ')}
                 </Text>
+                {actionCounts[item.id] ? (
+                  <Text
+                    style={styles.actionBadge}
+                    accessibilityLabel={`つぎの作業が${actionCounts[item.id]}件`}
+                  >
+                    つぎの作業 {actionCounts[item.id]}件
+                  </Text>
+                ) : null}
               </View>
 
               {/* 経過日数は栽培の主指標なので右端に固定して縦に揃える（docs/画面設計.md S02） */}
@@ -508,6 +542,17 @@ const styles = StyleSheet.create({
   },
   variety: { fontWeight: Typography.weight.regular, color: Colors.inkDim },
   meta: { fontSize: Typography.size.xs, color: Colors.inkDim },
+  // 提案があることだけ分かればよいので、行の中で小さく収める
+  actionBadge: {
+    alignSelf: 'flex-start',
+    fontSize: Typography.size.xs,
+    color: Colors.accentInk,
+    backgroundColor: Colors.accentSoft,
+    borderRadius: 10,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    overflow: 'hidden',
+  },
   elapsed: { alignItems: 'flex-end', minWidth: 44 },
   elapsedNumber: {
     fontSize: Typography.size.xl,
