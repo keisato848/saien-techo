@@ -15,7 +15,20 @@ import type { PlantingProgress } from '../services/growth-progress.service';
  * - **凡例は置かない。** ホームで凡例が要る色分けは、その時点で複雑すぎる
  *
  * **収穫の「窓」**（4.19）: マスターが収穫の幅を持つ作物は、幅の最小から右端までを
- * 収穫色の薄い帯で示す。幅を持たない作物は従来どおり右端の 1 点が目安。
+ * 収穫色の帯で示す。幅を持たない作物は従来どおり右端の 1 点が目安。
+ *
+ * 窓の描き方は 3 点を直した（4.19 レビュー 3）:
+ *
+ * - 面は `harvestSoft` → **`harvestLine`**。`surfaceInput`（残りの色）に対する
+ *   コントラストが 1.01 しかなく、**窓があってもまず見えなかった**
+ * - 窓の始まりに**縦のティック**を打つ（`harvest`・対 track 3.95:1）。
+ *   面の濃さだけに頼らず、境界そのものを線で示す
+ * - 窓の矩形から **`rx` を外す**。角丸は端を最大 4px 削り、
+ *   90 日の帯（92px）では**境界が 13 日ずれて見えた**
+ *
+ * **軸は必ずしも「植え付け → 収穫」ではない**（レビュー 16）。収穫中で
+ * 採り入れ期間が分かる作物は `bandStartDay` が初収穫の日に移り、帯が
+ * 「初収穫 → 採り終わり」になる。そのときは帯そのものが収穫期間なので窓は描かない。
  */
 interface ProgressBandProps {
   progress: PlantingProgress;
@@ -32,15 +45,20 @@ export function ProgressBand({ progress, width }: ProgressBandProps) {
   if (progress.ratio == null) return <View style={{ height: HEIGHT }} />;
 
   const filled = Math.max(2, Math.round(width * progress.ratio));
-  // 「due（未収穫で目安超過）」だけ収穫色。収穫中は正常な状態なので緑のまま
-  const due = progress.state === 'due';
-  const target = progress.harvestAfterDays ?? 1;
+  // 「未収穫で目安を過ぎた（due / over）」だけ収穫色。収穫中は正常な状態なので緑のまま
+  const due = progress.state === 'due' || progress.state === 'over';
+  // 帯の軸（植え付けからの日数）。収穫中は初収穫 → 採り終わりに移ることがある
+  const axisStart = progress.bandStartDay;
+  const axisEnd = progress.bandEndDay ?? axisStart + 1;
+  const span = Math.max(1, axisEnd - axisStart);
+  const xForDay = (day: number) => ((day - axisStart) / span) * width;
   // 満杯の帯では今日マーカーが意味を持たず、右端で切れて欠けにも見えるので出さない
   const showToday = progress.ratio < 1;
-  // 収穫の窓。帯の右端 = 幅の最大なので、最小の位置から右端まで
+  // 収穫の窓。帯の右端 = 幅の最大なので、最小の位置から右端まで。
+  // 軸が採り入れ期間に切り替わっているときは帯そのものが収穫期間なので描かない
   const windowStart =
-    progress.harvestWindow != null
-      ? Math.round((progress.harvestWindow.min / target) * width)
+    progress.harvestWindow != null && axisStart === 0
+      ? Math.round(xForDay(progress.harvestWindow.min))
       : null;
 
   return (
@@ -55,15 +73,15 @@ export function ProgressBand({ progress, width }: ProgressBandProps) {
           rx={BAR_H / 2}
           fill={Colors.surfaceInput}
         />
-        {/* 収穫の窓（あれば）。塗りの下に敷いて「ここから採れる」を示す */}
+        {/* 収穫の窓（あれば）。塗りの下に敷いて「ここから採れる」を示す。
+         **角丸は付けない** — 左端が丸まると窓の始まりが実際より右に見える */}
         {windowStart != null ? (
           <Rect
             x={windowStart}
             y={BAR_Y}
             width={Math.max(0, width - windowStart)}
             height={BAR_H}
-            rx={BAR_H / 2}
-            fill={Colors.harvestSoft}
+            fill={Colors.harvestLine}
             testID="progress-band-window"
           />
         ) : null}
@@ -76,11 +94,22 @@ export function ProgressBand({ progress, width }: ProgressBandProps) {
           rx={BAR_H / 2}
           fill={due ? Colors.harvest : Colors.accent}
         />
+        {/* 窓の始まりのティック。面の濃さだけでは境界が読めない */}
+        {windowStart != null ? (
+          <Rect
+            x={Math.min(width - 1.5, windowStart)}
+            y={BAR_Y - 2}
+            width={1.5}
+            height={BAR_H + 4}
+            fill={Colors.harvest}
+            testID="progress-band-window-tick"
+          />
+        ) : null}
         {/* 作業ログのドット */}
         {progress.logDays.map((day) => (
           <Circle
             key={day}
-            cx={Math.min(width - 2, Math.max(2, (day / target) * width))}
+            cx={Math.min(width - 2, Math.max(2, xForDay(day)))}
             cy={BAR_Y + BAR_H + 6}
             r={1.8}
             fill={Colors.accentLine}

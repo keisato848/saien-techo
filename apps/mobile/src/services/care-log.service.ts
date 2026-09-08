@@ -11,6 +11,7 @@
 import { and, desc, eq, inArray } from 'drizzle-orm';
 
 import { getDb, isNativePlatform } from '../db/client';
+import type { CropTaskKind } from '../db/crop-master';
 import * as schema from '../db/schema';
 import { generateId } from '../utils/id';
 import { resolvePhotoUris, toStoredPhotoPath } from './photo-path';
@@ -80,6 +81,7 @@ export async function getCareLogs(plantingId: string): Promise<CareLogItem[]> {
       id: schema.careLogs.id,
       plantingId: schema.careLogs.plantingId,
       kind: schema.careLogs.kind,
+      taskKind: schema.careLogs.taskKind,
       loggedAt: schema.careLogs.loggedAt,
       note: schema.careLogs.note,
     })
@@ -96,6 +98,7 @@ export async function getCareLogs(plantingId: string): Promise<CareLogItem[]> {
     id: row.id,
     plantingId: row.plantingId,
     kind: row.kind as CareLogKind,
+    taskKind: (row.taskKind as CropTaskKind | null) ?? null,
     loggedAt: row.loggedAt,
     note: row.note,
     photoUris: resolvePhotoUris(photos.get(row.id) ?? []),
@@ -111,6 +114,7 @@ export async function getCareLog(logId: string): Promise<CareLogItem | null> {
       id: schema.careLogs.id,
       plantingId: schema.careLogs.plantingId,
       kind: schema.careLogs.kind,
+      taskKind: schema.careLogs.taskKind,
       loggedAt: schema.careLogs.loggedAt,
       note: schema.careLogs.note,
     })
@@ -125,6 +129,7 @@ export async function getCareLog(logId: string): Promise<CareLogItem | null> {
     id: row.id,
     plantingId: row.plantingId,
     kind: row.kind as CareLogKind,
+    taskKind: (row.taskKind as CropTaskKind | null) ?? null,
     loggedAt: row.loggedAt,
     note: row.note,
     photoUris: resolvePhotoUris(photos.get(row.id) ?? []),
@@ -148,6 +153,7 @@ export async function createCareLog(input: SaveCareLogInput): Promise<string> {
     id,
     plantingId: input.plantingId,
     kind: input.kind,
+    taskKind: input.taskKind ?? null,
     loggedAt: input.loggedAt ?? now,
     note: input.note?.trim() || null,
     createdAt: now,
@@ -169,6 +175,9 @@ export async function updateCareLog(
     .update(schema.careLogs)
     .set({
       kind: input.kind,
+      // 呼び出し側が読み込んだ値をそのまま返してくる前提。渡さなければ NULL に落ちる
+      // （手書きに戻す＝暦の作業ではなくなった、という意味になる）
+      taskKind: input.taskKind ?? null,
       loggedAt: input.loggedAt ?? nowIso(),
       note: input.note?.trim() || null,
       updatedAt: nowIso(),

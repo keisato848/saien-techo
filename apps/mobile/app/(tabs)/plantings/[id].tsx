@@ -32,13 +32,14 @@ import { PressableScale } from '../../../src/components/PressableScale';
 import { TagChip } from '../../../src/components/TagChip';
 import { Toast } from '../../../src/components/Toast';
 import { Colors, Typography } from '../../../src/constants/theme';
+import { CROP_TASK_LABEL } from '../../../src/db/crop-master';
 import { formatDateLabel } from '../../../src/components/DateField';
 import { getReminders } from '../../../src/services/reminder.service';
 import {
-  careLogKindForAction,
   describeNextAction,
   getNextActionsForPlanting,
-  nextActionLabel,
+  nextActionRecordHref,
+  nextActionRecordLabel,
   type NextAction,
 } from '../../../src/services/next-action.service';
 import { describeSchedule } from '../../../src/utils/reminderSchedule';
@@ -203,14 +204,8 @@ export default function PlantingDetailScreen() {
               <Pressable
                 key={`${action.kind}-${action.thresholdDays}`}
                 style={styles.adviceRow}
-                onPress={() =>
-                  router.push(
-                    action.kind === 'harvest'
-                      ? `/plantings/${id}/harvests/new`
-                      : `/plantings/${id}/care-logs/new?kind=${careLogKindForAction(action.kind)}`,
-                  )
-                }
-                accessibilityLabel={`${nextActionLabel(action)}を記録する`}
+                onPress={() => router.push(nextActionRecordHref(action))}
+                accessibilityLabel={`${nextActionRecordLabel(action)}を記録する`}
               >
                 <BellRing size={15} color={Colors.accentInk} />
                 <Text style={styles.adviceText}>{describeNextAction(action)}</Text>
@@ -323,7 +318,11 @@ export default function PlantingDetailScreen() {
               >
                 <View style={styles.logDot} />
                 <View style={styles.logBody}>
-                  <Text style={styles.logKind}>{CARE_KIND_LABEL[log.kind]}</Text>
+                  {/* 「つぎの作業」から記録したものは、その作業名で出す（v16）。
+                      kind だけだと支柱も土寄せも防虫ネットも「その他」になってしまう */}
+                  <Text style={styles.logKind}>
+                    {log.taskKind ? CROP_TASK_LABEL[log.taskKind] : CARE_KIND_LABEL[log.kind]}
+                  </Text>
                   {log.note ? (
                     <Text style={styles.logNote} numberOfLines={2}>
                       {log.note}

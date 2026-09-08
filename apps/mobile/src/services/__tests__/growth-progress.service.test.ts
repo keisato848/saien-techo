@@ -143,6 +143,90 @@ describeIfSqlite('growth-progress.service (real SQLite)', () => {
     expect(progress.daysToHarvest).toBe(15);
   });
 
+  // 幅の最大も過ぎたのに due のままだと「採りどき」が終わらず、
+  // ダイコンの 60 日目も 120 日目も同じ表示になっていた（4.19 レビュー 10）
+  it('幅の最大も過ぎて未収穫なら over（終わりごろ）', async () => {
+    mockHandles.expoDb.runSync(
+      "UPDATE crop_guides SET harvest_window_min_days = 50, harvest_window_max_days = 70 WHERE crop_id = 'crop-tomato'",
+    );
+
+    const inWindow = await progressFor(await seedPlanting({ cropId: 'crop-tomato', daysAgo: 70 }));
+    expect(inWindow.state).toBe('due');
+    expect(describeProgress(inWindow)).toBe('採りどき');
+
+    const over = await progressFor(await seedPlanting({ cropId: 'crop-tomato', daysAgo: 71 }));
+    expect(over.state).toBe('over');
+    expect(over.ratio).toBe(1);
+    // 咎めない。「過ぎています」は出さない
+    expect(describeProgress(over)).toBe('終わりごろ');
+  });
+
+  it('幅を持たない旧データは過ぎても due のまま（over にしない）', async () => {
+    const progress = await progressFor(await seedPlanting({ cropId: 'crop-tomato', daysAgo: 200 }));
+    expect(progress.state).toBe('due');
+  });
+
+  // 28 品目で「満杯固定の期間 ÷ 在圃期間」が平均 37%（バジル 69% / シソ 64%）あり、
+  // その間ずっと帯が右端に貼りついて動かなかった（4.19 レビュー 16）
+  describe('収穫中の帯（採り入れ期間の軸）', () => {
+    beforeEach(() => {
+      mockHandles.expoDb.runSync(
+        "UPDATE crop_guides SET harvest_duration_days = 40 WHERE crop_id = 'crop-tomato'",
+      );
+    });
+
+    it('初収穫からの残りで帯が動く', async () => {
+      const plantingId = await seedPlanting({ cropId: 'crop-tomato', daysAgo: 70 });
+      await createHarvest({ plantingId, harvestedAt: isoDaysAgo(10) }); // 60 日目に初収穫
+
+      const progress = await progressFor(plantingId);
+
+      expect(progress.state).toBe('harvesting');
+      expect(progress.bandStartDay).toBe(60);
+      expect(progress.bandEndDay).toBe(100);
+      expect(progress.ratio).toBeCloseTo(10 / 40, 5);
+      expect(progress.daysLeftInHarvest).toBe(30);
+      expect(describeProgress(progress)).toBe('あと30日 採れる');
+    });
+
+    it('いちばん古い収穫が左端になる（あとから古い日付を足しても動く）', async () => {
+      const plantingId = await seedPlanting({ cropId: 'crop-tomato', daysAgo: 70 });
+      await createHarvest({ plantingId, harvestedAt: isoDaysAgo(5) });
+      await createHarvest({ plantingId, harvestedAt: isoDaysAgo(20) });
+
+      const progress = await progressFor(plantingId);
+
+      expect(progress.bandStartDay).toBe(50);
+      expect(progress.bandEndDay).toBe(90);
+    });
+
+    it('採り入れ期間を過ぎたら満杯に戻り、回数の表示に戻る', async () => {
+      const plantingId = await seedPlanting({ cropId: 'crop-tomato', daysAgo: 130 });
+      await createHarvest({ plantingId, harvestedAt: isoDaysAgo(70) }); // 60 日目に初収穫
+
+      const progress = await progressFor(plantingId);
+
+      expect(progress.ratio).toBe(1);
+      expect(progress.daysLeftInHarvest).toBeNull();
+      expect(describeProgress(progress)).toBe('1回 採れた');
+    });
+
+    it('採り入れ期間を持たない作物は今までどおり満杯・回数のまま', async () => {
+      mockHandles.expoDb.runSync(
+        "UPDATE crop_guides SET harvest_duration_days = NULL WHERE crop_id = 'crop-tomato'",
+      );
+      const plantingId = await seedPlanting({ cropId: 'crop-tomato', daysAgo: 70 });
+      await createHarvest({ plantingId, harvestedAt: isoDaysAgo(10) });
+
+      const progress = await progressFor(plantingId);
+
+      expect(progress.bandStartDay).toBe(0);
+      expect(progress.bandEndDay).toBe(60);
+      expect(progress.ratio).toBe(1);
+      expect(describeProgress(progress)).toBe('1回 採れた');
+    });
+  });
+
   it('未収穫で目安を過ぎたら due（採りどき）', async () => {
     const plantingId = await seedPlanting({ cropId: 'crop-tomato', daysAgo: 70 });
 

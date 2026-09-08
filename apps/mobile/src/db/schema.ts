@@ -270,6 +270,12 @@ export const careLogs = sqliteTable(
     // water=水やり / fertilize=追肥 / transplant=植え替え /
     // prune=剪定 / pest=防除 / other
     kind: text('kind').notNull(),
+    // 栽培暦の作業（CropTaskKind: pinch / stake / hill / thin / sucker /
+    // fruit-thin / net）。v16。**kind の 6 語彙では作業を区別できない** —
+    // 支柱・土寄せ・間引き・防虫ネットが揃って `other` に潰れ、草取り 1 件で
+    // 4 つの提案がまとめて「済み」になっていた（4.19 レビュー 6）。
+    // 手書きのログは NULL のまま（提案側が kind へフォールバックする）
+    taskKind: text('task_kind'),
     loggedAt: text('logged_at').notNull(),
     note: text('note'),
     createdAt: text('created_at').notNull(),

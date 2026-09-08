@@ -81,6 +81,56 @@ describe('作業を記録（?kind= つき）', () => {
     );
   });
 
+  // v16: kind は 6 語彙しか無く、土寄せも間引きも防虫ネットも `other` になる。
+  // ?task= を保存しないと、タイムラインに「その他」としか残らない（4.19 レビュー 6）
+  it('?task= を作業ログに残す', async () => {
+    mockParams = { id: 'p1', kind: 'other', task: 'hill' };
+    render(<NewCareLogScreen />);
+
+    fireEvent.press(screen.getByText('記録'));
+
+    await waitFor(() =>
+      expect(mockCreateCareLog).toHaveBeenCalledWith(
+        expect.objectContaining({ kind: 'other', taskKind: 'hill' }),
+      ),
+    );
+  });
+
+  it('知らない task は捨てる（手で URL を作られても壊れない）', async () => {
+    mockParams = { id: 'p1', kind: 'other', task: 'こわれた値' };
+    render(<NewCareLogScreen />);
+
+    fireEvent.press(screen.getByText('記録'));
+
+    await waitFor(() =>
+      expect(mockCreateCareLog).toHaveBeenCalledWith(
+        expect.objectContaining({ kind: 'other', taskKind: null }),
+      ),
+    );
+  });
+
+  it('?note= はメモの下書きとして入れておく', async () => {
+    mockParams = { id: 'p1', kind: 'other', task: 'thin', note: '本葉 1〜2 枚で' };
+    render(<NewCareLogScreen />);
+
+    expect(screen.getByDisplayValue('本葉 1〜2 枚で')).toBeTruthy();
+  });
+
+  // 土寄せも間引きも kind=other。鍵が kind だけだと作り直されず、前の作業のまま記録される
+  it('同じ kind で違う task に開き直すと、その task に入れ替わる', async () => {
+    mockParams = { id: 'p1', kind: 'other', task: 'hill' };
+    const view = render(<NewCareLogScreen />);
+
+    mockParams = { id: 'p1', kind: 'other', task: 'thin' };
+    view.rerender(<NewCareLogScreen />);
+
+    fireEvent.press(screen.getByText('記録'));
+
+    await waitFor(() =>
+      expect(mockCreateCareLog).toHaveBeenCalledWith(expect.objectContaining({ taskKind: 'thin' })),
+    );
+  });
+
   // 実機で踏んだ不具合。key が無いと 2 回目が前回の kind のまま開く
   it('続けて違う kind で開き直すと、その kind に入れ替わる', async () => {
     mockParams = { id: 'p1', kind: 'water' };
@@ -145,6 +195,23 @@ describe('記録を編集', () => {
       expect(mockUpdateCareLog).toHaveBeenCalledWith(
         'care-3',
         expect.objectContaining({ kind: 'prune', note: 'わき芽かき' }),
+      ),
+    );
+  });
+
+  // 渡し忘れると、メモを直しただけで「土寄せ」がただの「その他」に戻り、提案がまた出てくる
+  it('栽培暦の作業（task_kind）は編集で消えない', async () => {
+    mockParams = { id: 'p1', logId: 'care-1' };
+    mockGetCareLog.mockResolvedValue(log({ kind: 'other', taskKind: 'hill' }));
+    render(<EditCareLogScreen />);
+    await waitFor(() => expect(screen.getByDisplayValue('朝に水やり')).toBeTruthy());
+
+    fireEvent.press(screen.getByText('保存'));
+
+    await waitFor(() =>
+      expect(mockUpdateCareLog).toHaveBeenCalledWith(
+        'care-1',
+        expect.objectContaining({ taskKind: 'hill' }),
       ),
     );
   });

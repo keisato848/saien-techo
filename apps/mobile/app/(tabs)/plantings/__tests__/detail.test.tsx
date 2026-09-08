@@ -100,6 +100,7 @@ function careLog(overrides: Partial<CareLogItem> & { id: string }): CareLogItem 
   return {
     plantingId: 'p1',
     kind: 'water',
+    taskKind: null,
     loggedAt: '2026-06-01T00:00:00.000Z',
     note: null,
     photoUris: [],
@@ -198,6 +199,20 @@ describe('栽培詳細 — 表示', () => {
     expect(mockPush).toHaveBeenCalledWith('/plantings/p1/care-logs/care-9');
   });
 
+  // v16: kind に潰すと支柱も土寄せも防虫ネットも「その他」になり、
+  // 何をやったのか記録から読めなかった（4.19 レビュー 6）
+  it('栽培暦の作業はその作業名で出す（「その他」にしない）', async () => {
+    mockGetCareLogs.mockResolvedValue([
+      careLog({ id: 'care-1', kind: 'other', taskKind: 'hill' }),
+      careLog({ id: 'care-2', kind: 'other', taskKind: null }),
+    ]);
+    render(<PlantingDetailScreen />);
+
+    await waitFor(() => expect(screen.getByText('土寄せ')).toBeTruthy());
+    // 手書きの「その他」は今までどおり
+    expect(screen.getByText('その他')).toBeTruthy();
+  });
+
   it('収穫が無ければ収穫セクションごと出さない', async () => {
     render(<PlantingDetailScreen />);
 
@@ -276,6 +291,38 @@ describe('栽培詳細 — 記録の導線', () => {
     fireEvent.press(screen.getByLabelText('追肥を記録する'));
 
     expect(mockPush).toHaveBeenCalledWith('/plantings/p1/care-logs/new?kind=fertilize');
+  });
+
+  // v16: kind だけを渡していた頃は「土寄せを記録する」で開いても
+  // タイムラインに「その他」としか残らなかった（4.19 レビュー 6）
+  it('つぎの作業「土寄せ」は kind と task を渡して作業記録を開く', async () => {
+    mockGetNextActions.mockResolvedValue([
+      {
+        plantingId: 'p1',
+        cropName: 'トマト',
+        kind: 'hill',
+        elapsedDays: 36,
+        thresholdDays: 35,
+      },
+    ]);
+    render(<PlantingDetailScreen />);
+
+    await waitFor(() => expect(screen.getByLabelText('土寄せ（35日目安）を記録する')).toBeTruthy());
+    fireEvent.press(screen.getByLabelText('土寄せ（35日目安）を記録する'));
+
+    expect(mockPush).toHaveBeenCalledWith('/plantings/p1/care-logs/new?kind=other&task=hill');
+  });
+
+  // カブの間引きは 10 日と 20 日の 2 回あり、両方が猶予に入る期間がある（4.19 レビュー 12）
+  it('同じ作業が 2 件並んでもラベルが重ならない', async () => {
+    mockGetNextActions.mockResolvedValue([
+      { plantingId: 'p1', cropName: 'カブ', kind: 'thin', elapsedDays: 22, thresholdDays: 10 },
+      { plantingId: 'p1', cropName: 'カブ', kind: 'thin', elapsedDays: 22, thresholdDays: 20 },
+    ]);
+    render(<PlantingDetailScreen />);
+
+    await waitFor(() => expect(screen.getByLabelText('間引き（10日目安）を記録する')).toBeTruthy());
+    expect(screen.getByLabelText('間引き（20日目安）を記録する')).toBeTruthy();
   });
 
   it('つぎの作業「収穫」は収穫の記録画面を開く', async () => {
