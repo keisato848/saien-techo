@@ -2,6 +2,7 @@
  * Service layer shared types
  * Used across all services for consistent data contracts
  */
+import type { CropTaskKind } from '../db/crop-master';
 
 export interface RecipeListItem {
   id: string;
@@ -297,6 +298,12 @@ export interface CareLogItem {
   id: string;
   plantingId: string;
   kind: CareLogKind;
+  /**
+   * 栽培暦の作業（v16）。「つぎの作業」から記録したときだけ入る。
+   * kind の 6 語彙は支柱・土寄せ・間引き・防虫ネットをまとめて `other` にしてしまうので、
+   * 提案の済み判定とタイムラインの表示はこちらを優先する
+   */
+  taskKind: CropTaskKind | null;
   loggedAt: string;
   note: string | null;
   /** 端末内の写真パス。最大 6 枚（R04） */
@@ -306,6 +313,8 @@ export interface CareLogItem {
 export interface SaveCareLogInput {
   plantingId: string;
   kind: CareLogKind;
+  /** 「つぎの作業」から来たときだけ入れる（v16）。手書きの記録は未指定 = NULL */
+  taskKind?: CropTaskKind | null;
   /** 未指定なら「今」（R04 の日時自動設定） */
   loggedAt?: string;
   note?: string;

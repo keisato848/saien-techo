@@ -10,7 +10,7 @@
  * マスターの更新は syncCropMaster（起動時）だけが行う。
  * 出典（sourceIds）は DB に持たず、コードのマスターを id で引く（検討文書 §2 ②）。
  */
-import { asc, eq, like } from 'drizzle-orm';
+import { and, asc, eq, like } from 'drizzle-orm';
 
 import { getDb, isNativePlatform } from '../db/client';
 import {
@@ -37,7 +37,14 @@ export interface CropGuideListItem {
   /** 編集者判断。一覧の絞り込みにだけ使う */
   beginner: boolean;
   containerOk: boolean;
-  /** 今月・選択地域で種まき or 植え付けの窓に入っているか */
+  /** 今月・選択地域で種まきの窓に入っているか */
+  sowNow: boolean;
+  /** 今月・選択地域で植え付けの窓に入っているか */
+  plantNow: boolean;
+  /**
+   * sowNow || plantNow。一覧の絞り込みは「まきどき」「植えどき」に割ったが
+   * （4.19 レビュー 19）、作付け計画フォームは「始めどき」の 1 印で足りるので残す
+   */
   startNow: boolean;
   /** 今月・選択地域で収穫の窓に入っているか */
   harvestNow: boolean;
@@ -114,7 +121,7 @@ export function formatMonthRange(startMonth: number, endMonth: number): string {
 
 const KIND_ORDER: Record<CropCalendarRow['kind'], number> = { sow: 0, plant: 1, harvest: 2 };
 
-/** ガイドの一覧。読み仮名順。今月の始めどき・採りどきの印つき */
+/** ガイドの一覧。読み仮名順。今月のまきどき・植えどき・採りどきの印つき */
 export async function getCropGuideList(now: Date = new Date()): Promise<CropGuideListItem[]> {
   if (!isNativePlatform) return [];
 
@@ -134,24 +141,27 @@ export async function getCropGuideList(now: Date = new Date()): Promise<CropGuid
     .where(like(schema.crops.id, 'crop-%'))
     .orderBy(asc(schema.crops.nameReading));
 
+  // 地域は SQL で絞る。50 品目 × 3 種 × 3 地域で 346 行あり、JS で捨てていた頃は
+  // 画面にフォーカスするたび 2/3 が無駄になっていた（4.19 レビュー 31b）
   const windows = await db
     .select({
       cropId: schema.cropCalendars.cropId,
-      region: schema.cropCalendars.region,
       kind: schema.cropCalendars.kind,
       startMonth: schema.cropCalendars.startMonth,
       endMonth: schema.cropCalendars.endMonth,
     })
     .from(schema.cropCalendars)
-    .where(like(schema.cropCalendars.cropId, 'crop-%'));
+    .where(
+      and(like(schema.cropCalendars.cropId, 'crop-%'), eq(schema.cropCalendars.region, region)),
+    );
 
-  const inWindowNow = new Map<string, { start: boolean; harvest: boolean }>();
+  const inWindowNow = new Map<string, { sow: boolean; plant: boolean; harvest: boolean }>();
   for (const w of windows) {
-    if (w.region !== region) continue;
     if (!isMonthInWindow(month, w.startMonth, w.endMonth)) continue;
-    const entry = inWindowNow.get(w.cropId) ?? { start: false, harvest: false };
+    const entry = inWindowNow.get(w.cropId) ?? { sow: false, plant: false, harvest: false };
     if (w.kind === 'harvest') entry.harvest = true;
-    else entry.start = true;
+    else if (w.kind === 'plant') entry.plant = true;
+    else entry.sow = true;
     inWindowNow.set(w.cropId, entry);
   }
 
@@ -171,6 +181,7 @@ export async function getCropGuideList(now: Date = new Date()): Promise<CropGuid
     .filter((crop) => guideById.has(crop.cropId))
     .map((crop) => {
       const guide = guideById.get(crop.cropId);
+      const win = inWindowNow.get(crop.cropId);
       return {
         cropId: crop.cropId,
         name: crop.name,
@@ -180,8 +191,10 @@ export async function getCropGuideList(now: Date = new Date()): Promise<CropGuid
         perennial: guide?.perennial === 1,
         beginner: guide?.beginner === 1,
         containerOk: guide?.containerOk === 1,
-        startNow: inWindowNow.get(crop.cropId)?.start ?? false,
-        harvestNow: inWindowNow.get(crop.cropId)?.harvest ?? false,
+        sowNow: win?.sow ?? false,
+        plantNow: win?.plant ?? false,
+        startNow: (win?.sow ?? false) || (win?.plant ?? false),
+        harvestNow: win?.harvest ?? false,
       };
     });
 }

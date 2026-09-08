@@ -9,11 +9,17 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { Plus } from 'lucide-react-native';
 import { Controller, useForm } from 'react-hook-form';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Colors, Typography } from '../constants/theme';
+import {
+  ambiguousCropCandidates,
+  getCropMaster,
+  suggestCropNames,
+  type CropMasterRow,
+} from '../services/crop-match.service';
 import { getPlaceList } from '../services/place.service';
 import { elapsedDaysFrom, getPlantingTagNames } from '../services/planting.service';
 import { checkRotation, type RotationWarning } from '../services/rotation.service';
@@ -66,6 +72,7 @@ export function PlantingForm({
   const [availableTags, setAvailableTags] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
   const [rotationWarning, setRotationWarning] = useState<RotationWarning | null>(null);
+  const [cropMaster, setCropMaster] = useState<CropMasterRow[]>([]);
 
   const {
     control,
@@ -103,6 +110,60 @@ export function PlantingForm({
   const plantedAs = watch('plantedAs');
   const plantedOn = watch('plantedOn');
   const cropName = watch('cropName');
+  const cropNameReading = watch('cropNameReading');
+
+  /**
+   * 作物名の候補（レビュー 41 / WBS 4.19）。
+   *
+   * `cropId` が付くかどうかで、進行帯・「つぎの作業」・収穫の既定単位が丸ごと決まる。
+   * それなのに作物名は素のテキスト欄で、**マスターに載っている名前へ寄せる手助けが
+   * 何も無かった**（「トマト」と打ち切れた人だけが得をする）。
+   *
+   * **フォーカスされて初めて 1 回だけ引く。** 名前を触らない編集で 50 行を読む必要はない。
+   * 失敗しても候補が出ないだけにする — 候補は補助で、自由入力（R03）は禁じない。
+   */
+  const cropMasterRequested = useRef(false);
+  const loadCropMaster = useCallback(() => {
+    if (cropMasterRequested.current) return;
+    cropMasterRequested.current = true;
+    void getCropMaster()
+      .then(setCropMaster)
+      .catch(() => setCropMaster([]));
+  }, []);
+
+  // 「ネギ」「エンドウ」はどちらとも取れるので候補ではなく**選び直し**を出す。
+  // 寄せてしまうと、半分の人に別の作物の暦で助言することになる
+  const ambiguous = useMemo(() => ambiguousCropCandidates(cropName), [cropName]);
+  const suggestions = useMemo(
+    () => (ambiguous.length > 0 ? [] : suggestCropNames(cropName, cropMaster)),
+    [ambiguous, cropName, cropMaster],
+  );
+
+  /**
+   * 候補を押したら**名前と読みの両方**を埋める。読みが入れば検索（FTS）も
+   * 正しく当たる。cropId は保存時に名前から引き直される（画面の cropId は信用しない）
+   */
+  const chooseCropName = useCallback(
+    (name: string) => {
+      setValue('cropName', name, { shouldValidate: true });
+      const row = cropMaster.find((candidate) => candidate.name === name);
+      setValue('cropNameReading', row?.nameReading ?? undefined);
+    },
+    [cropMaster, setValue],
+  );
+
+  /**
+   * 名前を手で書き換えたら、候補で入れた読みは捨てる。
+   * 残すと「ナス」なのに読みが「とまと」の行ができ（保存時は渡された読みを優先する）、
+   * 検索がまったく別の作物に当たる。
+   */
+  const editCropName = useCallback(
+    (text: string, onChange: (value: string) => void) => {
+      onChange(text);
+      if (cropNameReading) setValue('cropNameReading', undefined);
+    },
+    [cropNameReading, setValue],
+  );
 
   /**
    * 連作チェック（R17 / WBS 4.5）。作物名・場所・植え付け日のどれかが変わるたびに引き直す。
@@ -172,12 +233,35 @@ export function PlantingForm({
               label="作物名"
               required
               value={value}
-              onChangeText={onChange}
+              onChangeText={(text) => editCropName(text, onChange)}
+              onFocus={loadCropMaster}
               placeholder="トマト"
               error={errors.cropName?.message}
             />
           )}
         />
+
+        {ambiguous.length > 0 || suggestions.length > 0 ? (
+          <View style={styles.suggestGroup} testID="crop-suggestions">
+            <Text style={styles.suggestLabel}>
+              {ambiguous.length > 0 ? 'どちらですか' : 'もしかして'}
+            </Text>
+            <View style={styles.chips}>
+              {(ambiguous.length > 0 ? ambiguous : suggestions.map((row) => row.name)).map(
+                (name) => (
+                  <PressableScale
+                    key={name}
+                    style={styles.chip}
+                    onPress={() => chooseCropName(name)}
+                    accessibilityLabel={`作物名を${name}にする`}
+                  >
+                    <Text style={styles.chipText}>{name}</Text>
+                  </PressableScale>
+                ),
+              )}
+            </View>
+          </View>
+        ) : null}
 
         <Controller
           control={control}
@@ -363,6 +447,9 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   hint: { fontSize: Typography.size.sm, color: Colors.inkDim },
+  // 作物名の欄（FormField の marginBottom 16）のすぐ下に寄せる
+  suggestGroup: { marginTop: -8, marginBottom: 16, gap: 8 },
+  suggestLabel: { fontSize: Typography.size.sm, color: Colors.inkDim },
   segmented: { flexDirection: 'row', gap: 8 },
   flexItem: { flex: 1 },
   segment: {

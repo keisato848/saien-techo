@@ -107,14 +107,16 @@ node scripts/agent/build-android.mjs --arch x86_64   # app.json/plugins 変更�
   | `settings` / `region` / `backup`                    | 設定・地域・バックアップ |
 
 - 状態を確定させたいときは事前に `adb shell am force-stop com.saientecho.app`（コールドスタート）
+- **文字サイズを大きくした状態も見る**: `adb shell settings put system font_scale 1.3`（戻すのは `1.0`）。ホームの「育てているもの」は内容幅 70px しかなく、等倍では入る 1 行が 130% で切れる
 - スクショ: `adb exec-out screencap -p > file.png` → Read で目視。**adb は PowerShell ツールで**（Git Bash は /sdcard を壊す）
 - 座標タップは**直前のスクショで座標を確認**（コーチマーク・ANR・通知パネル等のオーバーレイが座標を奪う）
 
 ## 4. ローカルサーバー E2E（AI 相談）
 
 ```bash
-# サーバー起動（.env は自動ロードされない — --env-file 必須）
-cd apps/server && pnpm exec tsx --env-file=.env src/index.ts
+# サーバーはこのリポジトリに無い（#150）。だいどこ側で起動する
+# （.env は自動ロードされない — --env-file 必須）
+cd C:/Projects/daidoko/apps/server && pnpm exec tsx --env-file=.env src/index.ts # daidoko-ref-ok
 ```
 
 ```powershell

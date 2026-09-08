@@ -113,7 +113,17 @@ const BACKUP_TABLES = [
   },
   {
     name: 'care_logs',
-    columns: ['id', 'planting_id', 'kind', 'logged_at', 'note', 'created_at', 'updated_at'],
+    // task_kind は v16。古いバックアップには無いが、復元は row[column] ?? null なので NULL で入る
+    columns: [
+      'id',
+      'planting_id',
+      'kind',
+      'task_kind',
+      'logged_at',
+      'note',
+      'created_at',
+      'updated_at',
+    ],
   },
   {
     name: 'harvests',

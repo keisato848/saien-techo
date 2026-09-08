@@ -21,7 +21,8 @@ jest.mock('../client', () => ({
   getExpoDb: () => mockHandles.expoDb,
 }));
 
-import { seedDatabase } from '../migrate';
+import { CROP_MASTER } from '../crop-master';
+import { seedDatabase, syncCropMaster } from '../migrate';
 import { seedPlantings, seedPlantingTags } from '../seed';
 import { IDENTIFY_PER_REWARD } from '../../services/identify-credit.service';
 
@@ -30,6 +31,9 @@ const describeIfSqlite = isSqliteAvailable ? describe : describe.skip;
 describeIfSqlite('seedDatabase against real SQLite', () => {
   beforeEach(async () => {
     mockHandles = createTestDb();
+    // 起動時と同じ順序（useDatabase）。作物・暦・ガイドはサンプルではなく
+    // syncCropMaster が入れる。seedPlantings はその crops を参照する
+    await syncCropMaster(mockHandles.db);
     await seedDatabase(mockHandles.db);
   });
 
@@ -44,9 +48,33 @@ describeIfSqlite('seedDatabase against real SQLite', () => {
   });
 
   it('作物マスターとガイド・栽培暦が投入される', () => {
-    expect(rows('SELECT id FROM crops').length).toBeGreaterThan(0);
-    expect(rows('SELECT crop_id FROM crop_guides').length).toBeGreaterThan(0);
+    expect(rows('SELECT id FROM crops')).toHaveLength(CROP_MASTER.length);
+    expect(rows('SELECT crop_id FROM crop_guides')).toHaveLength(CROP_MASTER.length);
     expect(rows('SELECT id FROM crop_calendars').length).toBeGreaterThan(0);
+  });
+
+  it('サンプルは作物・暦・ガイドを持たない（出典の無い窓を残さない）', () => {
+    // seed.ts がマスターと別 id 体系の暦を持っていた頃は、マスターの版を上げた
+    // 直後のサンプルビルドにだけ `cal-basil-temperate-sow` が残っていた（4.19 レビュー 29）
+    const masterIds = new Set(CROP_MASTER.map((crop) => crop.id));
+    const strays = rows<{ id: string; crop_id: string }>('SELECT id, crop_id FROM crop_calendars')
+      .filter((row) => !masterIds.has(row.crop_id))
+      .map((row) => row.id);
+    expect(strays).toEqual([]);
+
+    const cropIds = rows<{ id: string }>('SELECT id FROM crops').map((row) => row.id);
+    expect(cropIds.filter((id) => !masterIds.has(id))).toEqual([]);
+  });
+
+  it('サンプルの栽培が参照する作物はすべてマスターにある', () => {
+    const masterIds = new Set(CROP_MASTER.map((crop) => crop.id));
+    for (const planting of seedPlantings) {
+      if (planting.cropId == null) continue;
+      expect({ id: planting.id, ok: masterIds.has(planting.cropId) }).toEqual({
+        id: planting.id,
+        ok: true,
+      });
+    }
   });
 
   it('場所・作業ログ・収穫・資材が投入される', () => {

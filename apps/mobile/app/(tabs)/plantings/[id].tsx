@@ -32,13 +32,14 @@ import { PressableScale } from '../../../src/components/PressableScale';
 import { TagChip } from '../../../src/components/TagChip';
 import { Toast } from '../../../src/components/Toast';
 import { Colors, Typography } from '../../../src/constants/theme';
+import { CROP_TASK_LABEL } from '../../../src/db/crop-master';
 import { formatDateLabel } from '../../../src/components/DateField';
 import { getReminders } from '../../../src/services/reminder.service';
 import {
-  careLogKindForAction,
   describeNextAction,
   getNextActionsForPlanting,
-  nextActionLabel,
+  nextActionRecordHref,
+  nextActionRecordLabel,
   type NextAction,
 } from '../../../src/services/next-action.service';
 import { describeSchedule } from '../../../src/utils/reminderSchedule';
@@ -203,14 +204,8 @@ export default function PlantingDetailScreen() {
               <Pressable
                 key={`${action.kind}-${action.thresholdDays}`}
                 style={styles.adviceRow}
-                onPress={() =>
-                  router.push(
-                    action.kind === 'harvest'
-                      ? `/plantings/${id}/harvests/new`
-                      : `/plantings/${id}/care-logs/new?kind=${careLogKindForAction(action.kind)}`,
-                  )
-                }
-                accessibilityLabel={`${nextActionLabel(action)}を記録する`}
+                onPress={() => router.push(nextActionRecordHref(action))}
+                accessibilityLabel={`${nextActionRecordLabel(action)}を記録する`}
               >
                 <BellRing size={15} color={Colors.accentInk} />
                 <Text style={styles.adviceText}>{describeNextAction(action)}</Text>
@@ -223,6 +218,19 @@ export default function PlantingDetailScreen() {
           <InfoRow label="植え付け日" value={formatDateLabel(planting.plantedOn)} />
           <InfoRow label="種 / 苗" value={PLANTED_AS_LABEL[planting.plantedAs]} />
           <InfoRow label="場所" value={planting.placeName ?? '未設定'} />
+          {/* 作物ガイドへ（4.19 レビュー 17）。適温・連作年数・作業の目安・虫と病気・出典は
+              ガイド詳細にしか無いのに、栽培詳細からそこへ行く道が無かった。
+              手入力の栽培（cropId が無い／マスター外）では行ごと出さない */}
+          {planting.cropId?.startsWith('crop-') ? (
+            <Pressable
+              style={styles.infoRow}
+              onPress={() => router.push(`/crops/${planting.cropId}`)}
+              accessibilityLabel={`${planting.cropName}のガイドをみる`}
+            >
+              <Text style={styles.infoLabel}>育て方</Text>
+              <Text style={styles.infoLink}>{planting.cropName}のガイド →</Text>
+            </Pressable>
+          ) : null}
         </View>
 
         {planting.tags.length > 0 ? (
@@ -323,7 +331,11 @@ export default function PlantingDetailScreen() {
               >
                 <View style={styles.logDot} />
                 <View style={styles.logBody}>
-                  <Text style={styles.logKind}>{CARE_KIND_LABEL[log.kind]}</Text>
+                  {/* 「つぎの作業」から記録したものは、その作業名で出す（v16）。
+                      kind だけだと支柱も土寄せも防虫ネットも「その他」になってしまう */}
+                  <Text style={styles.logKind}>
+                    {log.taskKind ? CROP_TASK_LABEL[log.taskKind] : CARE_KIND_LABEL[log.kind]}
+                  </Text>
                   {log.note ? (
                     <Text style={styles.logNote} numberOfLines={2}>
                       {log.note}
@@ -577,6 +589,7 @@ const styles = StyleSheet.create({
   },
   infoLabel: { fontSize: Typography.size.sm, color: Colors.inkDim },
   infoValue: { fontSize: Typography.size.base, color: Colors.ink },
+  infoLink: { fontSize: Typography.size.base, color: Colors.accentInk },
   tags: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   noteCard: {
     borderRadius: 12,

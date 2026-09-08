@@ -141,7 +141,33 @@ describe('MonthlyWorkCard', () => {
         'まきどき：ダイコン、カブ、ニンジン、ホウレンソウ、コマツナ、シュンギク、ほか2種。作物ガイドで見る',
       ),
     );
-    expect(mockPush).toHaveBeenCalledWith('/crops?now=1');
+    expect(mockPush).toHaveBeenCalledWith('/crops?now=sow');
+  });
+
+  /**
+   * 4.19 レビュー 19: 3 行とも `?now=1` で同じ画面（今月該当 26〜38 品目）に飛んでいた。
+   * 行ごとに種別を渡す。
+   */
+  it('行ごとに違う絞り込みでガイドを開く', async () => {
+    mockGetWork.mockResolvedValue(
+      work({
+        sow: [{ cropId: 'crop-daikon', name: 'ダイコン' }],
+        plant: [{ cropId: 'crop-hakusai', name: 'ハクサイ' }],
+        harvest: [{ cropId: 'crop-tomato', name: 'トマト' }],
+      }),
+    );
+    render(<MonthlyWorkCard />);
+    await waitFor(() => expect(screen.getByText('まきどき')).toBeTruthy());
+
+    fireEvent.press(screen.getByLabelText('まきどき：ダイコン。作物ガイドで見る'));
+    fireEvent.press(screen.getByLabelText('植えどき：ハクサイ。作物ガイドで見る'));
+    fireEvent.press(screen.getByLabelText('採りどき：トマト。作物ガイドで見る'));
+
+    expect(mockPush.mock.calls.map(([path]: [string]) => path)).toEqual([
+      '/crops?now=sow',
+      '/crops?now=plant',
+      '/crops?now=harvest',
+    ]);
   });
 
   it('describeCropRow は上限ちょうどなら畳まない', () => {

@@ -6,11 +6,13 @@
  * 提案が無ければカードごと出さない。
  *
  * **表示は上位 VISIBLE_COUNT 件で打ち切り、残りは「ほかN件」の1行にまとめる**
- * （2026-09-01）。getNextActions() はサービス側で最大10件返すため、栽培が増えると
- * このカードが際限なく縦に伸び、下にある「育てているもの」（進行帯）が画面外に
- * 落ちる — ホームのカード順を入れ替えただけでは栽培数が増えると再発する
+ * （2026-09-01）。**getNextActions() は件数を絞らない** — 育成中の栽培ぶんだけ
+ * 提案が返る（5 栽培の庭で 60〜90 日ごろには 10 件を超える）ので、
+ * 畳まないとカードが際限なく縦に伸び、下にある「育てているもの」（進行帯）が
+ * 画面外に落ちる — ホームのカード順を入れ替えただけでは栽培数が増えると再発する
  * （index.tsx 冒頭の doc コメント参照）。並び順（優先度）はサービス側のまま変えず、
- * ここでは表示件数を slice するだけにとどめる。
+ * ここでは表示件数を slice するだけにとどめる。畳んだぶんは「ほかN件 →」から
+ * 栽培一覧へ送り、一覧の各行が株ごとの件数を出す（レビュー 9）。
  */
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useState } from 'react';
@@ -18,10 +20,10 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { Colors, Typography } from '../constants/theme';
 import {
-  careLogKindForAction,
   describeNextAction,
   getNextActions,
-  nextActionLabel,
+  nextActionRecordHref,
+  nextActionRecordLabel,
   snoozeNextAction,
   type NextAction,
 } from '../services/next-action.service';
@@ -47,12 +49,8 @@ export function NextActionCard() {
   const hiddenCount = actions.length - visibleActions.length;
 
   const record = (action: NextAction) => {
-    // 収穫は収穫記録へ、追肥・作業（摘芯・支柱…）は作業ログへ（種類を引き継ぐ）
-    router.push(
-      action.kind === 'harvest'
-        ? `/plantings/${action.plantingId}/harvests/new`
-        : `/plantings/${action.plantingId}/care-logs/new?kind=${careLogKindForAction(action.kind)}`,
-    );
+    // 収穫は収穫記録へ、追肥・作業（摘芯・支柱…）は作業ログへ（作業そのものを引き継ぐ）
+    router.push(nextActionRecordHref(action));
   };
 
   const later = (action: NextAction) => {
@@ -75,7 +73,7 @@ export function NextActionCard() {
             <Pressable
               style={styles.recordButton}
               onPress={() => record(action)}
-              accessibilityLabel={`${action.cropName}の${nextActionLabel(action)}を記録する`}
+              accessibilityLabel={`${action.cropName}の${nextActionRecordLabel(action)}を記録する`}
             >
               <Text style={styles.recordText}>記録する</Text>
             </Pressable>

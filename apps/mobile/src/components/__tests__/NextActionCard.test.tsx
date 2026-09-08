@@ -81,7 +81,9 @@ describe('NextActionCard', () => {
     expect(mockPush).toHaveBeenCalledWith('/plantings/p1/harvests/new');
   });
 
-  it('作業（芽かき）は剪定の作業ログへ、土寄せはその他へ送る（4.19）', async () => {
+  // v16: kind だけだと支柱も土寄せも防虫ネットも `other` に潰れ、
+  // タイムラインに「その他」としか残らなかった（4.19 レビュー 6）
+  it('作業は kind に加えて task も渡す（芽かき=剪定・土寄せ=その他）', async () => {
     mockGetActions.mockResolvedValue([
       action({ kind: 'sucker', thresholdDays: 10, elapsedDays: 12, cropName: 'トマト' }),
       action({ kind: 'hill', thresholdDays: 35, elapsedDays: 36, cropName: 'ジャガイモ' }),
@@ -89,11 +91,41 @@ describe('NextActionCard', () => {
     render(<NextActionCard />);
     await waitFor(() => expect(screen.getByText('つぎの作業')).toBeTruthy());
 
-    fireEvent.press(screen.getByLabelText('トマトの芽かきを記録する'));
-    expect(mockPush).toHaveBeenCalledWith('/plantings/p1/care-logs/new?kind=prune');
+    fireEvent.press(screen.getByLabelText('トマトの芽かき（10日目安）を記録する'));
+    expect(mockPush).toHaveBeenCalledWith('/plantings/p1/care-logs/new?kind=prune&task=sucker');
 
-    fireEvent.press(screen.getByLabelText('ジャガイモの土寄せを記録する'));
-    expect(mockPush).toHaveBeenCalledWith('/plantings/p1/care-logs/new?kind=other');
+    fireEvent.press(screen.getByLabelText('ジャガイモの土寄せ（35日目安）を記録する'));
+    expect(mockPush).toHaveBeenCalledWith('/plantings/p1/care-logs/new?kind=other&task=hill');
+  });
+
+  it('ガイドの一言はメモの下書きとして note で渡す', async () => {
+    mockGetActions.mockResolvedValue([
+      action({ kind: 'thin', thresholdDays: 10, elapsedDays: 11, note: '本葉 1〜2 枚で' }),
+    ]);
+    render(<NextActionCard />);
+    await waitFor(() => expect(screen.getByText('つぎの作業')).toBeTruthy());
+
+    fireEvent.press(screen.getByLabelText('カブの間引き（10日目安）を記録する'));
+
+    expect(mockPush).toHaveBeenCalledWith(
+      `/plantings/p1/care-logs/new?kind=other&task=thin&note=${encodeURIComponent('本葉 1〜2 枚で')}`,
+    );
+  });
+
+  // カブは間引きが 10 日と 20 日の 2 回あり、20〜24 日目は両方が猶予の中に入る。
+  // 目安日を添えないとラベルが同一になり、読み上げでも区別できない（4.19 レビュー 12）
+  it('同じ作業が 2 件並んでもラベルが重ならない', async () => {
+    mockGetActions.mockResolvedValue([
+      action({ kind: 'thin', thresholdDays: 20, elapsedDays: 22 }),
+      action({ kind: 'thin', thresholdDays: 10, elapsedDays: 22 }),
+    ]);
+    render(<NextActionCard />);
+    await waitFor(() => expect(screen.getByText('つぎの作業')).toBeTruthy());
+
+    // 一意でなければ getByLabelText が複数一致で例外になる
+    fireEvent.press(screen.getByLabelText('カブの間引き（20日目安）を記録する'));
+    expect(mockPush).toHaveBeenCalledWith('/plantings/p1/care-logs/new?kind=other&task=thin');
+    expect(screen.getByLabelText('カブの間引き（10日目安）を記録する')).toBeTruthy();
   });
 
   it('「あとで」で先送りして読み直す', async () => {

@@ -66,112 +66,12 @@ function daysAgoIso(days: number): string {
 
 const SAIEN_TIMESTAMP = SAIEN_NOW.toISOString();
 
-export const seedCrops = [
-  {
-    id: 'crop-tomato',
-    name: 'トマト',
-    nameReading: 'とまと',
-    family: 'ナス科',
-    defaultUnit: 'piece',
-    createdAt: SAIEN_TIMESTAMP,
-    updatedAt: SAIEN_TIMESTAMP,
-  },
-  {
-    id: 'crop-cucumber',
-    name: 'キュウリ',
-    nameReading: 'きゅうり',
-    family: 'ウリ科',
-    defaultUnit: 'piece',
-    createdAt: SAIEN_TIMESTAMP,
-    updatedAt: SAIEN_TIMESTAMP,
-  },
-  {
-    id: 'crop-basil',
-    name: 'バジル',
-    nameReading: 'ばじる',
-    family: 'シソ科',
-    defaultUnit: 'bunch',
-    createdAt: SAIEN_TIMESTAMP,
-    updatedAt: SAIEN_TIMESTAMP,
-  },
-] as const;
-
-export const seedCropGuides = [
-  {
-    cropId: 'crop-tomato',
-    spacingCm: 50,
-    sunlight: 'full',
-    wateringNote: '土の表面が乾いたらたっぷり。過湿は裂果の原因になる',
-    fertilizeAfterDays: 21,
-    harvestAfterDays: 60,
-    commonPests: JSON.stringify(['アブラムシ', 'オオタバコガ', '尻腐れ症']),
-    tips: '第一花房が咲いたら追肥を始める。わき芽は早めにかき取る',
-  },
-  {
-    cropId: 'crop-cucumber',
-    spacingCm: 45,
-    sunlight: 'full',
-    wateringNote: '乾燥に弱い。夏場は朝夕 2 回',
-    fertilizeAfterDays: 14,
-    harvestAfterDays: 40,
-    commonPests: JSON.stringify(['うどんこ病', 'ウリハムシ']),
-    tips: '採り遅れると株が疲れる。若採りを心がける',
-  },
-  {
-    cropId: 'crop-basil',
-    spacingCm: 25,
-    sunlight: 'full',
-    wateringNote: '乾かしすぎない。葉がしおれる前に',
-    fertilizeAfterDays: 30,
-    harvestAfterDays: 30,
-    commonPests: JSON.stringify(['ヨトウムシ']),
-    tips: '摘芯すると脇芽が伸びて収量が増える',
-  },
-] as const;
-
-/** 中間地（temperate）だけの最小セット。寒冷地・暖地は WBS 3.1 で追加する */
-export const seedCropCalendars = [
-  {
-    id: 'cal-tomato-temperate-plant',
-    cropId: 'crop-tomato',
-    region: 'temperate',
-    kind: 'plant',
-    startMonth: 4,
-    endMonth: 6,
-  },
-  {
-    id: 'cal-tomato-temperate-harvest',
-    cropId: 'crop-tomato',
-    region: 'temperate',
-    kind: 'harvest',
-    startMonth: 6,
-    endMonth: 9,
-  },
-  {
-    id: 'cal-cucumber-temperate-plant',
-    cropId: 'crop-cucumber',
-    region: 'temperate',
-    kind: 'plant',
-    startMonth: 4,
-    endMonth: 6,
-  },
-  {
-    id: 'cal-cucumber-temperate-harvest',
-    cropId: 'crop-cucumber',
-    region: 'temperate',
-    kind: 'harvest',
-    startMonth: 6,
-    endMonth: 9,
-  },
-  {
-    id: 'cal-basil-temperate-sow',
-    cropId: 'crop-basil',
-    region: 'temperate',
-    kind: 'sow',
-    startMonth: 4,
-    endMonth: 7,
-  },
-] as const;
+// 作物・作物ガイド・栽培暦のサンプルは持たない（4.19 レビュー）。
+// 本番と同じ CROP_MASTER（crop-master.ts）を syncCropMaster が入れる。
+// サンプル側にも別 id 体系の暦を置いていたため、マスターの版を上げた直後の
+// サンプルビルドにだけ出典の無い窓（cal-basil-temperate-sow）が残っていた。
+// 下の seedPlantings が参照する crop-tomato / crop-cucumber / crop-basil は
+// すべて CROP_MASTER にある。
 
 export const seedPlaces = [
   {

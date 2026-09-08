@@ -7,11 +7,16 @@
  */
 import { REGIONS } from '../../services/region.service';
 import {
+  CROP_CATEGORY_LABEL,
   CROP_CATEGORY_ORDER,
   CROP_MASTER,
+  CROP_MASTER_ATTRIBUTION,
   CROP_MASTER_REFERENCES,
   CROP_MASTER_VERSION,
+  PERENNIAL_FIRST_HARVEST_LABEL,
+  attributionFor,
   findCropMaster,
+  perennialNoticeFor,
   referencesFor,
 } from '../crop-master';
 import {
@@ -31,11 +36,114 @@ jest.mock('../../db/client', () => ({
 
 import { runMigrations, syncCropMaster } from '../migrate';
 
+/** id で必ず引ける前提のマスター（引けなければテストとして失敗させる） */
+function crop(id: string) {
+  const found = findCropMaster(id);
+  if (!found) throw new Error(`${id} がマスターにありません`);
+  return found;
+}
+
+/** `name` はカタカナで書く（crop-master.ts のヘッダの決め） */
+const KATAKANA_NAME = /^[ァ-ヶー]+$/;
+
+/**
+ * カタカナ以外の表記を許す品目と、その理由。
+ *
+ * **理由の無い例外は足さない。** 表記が揺れると検索が別名頼みになり、
+ * UI の例示（作物ガイドのプレースホルダ）もマスターとずれる（2026-09-07 レビュー 38）。
+ */
+const NAME_NOTATION_EXCEPTIONS: Record<string, string> = {
+  'crop-kushinsai': '種袋・店頭の表記が「空芯菜」で通っている。カタカナ表記は別名で拾う',
+  'crop-hanegi': 'ネギは「葉ネギ / 長ネギ」の対で区別する慣用表記。全カタカナだと対が読めない',
+  'crop-naganegi': '同上。「ナガネギ」表記は流通でほぼ使われない',
+};
+
+/**
+ * v4（50 品目）時点の id。**この配列からは消さない。**
+ * id は `plantings.crop_id` に保存され、`syncCropMaster` は `crops` 行を消さないので、
+ * マスターから品目を落とすと利用者の栽培が参照先を失う（暦も「次の作業」も静かに止まる）。
+ */
+const FROZEN_CROP_IDS = [
+  'crop-daikon',
+  'crop-kabu',
+  'crop-ninjin',
+  'crop-hourensou',
+  'crop-komatsuna',
+  'crop-shungiku',
+  'crop-mizuna',
+  'crop-hakusai',
+  'crop-kyabetsu',
+  'crop-burokkori',
+  'crop-tamanegi',
+  'crop-ninniku',
+  'crop-tomato',
+  'crop-cucumber',
+  'crop-nasu',
+  'crop-piiman',
+  'crop-okura',
+  'crop-edamame',
+  'crop-toumorokoshi',
+  'crop-kabocha',
+  'crop-goya',
+  'crop-zucchini',
+  'crop-jagaimo',
+  'crop-satsumaimo',
+  'crop-ichigo',
+  'crop-hanegi',
+  'crop-snap-endou',
+  'crop-shiso',
+  'crop-basil',
+  'crop-retasu',
+  'crop-rukkora',
+  'crop-kushinsai',
+  'crop-chingensai',
+  'crop-moroheiya',
+  'crop-sanchu',
+  'crop-karifurawa',
+  'crop-radisshu',
+  'crop-shoga',
+  'crop-togarashi',
+  'crop-papurika',
+  'crop-suika',
+  'crop-ingen',
+  'crop-sayaendo',
+  'crop-soramame',
+  'crop-rakkasei',
+  'crop-satoimo',
+  'crop-naganegi',
+  'crop-nira',
+  'crop-paseri',
+  'crop-myoga',
+];
+
 describe('作物マスターの構造', () => {
   it('id は一意で crop- 始まり', () => {
     const ids = CROP_MASTER.map((crop) => crop.id);
     expect(new Set(ids).size).toBe(ids.length);
     for (const id of ids) expect(id).toMatch(/^crop-[a-z-]+$/);
+  });
+
+  it('name はカタカナ。例外は理由つきの許可リストに載っているものだけ', () => {
+    const offenders = CROP_MASTER.filter(
+      (crop) => !KATAKANA_NAME.test(crop.name) && !(crop.id in NAME_NOTATION_EXCEPTIONS),
+    ).map((crop) => `${crop.id}(${crop.name})`);
+    expect(offenders).toEqual([]);
+  });
+
+  it('表記の例外は実在する品目で、理由が書かれている', () => {
+    for (const [id, reason] of Object.entries(NAME_NOTATION_EXCEPTIONS)) {
+      const crop = findCropMaster(id);
+      expect(`${id}:${crop ? 'あり' : 'なし'}`).toBe(`${id}:あり`);
+      // カタカナに直したら例外リストからも消すこと（死んだ例外を残さない）
+      expect(`${id}:${KATAKANA_NAME.test(crop?.name ?? '')}`).toBe(`${id}:false`);
+      expect(reason.trim().length).toBeGreaterThan(10);
+    }
+  });
+
+  it('一度出した id は消さない・変えない（plantings.crop_id に保存済み）', () => {
+    const ids = new Set(CROP_MASTER.map((crop) => crop.id));
+    const missing = FROZEN_CROP_IDS.filter((id) => !ids.has(id));
+    expect(missing).toEqual([]);
   });
 
   it('読み仮名はひらがな', () => {
@@ -239,6 +347,114 @@ describe('作物マスターの構造', () => {
       'ニラ',
       'ミョウガ',
     ]);
+    // マスターの中身を変えたら版を上げる（据え置くと配布済み端末に反映されない）
+    expect(CROP_MASTER_VERSION).toBeGreaterThanOrEqual(5);
+  });
+
+  // ── 4.19 レビュー 24: 多年草を boolean で表せない ────────────────────────
+  it('多年草は収穫日数を持たず、いつから採れるかを持つ', () => {
+    for (const crop of CROP_MASTER) {
+      if (!crop.perennial) {
+        // 多年草でなければ収穫の幅は必須（進行帯が窓を描けない品目を作らない）
+        expect({ id: crop.id, window: crop.guide.harvestWindowDays != null }).toEqual({
+          id: crop.id,
+          window: true,
+        });
+        continue;
+      }
+      expect({ id: crop.id, harvestAfterDays: crop.guide.harvestAfterDays }).toEqual({
+        id: crop.id,
+        harvestAfterDays: null,
+      });
+      expect({ id: crop.id, window: crop.guide.harvestWindowDays }).toEqual({
+        id: crop.id,
+        window: null,
+      });
+      expect(Object.keys(PERENNIAL_FIRST_HARVEST_LABEL)).toContain(crop.perennial.firstHarvest);
+    }
+  });
+
+  it('ミョウガの札と tips が食い違わない（植えた年から採れる）', () => {
+    const myoga = crop('crop-myoga');
+    expect(myoga.perennial?.firstHarvest).toBe('same-year');
+    // 「翌年から収穫」と書くと tips（植えた年は 9 月から）と矛盾する
+    expect(perennialNoticeFor(myoga)).toContain('植えた年から収穫');
+    expect(myoga.guide.tips).toContain('植えた年は 9 月から');
+
+    const nira = crop('crop-nira');
+    expect(nira.perennial?.firstHarvest).toBe('next-year');
+    expect(perennialNoticeFor(nira)).toContain('翌年から収穫');
+
+    // 多年草でなければ注記は出さない
+    expect(perennialNoticeFor(crop('crop-tomato'))).toBeNull();
+  });
+
+  it("ミョウガは根もの。'tree' は果樹だけの節に戻した", () => {
+    expect(findCropMaster('crop-myoga')?.category).toBe('root');
+    expect(CROP_CATEGORY_LABEL.tree).toBe('果樹');
+    // 多年草かどうかは perennial が持つ。分類に混ぜない
+    expect(CROP_MASTER.filter((crop) => crop.category === 'tree')).toEqual([]);
+  });
+
+  // ── 4.19 レビュー 30: 適温に気温と地温が混ざっていた ─────────────────────
+  it('種から始めない品目の適温は地温（萌芽）基準', () => {
+    const soil = CROP_MASTER.filter((crop) => crop.guide.temperature?.basis === 'soil');
+    expect(soil.map((crop) => crop.name)).toEqual([
+      'ニンニク',
+      'ジャガイモ',
+      'ショウガ',
+      'サトイモ',
+      'ミョウガ',
+    ]);
+
+    // 地温基準になるのは「種いも・鱗片・根株から直に植える」品目 =
+    // 種まきの窓が無く（sow なし）、育苗期間も持たない（transplantAfterDays が null）のに
+    // 発芽（萌芽）日数だけ持つもの。レタスのように苗を育ててから植える品目は
+    // 育苗期間を持つので気温基準のまま。品目が増えてもこの不変条件で漏れを捕まえられる
+    for (const crop of CROP_MASTER) {
+      if (!crop.guide.temperature) continue;
+      const sprouts =
+        crop.calendars.every((w) => w.kind !== 'sow') && crop.guide.transplantAfterDays == null;
+      const expected = sprouts && crop.guide.germinationDays != null ? 'soil' : 'air';
+      expect({ id: crop.id, basis: crop.guide.temperature.basis }).toEqual({
+        id: crop.id,
+        basis: expected,
+      });
+    }
+  });
+
+  // ── 4.19 レビュー 28: 情報量と出典の下限 ─────────────────────────────────
+  it('どの作物も公的資料（農水省・県・JA・普及協会）の出典を 1 つ以上持つ', () => {
+    // 種苗会社の資料だけで書かれた作物を作らない（決定③）
+    const isPublic = (publisher: string) =>
+      publisher === '農林水産省' ||
+      publisher === '全国農業改良普及支援協会' ||
+      publisher.endsWith('県') ||
+      publisher.startsWith('JA');
+
+    for (const crop of CROP_MASTER) {
+      const publishers = referencesFor(crop.sourceIds).map((ref) => ref.publisher);
+      expect({ id: crop.id, ok: publishers.some(isPublic) }).toEqual({ id: crop.id, ok: true });
+    }
+    // 種苗会社の資料も実際に使われている（決定③の例外が生きている）
+    expect(CROP_MASTER_REFERENCES.some((ref) => !isPublic(ref.publisher))).toBe(true);
+  });
+
+  it('出典の見出しはその作物の発行元から組み立てる', () => {
+    // ミョウガの出典は普及協会 1 件だけ。全体の脚注（農水省・JA…）を出さない
+    expect(attributionFor(crop('crop-myoga').sourceIds)).toBe(
+      '全国農業改良普及支援協会の公開資料をもとにした目安です',
+    );
+    // 同じ発行元の資料を 2 件持っていても 1 回だけ出す
+    expect(attributionFor(['saitama-satoimo', 'saitama-shoga'])).toBe(
+      '埼玉県の公開資料をもとにした目安です',
+    );
+    // 引けないときだけ全体の脚注へ落とす
+    expect(attributionFor(['nothing'])).toBe(CROP_MASTER_ATTRIBUTION);
+
+    for (const ref of CROP_MASTER_REFERENCES) {
+      expect({ id: ref.id, ok: ref.publisher.length > 0 }).toEqual({ id: ref.id, ok: true });
+    }
   });
 
   it('2 期作の作物がある（同 kind 2 窓が実際に使われている）', () => {
@@ -365,6 +581,37 @@ describeIfSqlite('syncCropMaster (real SQLite)', () => {
     );
     expect(hakusai.container_ok).toBe(0);
     expect(hakusai.container_depth_cm).toBeNull();
+  });
+
+  /**
+   * 4.19 レビュー 27: マスターの同期は**原子的**でなければならない。
+   *
+   * 暦とガイドは「消してから入れ直す」ので、途中で落ちたまま版だけ上がると
+   * **窓が消えた端末**ができ、次の起動でも同版としてスキップされて直らない。
+   * ここでは途中の insert を失敗させ、何も残らず版も上がらないことを見る。
+   */
+  it('途中で失敗したら何も残らず、版も上がらない（全部入ったときだけ版が上がる）', async () => {
+    // db をそのまま前に置いた薄い被せもの。3 回目の insert だけ失敗させる
+    const failing = Object.create(mockHandles.db) as typeof mockHandles.db;
+    let calls = 0;
+    failing.insert = (table: unknown) => {
+      calls += 1;
+      if (calls === 3) throw new Error('insert に失敗しました');
+      return mockHandles.db.insert(table);
+    };
+
+    await expect(syncCropMaster(failing)).rejects.toThrow('insert に失敗しました');
+
+    expect(countOf('crops')).toBe(0);
+    expect(countOf('crop_calendars')).toBe(0);
+    expect(countOf('crop_guides')).toBe(0);
+    expect(
+      mockHandles.expoDb.getAllSync("SELECT value FROM app_meta WHERE key = 'crop_master_version'"),
+    ).toEqual([]);
+
+    // やり直せる（版が上がっていないので次の起動で入る）
+    await syncCropMaster(mockHandles.db);
+    expect(countOf('crops')).toBe(CROP_MASTER.length);
   });
 
   it('v3 の端末（列が無い）にも ADD COLUMN で入る — runMigrations が冪等に足す', () => {

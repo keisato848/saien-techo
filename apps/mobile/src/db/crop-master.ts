@@ -10,14 +10,24 @@
  * - 月単位。旬・上旬の粒度は持たない — 家庭菜園の判断は月で足りる
  * - 年またぎは startMonth > endMonth で表す（10 月〜翌 2 月 = 10, 2）
  * - 同じ kind に春秋 2 つの窓を持てる（例: ジャガイモ）。窓は最大 2 つ
+ * - **日数の起点は「植え付け（定植）から」。ただし直まきの作物（`sow` の窓しか持たない
+ *   ダイコン・ホウレンソウなど）は「種まきから」数える**。苗物は定植から、直まき物は播種から
+ *   （docs/データ設計.md §3.3 と揃える）
  * - 一般的な露地・プランター栽培の目安。品種や年ごとの気候では前後する
  *   （利用規約の免責どおり「目安」であり、正確性はレビューで担保する）
  * - **列は 4.19 第 1 段で決め切った**（docs/検討-作物マスター100品目.md §3-1）。
  *   あとから列を足すと全品目を触り直すことになる
  * - 出典を伴う値（guide）と、出典なしの編集者判断（editorial）を分けて持つ。
  *   editorial は一覧の絞り込みと登録時の助言にだけ使い、暦や「次の作業」の判定には使わない
- * - id は新規から**和名のヘボン式ローマ字**で統一する（`crop-rukkora`）。既存の英語 id
- *   （`crop-cucumber`）は plantings.crop_id に保存済みなので変えない
+ * - **`name` はカタカナ**で書く（`トウガラシ` / `ルッコラ`）。慣用の漢字表記が定着していて
+ *   カタカナだと別物に見える品目だけを例外にし、**例外は理由を添えて**
+ *   `__tests__/crop-master.test.ts` の許可リストへ足す（現在は空芯菜・葉ネギ・長ネギの 3 件）。
+ *   検索欄のプレースホルダなど、UI で作物名を例示するときもこの表記に合わせる
+ * - id は新規から**和名のヘボン式ローマ字**で統一する（`crop-rukkora`）。**長音は母音を重ねる**
+ *   （`crop-hourensou` / `crop-toumorokoshi`）。既存の英語 id（`crop-cucumber`）は変えない
+ * - **id は消さない・変えない**（決定）。`plantings.crop_id` に保存されるので、id を変えると
+ *   既存の栽培がマスターから外れ、暦も「次の作業」も静かに止まる。品目の掲載をやめるときも
+ *   id は残す — `syncCropMaster` は `crops` 行を削除しない（利用者の栽培が参照先を失うため）
  *
  * ここを変えたら CROP_MASTER_VERSION を上げること。据え置くと
  * 投入済みの端末が同期をスキップし、新しい行が入らない。
@@ -29,7 +39,9 @@ import type { Region } from '../services/region.service';
 //     暖地ジャガイモ秋作の植付を 8〜9 月に）。出典は CROP_MASTER_REFERENCES
 // v4: 4.19 第 1 段。20 品目を足して 50 品目に。全品目に分類・出典・水やり間隔・発芽日数・
 //     定植日数・追肥間隔・収穫の幅と期間・適温・連作年数・作業・多年草・編集者判断を追加（#180）
-export const CROP_MASTER_VERSION = 4;
+// v5: 4.19 のレビュー反映。多年草を「いつから採れるか」で持ち、ミョウガを果樹の節から
+//     根もの（'root'）へ移す。適温に気温／地温の別を足し、出典に発行元を持たせた
+export const CROP_MASTER_VERSION = 5;
 
 export type CropCalendarKind = 'sow' | 'plant' | 'harvest';
 
@@ -72,7 +84,9 @@ export const CROP_CATEGORY_LABEL: Record<CropCategory, string> = {
   tuber: 'いも',
   allium: 'ネギ類',
   herb: 'ハーブ',
-  tree: '果樹・多年草',
+  // 多年草はここに入れない（多年草かどうかは perennial が持つ）。
+  // ミョウガは v5 で 'root' へ移した。果樹の品目が入るまでこの節は空になる
+  tree: '果樹',
 };
 
 /**
@@ -90,6 +104,30 @@ export const CROP_TASK_LABEL: Record<CropTaskKind, string> = {
   'fruit-thin': '摘果',
   net: '防虫ネット',
 };
+
+/**
+ * 適温の基準。種から始めない品目（種いも・鱗片・根株）の「発芽◯℃」は
+ * 気温ではなく**地温の萌芽適温**で、意味が違う（ショウガの tips「地温 15℃ 以下では
+ * 芽が出ない」がその例）。値を捨てずに区別できるよう基準を持たせる。
+ */
+export type TemperatureBasis = 'air' | 'soil';
+
+/** 画面に出す適温の見出し。基準を混ぜて書かないための語彙 */
+export const TEMPERATURE_BASIS_LABEL: Record<
+  TemperatureBasis,
+  { germination: string; growth: string }
+> = {
+  air: { germination: '発芽適温', growth: '生育適温' },
+  soil: { germination: '萌芽適温（地温）', growth: '生育適温' },
+};
+
+export interface CropTemperature {
+  /** air=気温 / soil=地温（種いも・鱗片・根株から始める品目） */
+  basis: TemperatureBasis;
+  /** 発芽（soil なら萌芽）の適温 */
+  germination: [number, number];
+  growth: [number, number];
+}
 
 export interface CropTask {
   kind: CropTaskKind;
@@ -122,8 +160,8 @@ export interface CropGuideMaster {
   harvestWindowDays: { min: number; max: number } | null;
   /** 初収穫から採り続けられる日数。一度で採り切る作物は null */
   harvestDurationDays: number | null;
-  /** 発芽適温・生育適温（℃）。WBS 4.13 の天気連携と R33 が使う */
-  temperature: { germination: [number, number]; growth: [number, number] } | null;
+  /** 発芽（萌芽）適温・生育適温（℃）。WBS 4.13 の天気連携と R33 が使う */
+  temperature: CropTemperature | null;
   /** 連作を避ける年数。0 = 連作障害が出にくい。R17 は科だけでは足りない */
   rotationYears: number | null;
   /** 作物ごとの作業（摘芯・支柱・土寄せ…）。日数順 */
@@ -151,8 +189,12 @@ export interface CropMaster {
   category: CropCategory;
   /** 収穫の既定単位（HARVEST_UNITS の語彙） */
   defaultUnit: 'piece' | 'g' | 'kg' | 'bunch' | 'plant';
-  /** 多年草。収穫日数を持たず、ガイドに「翌年から収穫」と出す */
-  perennial?: true;
+  /**
+   * 多年草。収穫日数（harvestAfterDays / harvestWindowDays）を持たない代わりに、
+   * **いつから採れるか**をここで持つ。boolean だと「翌年から」しか言えず、
+   * 植えた年から採れるミョウガの札と tips が食い違っていた（v5 で修正）。
+   */
+  perennial?: CropPerennial;
   /** CROP_MASTER_REFERENCES の id。1 つ以上 */
   sourceIds: string[];
   calendars: CropCalendarWindow[];
@@ -160,9 +202,27 @@ export interface CropMaster {
   editorial: CropEditorial;
 }
 
+/** 多年草の初収穫。DB は perennial 列に 0/1 だけ持ち、文言はここから引く */
+export type PerennialFirstHarvest = 'same-year' | 'next-year' | 'year-2to3';
+
+export interface CropPerennial {
+  firstHarvest: PerennialFirstHarvest;
+  /** 札の下に 1 行だけ添える注記。無ければラベルだけ出す */
+  note?: string;
+}
+
+/** 札に出す 1 行。「多年草」とだけ書くと、いつ採れるのかが伝わらない */
+export const PERENNIAL_FIRST_HARVEST_LABEL: Record<PerennialFirstHarvest, string> = {
+  'same-year': '植えた年から収穫（多年草）',
+  'next-year': '翌年から収穫（多年草）',
+  'year-2to3': '2〜3 年目から収穫（多年草）',
+};
+
 export interface CropReference {
   id: string;
   name: string;
+  /** 発行元。ガイドの出典見出しをこの作物の資料から組み立てるために持つ */
+  publisher: string;
   url: string;
 }
 
@@ -181,111 +241,133 @@ export const CROP_MASTER_REFERENCES: readonly CropReference[] = [
   {
     id: 'maff-sehi',
     name: '農林水産省「都道府県の施肥基準・野菜栽培技術指針」',
+    publisher: '農林水産省',
     url: 'https://www.maff.go.jp/j/seisan/kankyo/hozen_type/h_sehi_kizyun/',
   },
   {
     id: 'maff-akita-konsai',
     name: '秋田県「野菜栽培技術指針 根菜類」（農林水産省収載）',
+    publisher: '秋田県',
     url: 'https://www.maff.go.jp/j/seisan/kankyo/hozen_type/h_sehi_kizyun/attach/pdf/aki3-7.pdf',
   },
   {
     id: 'ja-hokkaido',
     name: 'JAグループ北海道「チャレンジ！家庭菜園 主要野菜のは種・定植・収穫時期」',
+    publisher: 'JAグループ北海道',
     url: 'https://ja-dosanko.jp/agriculture/charenge/no7/',
   },
   {
     id: 'nagasaki-potato',
     name: '長崎県農林技術開発センター「バレイショ栽培マニュアル」',
+    publisher: '長崎県',
     url: 'https://www.pref.nagasaki.jp/e-nourin/nougi/manual/kogane2018.pdf',
   },
   {
     id: 'maff-potato',
     name: '農林水産省 消費者相談「国内のジャガイモの栽培時期」',
+    publisher: '農林水産省',
     url: 'https://www.maff.go.jp/j/heya/sodan/1204/01a.html',
   },
   {
     id: 'nagano-kasai-ondo',
     name: '長野県「主な果菜類の発芽適温と育苗温度のめやす」',
+    publisher: '長野県',
     url: 'https://www.pref.nagano.lg.jp/sakuchi/nosei-aec/joho/gijutsu/documents/kasai-ondo.pdf',
   },
   {
     id: 'okinawa-tokusai',
     name: '沖縄県「特別栽培農産物 栽培マニュアル」',
+    publisher: '沖縄県',
     url: 'https://www.pref.okinawa.jp/shigoto/nogyo/1010362/1010676/1010680.html',
   },
   {
     id: 'saitama-satoimo',
     name: '埼玉県農業技術研究センター「水田におけるサトイモ栽培マニュアル」',
+    publisher: '埼玉県',
     url: 'https://www.pref.saitama.lg.jp/documents/104573/manyuaru.pdf',
   },
   {
     id: 'saitama-shoga',
     name: '埼玉県農業技術研究センター「ショウガの栽培マニュアル」',
+    publisher: '埼玉県',
     url: 'https://www.pref.saitama.lg.jp/documents/103704/syougamanyuaru.pdf',
   },
   {
     id: 'chiba-rakkasei',
     name: '千葉県「落花生栽培の手引」',
+    publisher: '千葉県',
     url: 'https://www.pref.chiba.lg.jp/ninaite/seikafukyu/documents/05_rakkasei-tebiki.pdf',
   },
   {
     id: 'kochi-paseri',
     name: 'こうち農業ネット（高知県）「家庭菜園（パセリ）」',
+    publisher: '高知県',
     url: 'https://www.nogyo.tosa.pref.kochi.lg.jp/info/dtl.php?ID=590',
   },
   {
     id: 'jeinou-calendar',
     name: 'みんなの農業広場「栽培カレンダー」（全国農業改良普及支援協会）',
+    publisher: '全国農業改良普及支援協会',
     url: 'https://www.jeinou.com/benri/garden/planting_list.html',
   },
   {
     id: 'jeinou-satoimo',
     name: 'みんなの農業広場「サトイモの作り方（家庭菜園向け）」',
+    publisher: '全国農業改良普及支援協会',
     url: 'https://www.jeinou.com/benri/garden/root/2009/09/301000.html',
   },
   {
     id: 'jeinou-myoga',
     name: 'みんなの農業広場「ミョウガ（花ミョウガ）の作り方（家庭菜園向け）」',
+    publisher: '全国農業改良普及支援協会',
     url: 'https://www.jeinou.com/benri/garden/leaf_stem_vegetables/2012/04/250935.html',
   },
   {
     id: 'ja-kiso-kushinsai',
     name: 'JA木曽「家庭菜園アドバイス 空芯菜（エンサイ）の栽培」',
+    publisher: 'JA木曽',
     url: 'https://www.ja-kiso.iijan.or.jp/memo/1066',
   },
   {
     id: 'ja-kiso-papurika',
     name: 'JA木曽「家庭菜園アドバイス ピーマン、パプリカの栽培について」',
+    publisher: 'JA木曽',
     url: 'https://www.ja-kiso.iijan.or.jp/memo/1223',
   },
   {
     id: 'ja-hareoka-rukkora',
     name: 'JA晴れの国岡山「家庭菜園 ルッコラ」',
+    publisher: 'JA晴れの国岡山',
     url: 'https://www.ja-hareoka.or.jp/agri_food/kateisaien/2022/029/',
   },
   {
     id: 'ja-hareoka-sanchu',
     name: 'JA晴れの国岡山「家庭菜園 サンチュ」',
+    publisher: 'JA晴れの国岡山',
     url: 'https://www.ja-hareoka.or.jp/agri_food/kateisaien/2025/058/',
   },
   {
     id: 'ja-nishikasugai-moroheiya',
     name: 'JA西春日井「家庭菜園 モロヘイヤ」',
+    publisher: 'JA西春日井',
     url: 'https://www.ja-nishikasugai.com/2_data/moroheiya',
   },
   {
     id: 'ja-nishikasugai-shishito',
     name: 'JA西春日井「家庭菜園 シシトウ」',
+    publisher: 'JA西春日井',
     url: 'https://www.ja-nishikasugai.com/garden_vegetable/9254/',
   },
   {
     id: 'ja-saitama-nira',
     name: 'JAさいたま「ニラは春先の株分け更新が大切」',
+    publisher: 'JAさいたま',
     url: 'https://www.ja-saitama.or.jp/wp/?p=271',
   },
   {
     id: 'takii-manual',
     name: 'タキイ種苗「家庭菜園 野菜栽培マニュアル」（種苗会社の公開資料）',
+    publisher: 'タキイ種苗',
     url: 'https://www.takii.co.jp/tsk/manual/',
   },
 ] as const;
@@ -297,6 +379,29 @@ export const CROP_MASTER_ATTRIBUTION = '農林水産省・JAグループ等の�
 export function referencesFor(sourceIds: readonly string[]): CropReference[] {
   const wanted = new Set(sourceIds);
   return CROP_MASTER_REFERENCES.filter((ref) => wanted.has(ref.id));
+}
+
+/**
+ * 出典見出しの 1 行を**その作物の発行元から**組み立てる（4.19 レビュー）。
+ *
+ * CROP_MASTER_ATTRIBUTION は全体の脚注なので、作物ごとのガイドに出すと
+ * 「農林水産省・JAグループ等」が、実際は普及協会 1 件しか出典が無いミョウガにも並ぶ。
+ * 出典が引けないときだけ全体の脚注へ落とす。
+ */
+export function attributionFor(sourceIds: readonly string[]): string {
+  const publishers = [...new Set(referencesFor(sourceIds).map((ref) => ref.publisher))];
+  if (publishers.length === 0) return CROP_MASTER_ATTRIBUTION;
+  return `${publishers.join('・')}の公開資料をもとにした目安です`;
+}
+
+/**
+ * 多年草の札に出す 1 行。多年草でなければ null。
+ * 「多年草」だけでは いつ採れるのか が伝わらないので、初収穫の年をラベルに畳む。
+ */
+export function perennialNoticeFor(crop: CropMaster): string | null {
+  if (!crop.perennial) return null;
+  const label = PERENNIAL_FIRST_HARVEST_LABEL[crop.perennial.firstHarvest];
+  return crop.perennial.note ? `${label}。${crop.perennial.note}` : label;
 }
 
 /** id でマスターを引く（ガイド画面の出典など、DB に持たない値のため） */
@@ -311,7 +416,11 @@ const window = (min: number, max: number) => ({ min, max });
 const temp = (
   germination: [number, number],
   growth: [number, number],
-): CropGuideMaster['temperature'] => ({ germination, growth });
+  basis: TemperatureBasis = 'air',
+): CropTemperature => ({ basis, germination, growth });
+/** 種いも・鱗片・根株から始める品目。「発芽◯℃」は地温の萌芽適温 */
+const soilTemp = (germination: [number, number], growth: [number, number]): CropTemperature =>
+  temp(germination, growth, 'soil');
 
 /**
  * 50 品目（WBS 3.1 → 4.19 第 1 段）。秋冬 12 + 春夏 18 + 第 1 段 20。
@@ -777,7 +886,7 @@ export const CROP_MASTER: CropMaster[] = [
       harvestAfterDays: 240,
       harvestWindowDays: window(230, 260),
       harvestDurationDays: null,
-      temperature: temp([15, 20], [15, 20]),
+      temperature: soilTemp([15, 20], [15, 20]),
       rotationYears: 0,
       tasks: [{ kind: 'sucker', afterDays: 45, note: '芽が 2 本出たら細い方をかく' }],
       commonPests: ['アブラムシ', 'さび病'],
@@ -786,8 +895,8 @@ export const CROP_MASTER: CropMaster[] = [
     editorial: { beginner: true, container: container(20) },
   },
   // ─── 春夏作物（3.1b 後半・v2）────────────────────────────────────────────
-  // crop-tomato / crop-cucumber / crop-basil は開発用サンプル(seed.ts)と同じ id。
-  // マスターが upsert で正となり、サンプルの暦・ガイドは同期時に置き換わる。
+  // crop-tomato / crop-cucumber / crop-basil は seed.ts のサンプル栽培が参照する id。
+  // サンプル側は作物・暦・ガイドを持たず、ここが唯一の出どころ（4.19 レビュー 29）。
   {
     id: 'crop-tomato',
     name: 'トマト',
@@ -1212,7 +1321,7 @@ export const CROP_MASTER: CropMaster[] = [
       harvestAfterDays: 100,
       harvestWindowDays: window(90, 110),
       harvestDurationDays: null,
-      temperature: temp([15, 20], [15, 20]),
+      temperature: soilTemp([15, 20], [15, 20]),
       rotationYears: 3,
       tasks: [
         { kind: 'sucker', afterDays: 35, note: '芽が 10cm で 2〜3 本に' },
@@ -1792,7 +1901,7 @@ export const CROP_MASTER: CropMaster[] = [
       harvestAfterDays: 180,
       harvestWindowDays: window(160, 200),
       harvestDurationDays: null,
-      temperature: temp([25, 30], [25, 30]),
+      temperature: soilTemp([25, 30], [25, 30]),
       rotationYears: 4,
       tasks: [
         { kind: 'hill', afterDays: 60, note: '芽が 2〜3 本出そろったら 1 回目。追肥と一緒に' },
@@ -2107,7 +2216,7 @@ export const CROP_MASTER: CropMaster[] = [
       harvestAfterDays: 180,
       harvestWindowDays: window(160, 200),
       harvestDurationDays: null,
-      temperature: temp([25, 30], [25, 30]),
+      temperature: soilTemp([25, 30], [25, 30]),
       rotationYears: 3,
       tasks: [
         { kind: 'hill', afterDays: 50, note: '発芽から 3 週間で 1 回目。追肥と一緒に' },
@@ -2168,7 +2277,7 @@ export const CROP_MASTER: CropMaster[] = [
     family: 'ヒガンバナ科',
     category: 'allium',
     defaultUnit: 'bunch',
-    perennial: true,
+    perennial: { firstHarvest: 'next-year', note: '1 年目は刈らずに株を太らせる' },
     sourceIds: ['ja-saitama-nira', 'jeinou-calendar'],
     calendars: [
       { region: 'cold', kind: 'sow', startMonth: 4, endMonth: 5 },
@@ -2244,9 +2353,13 @@ export const CROP_MASTER: CropMaster[] = [
     name: 'ミョウガ',
     nameReading: 'みょうが',
     family: 'ショウガ科',
-    category: 'tree',
+    // 果樹ではないので v5 で 'tree' から移した。地下の花蕾を採る根もの扱い
+    category: 'root',
     defaultUnit: 'piece',
-    perennial: true,
+    perennial: {
+      firstHarvest: 'same-year',
+      note: '翌年からは 7 月ごろに早まる',
+    },
     sourceIds: ['jeinou-myoga'],
     calendars: [
       { region: 'cold', kind: 'plant', startMonth: 4, endMonth: 5 },
@@ -2268,7 +2381,7 @@ export const CROP_MASTER: CropMaster[] = [
       harvestAfterDays: null,
       harvestWindowDays: null,
       harvestDurationDays: null,
-      temperature: temp([20, 23], [20, 23]),
+      temperature: soilTemp([20, 23], [20, 23]),
       rotationYears: 0,
       tasks: [],
       commonPests: ['ハスモンヨトウ', 'アブラムシ', '根茎腐敗病'],

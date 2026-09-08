@@ -36,6 +36,21 @@ jest.mock('../../services/rotation.service', () => ({
   checkRotation: (...args: unknown[]) => mockCheckRotation(...args),
 }));
 
+// 作物名の候補（レビュー 41）。**照合そのものは実物を使う** — 前方一致や
+// 「どちらですか」の判定を作り物に差し替えると、サービスと画面がずれても気づけない。
+// DB を読む getCropMaster だけ差し替える
+const mockGetCropMaster = jest.fn<Promise<unknown[]>, []>(() =>
+  Promise.resolve([
+    { id: 'crop-tomato', name: 'トマト', nameReading: 'とまと' },
+    { id: 'crop-naganegi', name: '長ネギ', nameReading: 'ながねぎ' },
+    { id: 'crop-hanegi', name: '葉ネギ', nameReading: 'はねぎ' },
+  ]),
+);
+jest.mock('../../services/crop-match.service', () => ({
+  ...jest.requireActual('../../services/crop-match.service'),
+  getCropMaster: () => mockGetCropMaster(),
+}));
+
 jest.mock('../../services/photo-storage.service', () => ({
   persistRecipePhoto: jest.fn(),
 }));
@@ -57,6 +72,11 @@ describe('PlantingForm', () => {
     mockPlaces.mockReset().mockResolvedValue([]);
     mockTags.mockReset().mockResolvedValue([]);
     mockCheckRotation.mockReset().mockResolvedValue(null);
+    mockGetCropMaster.mockReset().mockResolvedValue([
+      { id: 'crop-tomato', name: 'トマト', nameReading: 'とまと' },
+      { id: 'crop-naganegi', name: '長ネギ', nameReading: 'ながねぎ' },
+      { id: 'crop-hanegi', name: '葉ネギ', nameReading: 'はねぎ' },
+    ]);
   });
 
   it('作物名が空だと保存できず、エラーを出す', async () => {
@@ -233,6 +253,7 @@ describe('PlantingForm の連作チェック', () => {
     mockPlaces.mockReset().mockResolvedValue([]);
     mockTags.mockReset().mockResolvedValue([]);
     mockCheckRotation.mockReset().mockResolvedValue(null);
+    mockGetCropMaster.mockReset().mockResolvedValue([]);
   });
 
   it('作物名・場所・植え付け日を渡して引く。編集時は自分自身を除く', async () => {
@@ -279,5 +300,130 @@ describe('PlantingForm の連作チェック', () => {
 
     await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));
     expect(screen.queryByTestId('rotation-notice')).toBeNull();
+  });
+});
+
+// ─── 作物名の候補（レビュー 41 / 7c）─────────────────────────────────────
+// cropId が付くかどうかで進行帯・「つぎの作業」・収穫の既定単位が決まる。
+// 候補を出して**付く確率を上げる**のがここの仕事
+describe('PlantingForm の作物名の候補', () => {
+  beforeEach(() => {
+    mockPush.mockReset();
+    mockPlaces.mockReset().mockResolvedValue([]);
+    mockTags.mockReset().mockResolvedValue([]);
+    mockCheckRotation.mockReset().mockResolvedValue(null);
+    mockGetCropMaster.mockReset().mockResolvedValue([
+      { id: 'crop-tomato', name: 'トマト', nameReading: 'とまと' },
+      { id: 'crop-naganegi', name: '長ネギ', nameReading: 'ながねぎ' },
+      { id: 'crop-hanegi', name: '葉ネギ', nameReading: 'はねぎ' },
+    ]);
+  });
+
+  async function focusCropName(): Promise<void> {
+    const input = screen.getByPlaceholderText('トマト');
+    fireEvent(input, 'focus');
+    await waitFor(() => expect(mockGetCropMaster).toHaveBeenCalled());
+  }
+
+  it('作物名にフォーカスするまでマスターを引かない', () => {
+    setup();
+    expect(mockGetCropMaster).not.toHaveBeenCalled();
+  });
+
+  it('マスターは 1 回だけ引く', async () => {
+    setup();
+    await focusCropName();
+    fireEvent(screen.getByPlaceholderText('トマト'), 'focus');
+    fireEvent.changeText(screen.getByPlaceholderText('トマト'), 'とま');
+
+    await waitFor(() => expect(screen.getByText('もしかして')).toBeTruthy());
+    expect(mockGetCropMaster).toHaveBeenCalledTimes(1);
+  });
+
+  it('1 文字では候補を出さない', async () => {
+    setup();
+    await focusCropName();
+
+    fireEvent.changeText(screen.getByPlaceholderText('トマト'), 'と');
+
+    await waitFor(() => expect(screen.queryByTestId('crop-suggestions')).toBeNull());
+  });
+
+  it('2 文字以上で候補を出し、押すと名前と読みの両方が入る', async () => {
+    const { onSubmit } = setup();
+    await focusCropName();
+
+    fireEvent.changeText(screen.getByPlaceholderText('トマト'), 'とま');
+    await waitFor(() => expect(screen.getByText('もしかして')).toBeTruthy());
+
+    fireEvent.press(screen.getByLabelText('作物名をトマトにする'));
+    fireEvent.press(screen.getByText('保存'));
+
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));
+    // 読みまで入れるのは FTS のため。名前だけ入れると検索でかなに当たらない
+    expect(onSubmit.mock.calls[0][0]).toMatchObject({
+      cropName: 'トマト',
+      cropNameReading: 'とまと',
+    });
+  });
+
+  it('「ネギ」はどちらか選ばせる（葉ネギに黙って寄せない）', async () => {
+    const { onSubmit } = setup();
+    await focusCropName();
+
+    fireEvent.changeText(screen.getByPlaceholderText('トマト'), 'ネギ');
+    await waitFor(() => expect(screen.getByText('どちらですか')).toBeTruthy());
+    expect(screen.getByLabelText('作物名を長ネギにする')).toBeTruthy();
+    expect(screen.getByLabelText('作物名を葉ネギにする')).toBeTruthy();
+
+    fireEvent.press(screen.getByLabelText('作物名を長ネギにする'));
+    fireEvent.press(screen.getByText('保存'));
+
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));
+    expect(onSubmit.mock.calls[0][0]).toMatchObject({
+      cropName: '長ネギ',
+      cropNameReading: 'ながねぎ',
+    });
+  });
+
+  it('候補を押したあと名前を打ち直したら、読みを持ち越さない', async () => {
+    const { onSubmit } = setup();
+    await focusCropName();
+
+    fireEvent.changeText(screen.getByPlaceholderText('トマト'), 'とま');
+    await waitFor(() => expect(screen.getByText('もしかして')).toBeTruthy());
+    fireEvent.press(screen.getByLabelText('作物名をトマトにする'));
+
+    // 「ナス」なのに読みが「とまと」の行ができると、検索が別の作物に当たる
+    fireEvent.changeText(screen.getByPlaceholderText('トマト'), 'ナス');
+    fireEvent.press(screen.getByText('保存'));
+
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));
+    expect(onSubmit.mock.calls[0][0].cropName).toBe('ナス');
+    expect(onSubmit.mock.calls[0][0].cropNameReading).toBeUndefined();
+  });
+
+  it('当たらなければ候補を出さない（自由入力を禁じない）', async () => {
+    const { onSubmit } = setup();
+    await focusCropName();
+
+    fireEvent.changeText(screen.getByPlaceholderText('トマト'), 'パクチー');
+    await waitFor(() => expect(screen.queryByTestId('crop-suggestions')).toBeNull());
+
+    fireEvent.press(screen.getByText('保存'));
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));
+    expect(onSubmit.mock.calls[0][0].cropName).toBe('パクチー');
+  });
+
+  it('マスターが引けなくても入力と保存は続けられる', async () => {
+    mockGetCropMaster.mockRejectedValue(new Error('DB not ready'));
+    const { onSubmit } = setup();
+    await focusCropName();
+
+    fireEvent.changeText(screen.getByPlaceholderText('トマト'), 'とま');
+    await waitFor(() => expect(screen.queryByText('もしかして')).toBeNull());
+
+    fireEvent.press(screen.getByText('保存'));
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));
   });
 });
