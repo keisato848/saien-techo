@@ -9,7 +9,9 @@ argument-hint: 'Provide AWS region, alert email, and the Gemini key source'
 
 ## When To Use
 
-- Deploying `apps/server` to AWS Lambda behind a public Function URL with cost guardrails.
+- Deploying the Hono inference server to AWS Lambda behind a public Function URL with cost
+  guardrails. **The server source is not in this repo (#150)** — it lives in daidoko's
+  `apps/server` (Railway shared, 決定⑨). Vendor it here first, or deploy from that repo. <!-- daidoko-ref-ok -->
 - Moving the Vision endpoint off Railway, or standing up a personal/learning deploy.
 
 ## Procedure

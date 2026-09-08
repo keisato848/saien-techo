@@ -113,8 +113,9 @@ node scripts/agent/build-android.mjs --arch x86_64   # app.json/plugins 変更�
 ## 4. ローカルサーバー E2E（AI 相談）
 
 ```bash
-# サーバー起動（.env は自動ロードされない — --env-file 必須）
-cd apps/server && pnpm exec tsx --env-file=.env src/index.ts
+# サーバーはこのリポジトリに無い（#150）。だいどこ側で起動する
+# （.env は自動ロードされない — --env-file 必須）
+cd C:/Projects/daidoko/apps/server && pnpm exec tsx --env-file=.env src/index.ts # daidoko-ref-ok
 ```
 
 ```powershell
