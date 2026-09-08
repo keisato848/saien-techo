@@ -43,11 +43,107 @@ function crop(id: string) {
   return found;
 }
 
+/** `name` はカタカナで書く（crop-master.ts のヘッダの決め） */
+const KATAKANA_NAME = /^[ァ-ヶー]+$/;
+
+/**
+ * カタカナ以外の表記を許す品目と、その理由。
+ *
+ * **理由の無い例外は足さない。** 表記が揺れると検索が別名頼みになり、
+ * UI の例示（作物ガイドのプレースホルダ）もマスターとずれる（2026-09-07 レビュー 38）。
+ */
+const NAME_NOTATION_EXCEPTIONS: Record<string, string> = {
+  'crop-kushinsai': '種袋・店頭の表記が「空芯菜」で通っている。カタカナ表記は別名で拾う',
+  'crop-hanegi': 'ネギは「葉ネギ / 長ネギ」の対で区別する慣用表記。全カタカナだと対が読めない',
+  'crop-naganegi': '同上。「ナガネギ」表記は流通でほぼ使われない',
+};
+
+/**
+ * v4（50 品目）時点の id。**この配列からは消さない。**
+ * id は `plantings.crop_id` に保存され、`syncCropMaster` は `crops` 行を消さないので、
+ * マスターから品目を落とすと利用者の栽培が参照先を失う（暦も「次の作業」も静かに止まる）。
+ */
+const FROZEN_CROP_IDS = [
+  'crop-daikon',
+  'crop-kabu',
+  'crop-ninjin',
+  'crop-hourensou',
+  'crop-komatsuna',
+  'crop-shungiku',
+  'crop-mizuna',
+  'crop-hakusai',
+  'crop-kyabetsu',
+  'crop-burokkori',
+  'crop-tamanegi',
+  'crop-ninniku',
+  'crop-tomato',
+  'crop-cucumber',
+  'crop-nasu',
+  'crop-piiman',
+  'crop-okura',
+  'crop-edamame',
+  'crop-toumorokoshi',
+  'crop-kabocha',
+  'crop-goya',
+  'crop-zucchini',
+  'crop-jagaimo',
+  'crop-satsumaimo',
+  'crop-ichigo',
+  'crop-hanegi',
+  'crop-snap-endou',
+  'crop-shiso',
+  'crop-basil',
+  'crop-retasu',
+  'crop-rukkora',
+  'crop-kushinsai',
+  'crop-chingensai',
+  'crop-moroheiya',
+  'crop-sanchu',
+  'crop-karifurawa',
+  'crop-radisshu',
+  'crop-shoga',
+  'crop-togarashi',
+  'crop-papurika',
+  'crop-suika',
+  'crop-ingen',
+  'crop-sayaendo',
+  'crop-soramame',
+  'crop-rakkasei',
+  'crop-satoimo',
+  'crop-naganegi',
+  'crop-nira',
+  'crop-paseri',
+  'crop-myoga',
+];
+
 describe('作物マスターの構造', () => {
   it('id は一意で crop- 始まり', () => {
     const ids = CROP_MASTER.map((crop) => crop.id);
     expect(new Set(ids).size).toBe(ids.length);
     for (const id of ids) expect(id).toMatch(/^crop-[a-z-]+$/);
+  });
+
+  it('name はカタカナ。例外は理由つきの許可リストに載っているものだけ', () => {
+    const offenders = CROP_MASTER.filter(
+      (crop) => !KATAKANA_NAME.test(crop.name) && !(crop.id in NAME_NOTATION_EXCEPTIONS),
+    ).map((crop) => `${crop.id}(${crop.name})`);
+    expect(offenders).toEqual([]);
+  });
+
+  it('表記の例外は実在する品目で、理由が書かれている', () => {
+    for (const [id, reason] of Object.entries(NAME_NOTATION_EXCEPTIONS)) {
+      const crop = findCropMaster(id);
+      expect(`${id}:${crop ? 'あり' : 'なし'}`).toBe(`${id}:あり`);
+      // カタカナに直したら例外リストからも消すこと（死んだ例外を残さない）
+      expect(`${id}:${KATAKANA_NAME.test(crop?.name ?? '')}`).toBe(`${id}:false`);
+      expect(reason.trim().length).toBeGreaterThan(10);
+    }
+  });
+
+  it('一度出した id は消さない・変えない（plantings.crop_id に保存済み）', () => {
+    const ids = new Set(CROP_MASTER.map((crop) => crop.id));
+    const missing = FROZEN_CROP_IDS.filter((id) => !ids.has(id));
+    expect(missing).toEqual([]);
   });
 
   it('読み仮名はひらがな', () => {

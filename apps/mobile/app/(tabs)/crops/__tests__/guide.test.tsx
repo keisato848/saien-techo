@@ -126,6 +126,26 @@ describe('作物ガイド一覧', () => {
     mockParams = {};
   });
 
+  // 例示がマスターの表記（トウガラシ・空芯菜）と違い、別名のおかげで
+  // かろうじて当たっていた（2026-09-07 レビュー 38）
+  it('検索欄の例示はマスターに実在する表記を使う', async () => {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { CROP_MASTER } = require('../../../../src/db/crop-master');
+    render(<CropGuideListScreen />);
+
+    const placeholder = screen.getByPlaceholderText(/作物名で探す/).props.placeholder as string;
+    const examples = placeholder
+      .replace(/^.*（|）$/g, '')
+      .split('・')
+      .map((example) => example.replace(/…$/, ''))
+      .filter((example) => example.length > 0);
+    const names: string[] = CROP_MASTER.map((crop: { name: string }) => crop.name);
+    expect(examples.length).toBeGreaterThan(0);
+    for (const example of examples) {
+      expect(`${example}:${names.includes(example)}`).toBe(`${example}:true`);
+    }
+  });
+
   it('作物と科を並べる', async () => {
     mockGetList.mockResolvedValue([
       listItem({ cropId: 'crop-daikon' }),

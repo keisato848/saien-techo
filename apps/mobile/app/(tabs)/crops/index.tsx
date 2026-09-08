@@ -233,7 +233,7 @@ export default function CropGuideListScreen() {
           style={styles.searchInput}
           value={query}
           onChangeText={setQuery}
-          placeholder="作物名で探す（ししとう・空心菜…）"
+          placeholder="作物名で探す（トウガラシ・空芯菜…）"
           placeholderTextColor={Colors.inkDim}
           autoCorrect={false}
           returnKeyType="search"

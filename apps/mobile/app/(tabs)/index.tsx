@@ -203,7 +203,13 @@ export default function HomeScreen() {
                         <Text style={styles.growingEmoji}>🌱</Text>
                       </View>
                     )}
-                    <Text style={styles.growingName} numberOfLines={1}>
+                    <Text
+                      style={styles.growingName}
+                      numberOfLines={1}
+                      // カード内容幅は 70px しかなく、130% で 1 行が切れる。
+                      // 上限を 1.3 で止めて名前と日数だけは読める状態を守る（他は伸ばしてよい）
+                      maxFontSizeMultiplier={1.3}
+                    >
                       {planting.cropName}
                     </Text>
                     {progress.get(planting.id) ? (
@@ -212,12 +218,18 @@ export default function HomeScreen() {
                           progress={progress.get(planting.id) as PlantingProgress}
                           width={GROWING_BAND_WIDTH}
                         />
-                        <Text style={styles.growingDays} numberOfLines={1}>
+                        <Text
+                          style={styles.growingDays}
+                          numberOfLines={1}
+                          maxFontSizeMultiplier={1.3}
+                        >
                           {describeProgress(progress.get(planting.id) as PlantingProgress)}
                         </Text>
                       </>
                     ) : (
-                      <Text style={styles.growingDays}>{planting.elapsedDays}日目</Text>
+                      <Text style={styles.growingDays} maxFontSizeMultiplier={1.3}>
+                        {planting.elapsedDays}日目
+                      </Text>
                     )}
                   </PressableScale>
                 ))}

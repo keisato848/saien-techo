@@ -273,3 +273,43 @@ export function describeProgress(progress: PlantingProgress): string {
         : `${progress.harvestCount}回 採れた`;
   }
 }
+
+/**
+ * 読み上げ用の一行。**`describeProgress` とは別物**。
+ *
+ * `describeProgress` は幅 76px（6 文字）に収める都合で「あと15日」まで削っており、
+ * 読み上げにはそのまま使えない。読み上げは幅の制約を受けないので、
+ * 帯が**目で示していること**（今日の位置・収穫の窓・作業ログのドット）を
+ * ここで言葉にする。帯に a11y 属性が 1 つも無く、4.19 の目玉である収穫の窓が
+ * 読み上げに存在しなかったため（2026-09-07 レビュー 36）。
+ */
+export function describeProgressForA11y(progress: PlantingProgress): string {
+  const parts = [`植え付けから${progress.elapsedDays}日目`];
+  switch (progress.state) {
+    case 'none':
+      parts.push('収穫の目安は分かりません');
+      break;
+    case 'growing':
+      parts.push(`収穫の目安まであと${progress.daysToHarvest}日`);
+      break;
+    case 'due': {
+      const over = -(progress.daysToHarvest as number);
+      parts.push(
+        over > 0 ? `収穫の目安を${over}日過ぎています。採りどき` : '今日が収穫の目安。採りどき',
+      );
+      break;
+    }
+    case 'harvesting':
+      parts.push(`これまでに${progress.harvestCount}回 収穫しました`);
+      break;
+  }
+  if (progress.harvestWindow) {
+    parts.push(
+      `収穫の目安は植え付けから${progress.harvestWindow.min}日〜${progress.harvestWindow.max}日`,
+    );
+  } else if (progress.harvestAfterDays != null) {
+    parts.push(`収穫の目安は植え付けから${progress.harvestAfterDays}日`);
+  }
+  if (progress.logDays.length > 0) parts.push(`作業の記録${progress.logDays.length}件`);
+  return parts.join('。');
+}

@@ -187,3 +187,51 @@ describe('ProgressBand', () => {
     });
   });
 });
+
+describe('ProgressBand の読み上げ', () => {
+  it('progressbar として読め、進み具合を 0〜100 で持つ', () => {
+    render(<ProgressBand progress={progress()} width={70} />);
+
+    const band = screen.getByTestId('progress-band');
+    expect(band.props.accessibilityRole).toBe('progressbar');
+    // 帯の右端は軸の終わり。既定のフィクスチャは 60 日目安で 45 日目
+    expect(band.props.accessibilityValue).toEqual({ min: 0, max: 100, now: 75 });
+  });
+
+  it('ラベルに収穫の窓と作業ログの件数が入る', () => {
+    render(
+      <ProgressBand
+        progress={progress({
+          harvestAfterDays: 70,
+          harvestWindow: { min: 60, max: 70 },
+          bandEndDay: 70,
+          ratio: 45 / 70,
+          logDays: [5, 20, 35],
+        })}
+        width={70}
+      />,
+    );
+
+    const label = screen.getByTestId('progress-band').props.accessibilityLabel;
+    expect(label).toContain('60日〜70日');
+    expect(label).toContain('作業の記録3件');
+  });
+
+  it('採りどきはラベルでも採りどきと読む', () => {
+    render(
+      <ProgressBand
+        progress={progress({ state: 'due', daysToHarvest: -8, ratio: 1 })}
+        width={70}
+      />,
+    );
+
+    expect(screen.getByTestId('progress-band').props.accessibilityLabel).toContain('採りどき');
+    expect(screen.getByTestId('progress-band').props.accessibilityValue.now).toBe(100);
+  });
+
+  it('目安が無ければ帯を描かないので読み上げにも出さない', () => {
+    render(<ProgressBand progress={progress({ state: 'none', ratio: null })} width={70} />);
+
+    expect(screen.queryByTestId('progress-band')).toBeNull();
+  });
+});

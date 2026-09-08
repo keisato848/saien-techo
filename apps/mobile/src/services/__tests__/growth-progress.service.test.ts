@@ -29,6 +29,7 @@ jest.mock('../photo-storage.service', () => ({
 import { createCareLog } from '../care-log.service';
 import {
   describeProgress,
+  describeProgressForA11y,
   getPlantingProgress,
   type PlantingProgress,
 } from '../growth-progress.service';
@@ -302,5 +303,75 @@ describeIfSqlite('growth-progress.service (real SQLite)', () => {
     const progress = await progressFor(plantingId);
 
     expect(progress.logDays).toEqual([5, 35]);
+  });
+});
+
+/**
+ * 読み上げの文言（レビュー 36）。進行帯は Svg で中身を読み上げに出さないので、
+ * 帯が目で示していること（今日の位置・収穫の窓・作業ログ）が
+ * ここに言葉として出ていないと、読み上げ利用者には帯が存在しない。
+ */
+describe('describeProgressForA11y', () => {
+  const base: PlantingProgress = {
+    plantingId: 'planting-1',
+    state: 'growing',
+    harvestCount: 0,
+    elapsedDays: 45,
+    harvestAfterDays: 70,
+    harvestWindow: { min: 60, max: 70 },
+    ratio: 45 / 70,
+    daysToHarvest: 15,
+    logDays: [5, 20, 35],
+  };
+
+  it('76px の短文とは別物で、経過日数・収穫の窓・作業ログを言葉にする', () => {
+    const label = describeProgressForA11y(base);
+
+    expect(label).toBe(
+      '植え付けから45日目。収穫の目安まであと15日。収穫の目安は植え付けから60日〜70日。作業の記録3件',
+    );
+    // 幅 6 文字の describeProgress をそのまま流用していないこと
+    expect(label).not.toBe(describeProgress(base));
+  });
+
+  it('収穫の幅を持たない作物は 1 点の目安として読む', () => {
+    const label = describeProgressForA11y({
+      ...base,
+      harvestWindow: null,
+      harvestAfterDays: 60,
+      daysToHarvest: 15,
+      logDays: [],
+    });
+
+    expect(label).toBe('植え付けから45日目。収穫の目安まであと15日。収穫の目安は植え付けから60日');
+  });
+
+  it('採りどきは超過日数まで読む（当日は「今日が収穫の目安」）', () => {
+    expect(
+      describeProgressForA11y({ ...base, state: 'due', daysToHarvest: -8, logDays: [] }),
+    ).toContain('収穫の目安を8日過ぎています。採りどき');
+    expect(
+      describeProgressForA11y({ ...base, state: 'due', daysToHarvest: 0, logDays: [] }),
+    ).toContain('今日が収穫の目安。採りどき');
+  });
+
+  it('収穫中は回数を読む（帯が満杯で見た目の差が消えるため）', () => {
+    expect(
+      describeProgressForA11y({ ...base, state: 'harvesting', harvestCount: 4, logDays: [] }),
+    ).toBe('植え付けから45日目。これまでに4回 収穫しました。収穫の目安は植え付けから60日〜70日');
+  });
+
+  it('目安が無い作物は日数だけを読む', () => {
+    expect(
+      describeProgressForA11y({
+        ...base,
+        state: 'none',
+        harvestAfterDays: null,
+        harvestWindow: null,
+        ratio: null,
+        daysToHarvest: null,
+        logDays: [],
+      }),
+    ).toBe('植え付けから45日目。収穫の目安は分かりません');
   });
 });
