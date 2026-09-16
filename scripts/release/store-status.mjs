@@ -72,10 +72,14 @@ async function playStatus(pkg) {
     await fetch(`${base}/edits/${edit.id}`, { method: 'DELETE', headers: H });
   }
 
+  // **この件数を累計と読まないこと。** Play の reviews.list は公式手順書
+  // （Reply to Reviews API）のとおり「直近 1 週間に作成・更新されたもの」しか返さず、
+  // **コメントの無い星だけの評価は API から一切見えない**。累計は Play Console の
+  // CSV でしか分からない。ASC の customerReviews（下の ascStatus）は全期間を返すので別物
   const reviews = await get('/reviews?maxResults=5');
   const list = reviews.reviews ?? [];
   console.log(
-    `  reviews    ${list.length} 件${list.length === 0 ? '（利用者が少ない可能性 — 統計で裏取りする）' : ''}`,
+    `  reviews    ${list.length} 件（直近 1 週間・コメント付きのみ。累計は Console の CSV）`,
   );
   for (const x of list) {
     const c = x.comments?.[0]?.userComment ?? {};
