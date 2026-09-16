@@ -48,6 +48,17 @@ export async function getAccessToken(scope = 'https://www.googleapis.com/auth/an
   return tok.access_token;
 }
 
+/**
+ * サービスアカウントが属する GCP プロジェクト ID。
+ * BigQuery エクスポートの探索先の既定値に使う。
+ * **`client_email` も `private_key` も返さない** — 返すのは project_id だけ。
+ */
+export function serviceAccountProjectId() {
+  const key = JSON.parse(fs.readFileSync(KEY_PATH, 'utf8'));
+  if (!key.project_id) throw new Error('サービスアカウント JSON に project_id がありません');
+  return key.project_id;
+}
+
 /** edits フローの薄いクライアント */
 export function createEditsClient(accessToken) {
   const jsonHeaders = {
