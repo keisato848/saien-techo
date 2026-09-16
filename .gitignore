@@ -85,3 +85,7 @@ nul
 # android/ は既にプロジェクトごと無視しているので aab/apk は対象外。
 apps/mobile/build-*.ipa
 *.ipa
+
+# ストアの数字（store-analytics.mjs の出力）。private リポジトリだが、公開状態が変われば
+# 流入の実数が露出する。必要になったら個別に git add -f する
+analytics/

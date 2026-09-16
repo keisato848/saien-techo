@@ -19,6 +19,7 @@
 import { androidPackage } from '../agent/lib/app-identity.mjs';
 import { ascAppId, ascGet } from './lib/asc-api.mjs';
 import { getAccessToken } from './lib/play-api.mjs';
+import { getVitals, METRIC_SETS, VITALS_SCOPE } from './lib/play-vitals.mjs';
 
 const args = process.argv.slice(2);
 const opt = (name) => {
@@ -86,67 +87,37 @@ async function playStatus(pkg) {
   await playReporting(pkg);
 }
 
-/** インストール・クラッシュ（Developer Reporting API）。未有効なら手順を出して続行 */
+/**
+ * Android Vitals（Developer Reporting API）。クラッシュだけを短く出す。
+ * 取得の本体は lib/play-vitals.mjs に寄せてある（store-analytics.mjs と共用）。
+ * 未有効・権限不足でも例外にせず、理由を 1 行出して続行する。
+ */
 async function playReporting(pkg) {
   try {
-    const token = await getAccessToken('https://www.googleapis.com/auth/playdeveloperreporting');
-    // **end_date は「データ鮮度」を超えられない**（超えると 400 INVALID_ARGUMENT）。
-    // 鮮度は通常 2〜3 日遅れなので、メトリクスセットから最新の freshness を読んで揃える。
-    const H = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
-    const meta = await (
-      await fetch(
-        `https://playdeveloperreporting.googleapis.com/v1beta1/apps/${pkg}/crashRateMetricSet`,
-        { headers: H },
-      )
-    ).json();
-    const fresh = (meta.freshnessInfo?.freshnesses ?? []).find(
-      (f) => f.aggregationPeriod === 'DAILY',
-    )?.latestEndTime;
-    const end = fresh
-      ? new Date(Date.UTC(fresh.year, fresh.month - 1, fresh.day))
-      : new Date(Date.now() - 3 * 86400_000);
-    const start = new Date(end.getTime() - 7 * 86400_000);
-    const d = (x) => ({
-      year: x.getUTCFullYear(),
-      month: x.getUTCMonth() + 1,
-      day: x.getUTCDate(),
+    const token = await getAccessToken(VITALS_SCOPE);
+    const vitals = await getVitals({
+      pkg,
+      token,
+      days: 7,
+      metricSets: METRIC_SETS.filter((m) => m.id === 'crashRateMetricSet'),
     });
-    const r = await fetch(
-      `https://playdeveloperreporting.googleapis.com/v1beta1/apps/${pkg}/crashRateMetricSet:query`,
-      {
-        method: 'POST',
-        headers: H,
-        body: JSON.stringify({
-          timelineSpec: { aggregationPeriod: 'DAILY', startTime: d(start), endTime: d(end) },
-          metrics: ['crashRate', 'distinctUsers'],
-        }),
-      },
-    );
-    const j = await r.json();
-    if (r.status === 403) {
-      const m = /project (\d+)/.exec(j.error?.message ?? '');
-      console.log(
-        `  stats      取得不可: Play Developer Reporting API が未有効${m ? `（GCP project ${m[1]}）` : ''}。` +
-          ' 有効化 → SA に Play Console の「アプリ情報の閲覧」権限を付与すると取れる',
-      );
+    const set = vitals.sets[0];
+    if (!set.ok) {
+      console.log(`  stats      取得不可: ${String(set.reason).slice(0, 200)}`);
       return;
     }
-    if (!r.ok) throw new Error(`${r.status} ${JSON.stringify(j).slice(0, 160)}`);
     // **行が無い = 期間中にクラッシュの報告が無い**（この API はクラッシュ/ANR 系だけで、
     // インストール数や全ユーザー数は返さない — それは Play Console の UI にしかない）
-    if (!(j.rows ?? []).length) {
+    if (set.rows.length === 0) {
       console.log(
-        `  stats(7d)  クラッシュの報告なし（〜${end.toISOString().slice(0, 10)}・Reporting API）。利用者数はこの API では取れない`,
+        `  stats(7d)  クラッシュの報告なし（〜${vitals.end}・Reporting API）。利用者数はこの API では取れない`,
       );
       return;
     }
     console.log('  stats(7d)  日付        crashRate  distinctUsers');
-    for (const row of j.rows ?? []) {
-      const v = Object.fromEntries(
-        row.metrics.map((mm) => [mm.metric, mm.decimalValue?.value ?? mm.value ?? '-']),
-      );
+    for (const row of set.rows) {
       console.log(
-        `             ${row.startTime.year}-${String(row.startTime.month).padStart(2, '0')}-${String(row.startTime.day).padStart(2, '0')}  ${String(v.crashRate).padEnd(9)}  ${v.distinctUsers}`,
+        `             ${row.date}  ${String(row.crashRate).padEnd(9)}  ${row.distinctUsers}`,
       );
     }
   } catch (e) {
