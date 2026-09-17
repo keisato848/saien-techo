@@ -152,7 +152,7 @@ export function renderSales(sales) {
   }
   const s = sales.summary;
   out.push(
-    `期間: ${cell(sales.from)} 〜 ${cell(sales.to)}（${cell(sales.days)} 日 / うち計上なし ${cell(sales.emptyDays)} 日）`,
+    `期間: ${cell(sales.from)} 〜 ${cell(sales.to)}（要求 ${cell(sales.days)} 日 / 実際に見た ${cell(sales.countedDays ?? sales.days)} 日 / 売上なし ${cell(sales.emptyDays)} 日 / 未生成 ${cell(sales.pendingDays ?? 0)} 日）`,
     '',
   );
   const main = mdTable(
@@ -284,7 +284,7 @@ export function renderSummary({ date, vitals, asc, sales, play, bigquery, notes 
     '',
     '`node scripts/release/store-analytics.mjs` が自動生成した。手で編集すると次回の実行で消える。',
     '',
-    '取得元は API のみ（ブラウザのスクショは使っていない）。取れなかった項目は理由を残してある。',
+    '取得元は API と、Play Console にログイン済みのブラウザで落とした CSV。画面のスクショは使っていない。取れなかった項目は理由を残してある。',
     '',
     ...renderVitals(vitals),
     ...renderAsc(asc),

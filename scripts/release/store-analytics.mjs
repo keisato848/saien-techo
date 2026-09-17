@@ -48,7 +48,8 @@ const TO_STDOUT = flag('stdout');
 const PLAY_REPORT_DIR = path.resolve(ROOT, opt('play-reports', 'analytics/play-reports'));
 const VENDOR = opt('vendor', process.env.ASC_VENDOR_NUMBER ?? null);
 const SKU = opt('sku', 'saien-techo');
-const today = new Date().toISOString().slice(0, 10);
+// **UTC の日付を使わない。** JST の 00:00〜08:59 に実行すると前日のフォルダを上書きする
+const today = new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Tokyo' });
 const OUT_DIR = opt('out', path.join(ROOT, 'analytics', today));
 
 const notes = [];
@@ -167,7 +168,7 @@ async function main() {
   if (bigquery) console.log(`  bigquery   ${bigquery.state}: ${bigquery.detail}`);
   else notes.push('BigQuery エクスポートの判定は実行していない（--check-bigquery で判定する）');
 
-  if (!VENDOR)
+  if (!PLAY_ONLY && !VENDOR)
     notes.push(
       'ベンダー番号が未設定のため、売上とトレンド（ダウンロード数）を取得していない。ASC_VENDOR_NUMBER か --vendor で渡す',
     );

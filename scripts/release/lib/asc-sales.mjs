@@ -89,6 +89,12 @@ export function summarizeSales(rows, { sku } = {}) {
   const target = sku
     ? list.filter((r) => String(r.SKU ?? '').toLowerCase() === String(sku).toLowerCase())
     : list;
+  // **SKU が一致しないと全部 0 になる。** 「売れていない」と見分けが付かないので、
+  // 行はあるのに 1 件も当たらなかったことを呼び側へ伝える
+  const skuMismatch =
+    Boolean(sku) && target.length === 0 && list.length > 0
+      ? [...new Set(list.map((r) => r.SKU).filter(Boolean))]
+      : null;
 
   const kinds = new Map();
   const byDevice = new Map();
@@ -113,6 +119,7 @@ export function summarizeSales(rows, { sku } = {}) {
   const sortDesc = (m) => [...m.entries()].sort((a, b) => b[1] - a[1]);
   return {
     rowCount: target.length,
+    skuMismatch,
     downloads: kinds.get('download') ?? 0,
     updates: kinds.get('update') ?? 0,
     redownloads: kinds.get('redownload') ?? 0,
@@ -143,7 +150,22 @@ export async function fetchSalesDay({ vendorNumber, reportDate }) {
   const res = await fetch(`${ASC_BASE}/salesReports?${qs}`, {
     headers: { Authorization: `Bearer ${ascToken()}`, Accept: 'application/a-gzip' },
   });
-  if (res.status === 404) return { ok: true, rows: [], empty: true };
+  if (res.status === 404) {
+    // **「売上ゼロ」と「まだ生成されていない」を混ぜない。** Apple の日次レポートは
+    // 翌日 5am PT まで存在せず、その 404 の本文は「not available yet」。
+    // 混ぜると「7 日間で新規 0」と「5 日分しか見ていない」が同じ表示になる
+    const body = await res.text().catch(() => '');
+    const detail = (() => {
+      try {
+        return JSON.parse(body).errors?.[0]?.detail ?? body;
+      } catch {
+        return body;
+      }
+    })();
+    if (/not available yet|not yet available|is not available/i.test(detail))
+      return { ok: true, rows: [], pending: true, detail: String(detail).slice(0, 160) };
+    return { ok: true, rows: [], empty: true };
+  }
   if (!res.ok) {
     const body = await res.text();
     let detail = body.slice(0, 200);
@@ -177,24 +199,40 @@ export async function getSales({ vendorNumber, sku, days = 30, now }) {
   let rows = [];
   const failed = [];
   let emptyDays = 0;
+  let pendingDays = 0;
   for (const d of dates) {
     const r = await fetchSalesDay({ vendorNumber, reportDate: d });
     if (!r.ok) {
       failed.push(`${d}: ${r.reason}`);
       continue;
     }
-    if (r.empty) emptyDays += 1;
+    if (r.pending) pendingDays += 1;
+    else if (r.empty) emptyDays += 1;
     rows = rows.concat(r.rows);
   }
   if (failed.length === dates.length)
     return { state: 'error', detail: failed[0] ?? '全ての日で取得に失敗しました' };
+  const summary = summarizeSales(rows, { sku });
+  if (summary.skuMismatch)
+    return {
+      state: 'sku-mismatch',
+      detail: `SKU「${sku}」の行が 1 件も無い。レポートに出てきた SKU: ${summary.skuMismatch.join(', ')}。--sku で指定し直す`,
+    };
+  if (rows.length === 0 && pendingDays === dates.length)
+    return {
+      state: 'pending',
+      detail: `指定した ${dates.length} 日ぶんがすべて未生成。Apple の日次レポートは翌日 5am PT まで出ない`,
+    };
   return {
     state: 'ok',
     from: dates[0],
+    // **未生成の日を「期間」に含めない。** 含めると見ていない日を見たことにする
     to: dates[dates.length - 1],
     days: dates.length,
+    countedDays: dates.length - pendingDays - failed.length,
     emptyDays,
+    pendingDays,
     failed,
-    summary: summarizeSales(rows, { sku }),
+    summary,
   };
 }

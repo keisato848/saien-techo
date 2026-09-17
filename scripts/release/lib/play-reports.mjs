@@ -59,7 +59,10 @@ export function decodeCsv(buf) {
   if (!buf || buf.length < 2) return '';
   const b = Buffer.isBuffer(buf) ? buf : Buffer.from(buf);
   if (b[0] === 0xff && b[1] === 0xfe) return b.subarray(2).toString('utf16le');
-  if (b[0] === 0xfe && b[1] === 0xff) return b.subarray(2).swap16().toString('utf16le');
+  // **subarray は元のバッファと記憶を共有する。** swap16() はその場で書き換えるので、
+  // コピーせずに呼ぶと呼び出し元の buf が壊れる（保存前に判定すると壊れたまま保存される）
+  if (b[0] === 0xfe && b[1] === 0xff)
+    return Buffer.from(b.subarray(2)).swap16().toString('utf16le');
   if (b[0] === 0xef && b[1] === 0xbb && b[2] === 0xbf) return b.subarray(3).toString('utf8');
   return b.toString('utf8');
 }
@@ -144,7 +147,12 @@ export function summarizeStorePerformance(rows, { groupBy = 'Traffic source' } =
       header,
     };
 
-  const key = header.includes(groupBy) ? groupBy : null;
+  // 完全一致だと実 CSV が `Traffic Source`（大文字 S）のとき表が黙って消える
+  const norm = (x) =>
+    String(x)
+      .toLowerCase()
+      .replace(/[^a-z0-9]/g, '');
+  const key = header.find((h) => norm(h) === norm(groupBy)) ?? null;
   const groups = new Map();
   let visitors = 0;
   let acquisitions = 0;

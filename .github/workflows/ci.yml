@@ -42,6 +42,12 @@ jobs:
       - name: Test (mobile + shared)
         run: pnpm -r test
 
+      # Q-5b: リリース運用スクリプトのテスト。**`pnpm -r test` では走らない**
+      # （workspace のパッケージだけが対象で、ルートの test:scripts は含まれない）。
+      # 2026-09-17 の時点で 53 件が CI で一度も実行されていなかった
+      - name: Test (release scripts)
+        run: pnpm test:scripts
+
       # Q-4: Coverage (informational — thresholds enforced in vitest config)
       - name: Test coverage (server)
         run: pnpm --filter server test -- --coverage

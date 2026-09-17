@@ -79,6 +79,15 @@ const onConsole = (raw) => {
 };
 
 fs.mkdirSync(OUT, { recursive: true });
+// **親ディレクトリを勝手に作らない。** C:/secure が無い機で recursive に作ると、
+// C:\ 直下の既定 ACL を継承したフォルダに Google のセッションが置かれる
+if (!fs.existsSync(path.dirname(PROFILE))) {
+  console.error(
+    `失敗: プロファイルの置き場所の親がありません: ${path.dirname(PROFILE)}
+` + '      鍵と同じ保護された場所を用意するか、--profile で既存の場所を指定してください',
+  );
+  process.exit(1);
+}
 fs.mkdirSync(PROFILE, { recursive: true });
 
 const ctx = await chromium.launchPersistentContext(PROFILE, {
