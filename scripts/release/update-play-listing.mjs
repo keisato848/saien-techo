@@ -1,8 +1,12 @@
 /**
  * Google Play 掲載情報（ja-JP）を docs/store/google-play/listing-ja.md の内容で更新する。
  *
- * - 単一ソース: listing-ja.md の「## 短い説明」「## 詳しい説明」を反映する
- * - タイトルと動画は Play 側の現行値を維持する
+ * - 単一ソース: listing-ja.md の「## アプリ名」「## 短い説明」「## 詳しい説明」を反映する
+ * - 動画だけは Play 側の現行値を維持する
+ *
+ * **アプリ名も単一ソースから送る**（2026-09-18）。以前は現行値をそのまま送り返していて、
+ * listing-ja.md を「掲載文の唯一の正」と書きながらアプリ名だけ反映されていなかった。
+ * Play はアプリ名の変更で再審査が入ることがある。
  * - 認証: サービスアカウント JSON（既定 C:/secure/play-service-account.json、
  *   環境変数 PLAY_SERVICE_ACCOUNT_KEY で上書き可）。キーの値は一切出力しない。
  *
@@ -31,15 +35,21 @@ function extractSection(md, heading) {
 }
 
 const md = fs.readFileSync(LISTING_MD, 'utf8');
+const TITLE = extractSection(md, 'アプリ名');
 const SHORT = extractSection(md, '短い説明');
 const FULL = extractSection(md, '詳しい説明');
 
-if (SHORT.length > 80) throw new Error(`短い説明が80字超: ${SHORT.length}`);
-if (FULL.length > 4000) throw new Error(`詳しい説明が4000字超: ${FULL.length}`);
-console.log(`short: ${SHORT.length}字 / full: ${FULL.length}字`);
+// **文字数は符号位置で数える。** `.length` はサロゲートペアで実際より多く出る
+const len = (s) => [...s].length;
+if (len(TITLE) > 30) throw new Error(`アプリ名が30字超: ${len(TITLE)}`);
+if (/[\r\n]/.test(TITLE)) throw new Error('アプリ名が複数行です');
+if (len(SHORT) > 80) throw new Error(`短い説明が80字超: ${len(SHORT)}`);
+if (len(FULL) > 4000) throw new Error(`詳しい説明が4000字超: ${len(FULL)}`);
+console.log(`title: ${len(TITLE)}字 / short: ${len(SHORT)}字 / full: ${len(FULL)}字`);
 
 if (DRY_RUN) {
   console.log('--- dry-run: 送信せず終了 ---');
+  console.log(`アプリ名: ${TITLE}`);
   console.log(SHORT);
   process.exit(0);
 }
@@ -50,10 +60,12 @@ const edit = await client.insert();
 
 const cur = await client.getListing(edit.id, 'ja-JP');
 console.log('current title:', cur.title);
+if (cur.title !== TITLE)
+  console.log(`**アプリ名を変更します**: ${cur.title} → ${TITLE}（再審査が入ることがあります）`);
 
 await client.updateListing(edit.id, 'ja-JP', {
   language: 'ja-JP',
-  title: cur.title,
+  title: TITLE,
   shortDescription: SHORT,
   fullDescription: FULL,
   ...(cur.video ? { video: cur.video } : {}),

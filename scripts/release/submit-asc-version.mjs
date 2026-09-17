@@ -25,7 +25,7 @@ import { fileURLToPath } from 'node:url';
 
 import { appIdentity } from '../agent/lib/app-identity.mjs';
 import { ascAppId, ascGet, ascPatch, ascPost } from './lib/asc-api.mjs';
-import { parseWhatsNew, WHATS_NEW_MAX } from './lib/store-listing.mjs';
+import { parseFencedSection, parseWhatsNew, WHATS_NEW_MAX } from './lib/store-listing.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const LISTING = path.join(ROOT, 'docs/store/app-store/listing-ja.md');
@@ -46,9 +46,28 @@ if (!whatsNew) throw new Error(`listing-ja.md §6 に「### v${version}」の Wh
 if (whatsNew.length > WHATS_NEW_MAX)
   throw new Error(`What's New が ${WHATS_NEW_MAX} 字を超えています`);
 
+// **サブタイトル・プロモーション文・キーワードもここから送る**（2026-09-18）。
+// それまで What's New しか送っておらず、listing-ja.md を「唯一の正」と書きながら
+// プロモーション文は 1.3.0 まで空のままだった（API で実測）。
+const len = (x) => [...x].length;
+const FIELDS = [
+  { key: 'subtitle', heading: 'サブタイトル', max: 30, level: 'appInfo' },
+  { key: 'promotionalText', heading: 'プロモーションテキスト', max: 170, level: 'version' },
+  { key: 'keywords', heading: 'キーワード', max: 100, level: 'version' },
+  { key: 'description', heading: '説明', max: 4000, level: 'version' },
+];
+const listing = {};
+for (const f of FIELDS) {
+  const v = parseFencedSection(md, f.heading);
+  if (!v) throw new Error(`listing-ja.md に「${f.heading}」のコードブロックがありません`);
+  if (len(v) > f.max) throw new Error(`${f.heading} が ${f.max} 字を超えています: ${len(v)}`);
+  listing[f.key] = v;
+}
+
 console.log(`app      : ${APP}`);
 console.log(`version  : ${version}  build: ${iosBuildNumber}`);
 console.log(`whatsNew : ${whatsNew.split('\n')[0]} …（${whatsNew.length}字）`);
+for (const f of FIELDS) console.log(`${f.key.padEnd(9)}: ${len(listing[f.key])}/${f.max} 字`);
 
 // ─── 1) バージョン ─────────────────────────────────────────────────────────────
 const existing = (
@@ -123,8 +142,46 @@ if (!loc)
     `localization ${LOCALE} がありません（ある: ${locs.map((l) => l.attributes.locale).join(', ')}）`,
   );
 await ascPatch(`/appStoreVersionLocalizations/${loc.id}`, {
-  data: { type: 'appStoreVersionLocalizations', id: loc.id, attributes: { whatsNew } },
+  data: {
+    type: 'appStoreVersionLocalizations',
+    id: loc.id,
+    attributes: {
+      whatsNew,
+      promotionalText: listing.promotionalText,
+      keywords: listing.keywords,
+      description: listing.description,
+    },
+  },
 });
+
+// サブタイトルだけは版ではなくアプリ情報側にある（appInfoLocalizations）
+const infos = (await ascGet(`/apps/${APP}/appInfos?limit=10`)).data ?? [];
+let subtitleDone = false;
+for (const info of infos) {
+  const ilocs = (await ascGet(`/appInfos/${info.id}/appInfoLocalizations?limit=20`)).data ?? [];
+  const iloc = ilocs.find((l) => l.attributes.locale === LOCALE);
+  if (!iloc) continue;
+  if (iloc.attributes.subtitle === listing.subtitle) {
+    subtitleDone = true;
+    continue;
+  }
+  try {
+    await ascPatch(`/appInfoLocalizations/${iloc.id}`, {
+      data: {
+        type: 'appInfoLocalizations',
+        id: iloc.id,
+        attributes: { subtitle: listing.subtitle },
+      },
+    });
+    console.log(`subtitle : 更新 ${iloc.attributes.subtitle ?? '(空)'} → ${listing.subtitle}`);
+    subtitleDone = true;
+  } catch (e) {
+    // **公開中の appInfo は編集できない。** 準備中のものだけ通ればよいので、
+    // ここで止めずに次の appInfo を試す
+    console.log(`subtitle : この appInfo は編集不可（${String(e.message).slice(0, 60)}）`);
+  }
+}
+if (!subtitleDone) console.log('subtitle : 更新できる appInfo がありませんでした');
 
 // ─── 4) 紐付けを実物で確認（relationship の PATCH は 204 で中身を返さない） ───
 const linked = (await ascGet(`/appStoreVersions/${ver.id}/build?fields[builds]=version`)).data;
