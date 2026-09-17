@@ -45,8 +45,16 @@ export default function PlantingPlanListScreen() {
   const [toast, setToast] = useState<string | null>(null);
 
   const load = useCallback(async () => {
-    setPlans(await getPlantingPlans({ onlyConverted: tab === 'converted' }));
-    setLoading(false);
+    try {
+      setPlans(await getPlantingPlans({ onlyConverted: tab === 'converted' }));
+    } catch {
+      // **finally で必ず読み込みを終える。** ここで throw すると setLoading(false) に
+      // 到達せず、読み込み中の表示のまま永久に固まる
+      setPlans([]);
+      setToast('計画を読み込めませんでした');
+    } finally {
+      setLoading(false);
+    }
   }, [tab]);
 
   useFocusEffect(
@@ -59,12 +67,19 @@ export default function PlantingPlanListScreen() {
     const plan = converting;
     setConverting(null);
     if (!plan) return;
-    const plantingId = await convertPlanToPlanting(plan.id);
-    setToast(`${plan.cropName}の栽培を登録しました`);
-    // 登録直後は栽培の詳細へ。写真やメモを続けて足す動線が最短になる
-    // （plantings/new.tsx の登録後と同じ扱い）
-    setTimeout(() => router.push(`/plantings/${plantingId}`), 900);
-  }, [converting, router]);
+    try {
+      const plantingId = await convertPlanToPlanting(plan.id);
+      setToast(`${plan.cropName}の栽培を登録しました`);
+      // 登録直後は栽培の詳細へ。写真やメモを続けて足す動線が最短になる
+      // （plantings/new.tsx の登録後と同じ扱い）
+      setTimeout(() => router.push(`/plantings/${plantingId}`), 900);
+    } catch {
+      // **確認シートは先に閉じているので、失敗を黙ると「押したのに何も起きなかった」になる。**
+      // React Native では握りつぶされた例外が本番で無音になる（2026-09-17 のレビュー指摘）
+      setToast('栽培の登録に失敗しました。もう一度お試しください');
+      void load();
+    }
+  }, [converting, router, load]);
 
   return (
     <View style={styles.root}>

@@ -191,6 +191,31 @@ describe('作付け計画の一覧', () => {
     jest.useRealTimers();
   });
 
+  // **失敗を黙らない。** 確認シートは押した時点で閉じるので、変換が失敗したときに
+  // 何も出さないと「押したのに何も起きなかった」になる（2026-09-17 のレビュー指摘）
+  it('変換に失敗したら知らせる（黙って閉じない）', async () => {
+    mockGetPlans.mockResolvedValue([plan({ id: 'plan-1', monthsUntil: 0 })]);
+    mockConvert.mockRejectedValue(new Error('DB が壊れている'));
+    render(<PlantingPlanListScreen />);
+
+    await waitFor(() => expect(screen.getByLabelText('ナスを栽培にする')).toBeTruthy());
+    fireEvent.press(screen.getByLabelText('ナスを栽培にする'));
+    fireEvent.press(screen.getByText('登録する'));
+
+    await waitFor(() => expect(screen.getByText(/登録に失敗しました/)).toBeTruthy());
+    // 失敗したのに栽培の詳細へ飛ばさない
+    expect(mockPush).not.toHaveBeenCalledWith(expect.stringContaining('/plantings/planting'));
+  });
+
+  // 読み込みが失敗したときに setLoading(false) へ到達しないと、読み込み中のまま固まる
+  it('計画の読み込みに失敗しても読み込み中のまま固まらない', async () => {
+    mockGetPlans.mockRejectedValue(new Error('読めない'));
+    render(<PlantingPlanListScreen />);
+
+    await waitFor(() => expect(screen.getByText(/読み込めませんでした/)).toBeTruthy());
+    expect(screen.queryByText('読み込み中')).toBeNull();
+  });
+
   it('変換済みの行は栽培の詳細へ飛ぶ', async () => {
     mockGetPlans.mockResolvedValue([
       plan({ id: 'plan-1', cropName: 'ナス', plantingId: 'planting-9', convertedAt: '2026-09-15' }),
