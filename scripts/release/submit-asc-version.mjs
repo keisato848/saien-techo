@@ -162,8 +162,10 @@ for (const info of infos) {
   const iloc = ilocs.find((l) => l.attributes.locale === LOCALE);
   if (!iloc) continue;
   if (iloc.attributes.subtitle === listing.subtitle) {
+    // **一致しても抜けない。** 公開中が既に目的の値でも、提出準備中の版が
+    // 古いままのことがある。抜けるとそちらが古い文言のまま出る
     subtitleDone = true;
-    break;
+    continue;
   }
   try {
     await ascPatch(`/appInfoLocalizations/${iloc.id}`, {
@@ -174,9 +176,9 @@ for (const info of infos) {
       },
     });
     console.log(`subtitle : 更新 ${iloc.attributes.subtitle ?? '(空)'} → ${listing.subtitle}`);
+    // 抜けない。appInfo は状態ごとにあり、**どれも同じ文言であるべき**なので
+    // 違うものは全部直す。公開中のものは下の catch で弾かれる
     subtitleDone = true;
-    // **1 つ更新できたら抜ける。** 続けると別の状態の appInfo まで書き換える
-    break;
   } catch (e) {
     // **公開中の appInfo は編集できない。** 準備中のものだけ通ればよいので、
     // ここで止めずに次の appInfo を試す
