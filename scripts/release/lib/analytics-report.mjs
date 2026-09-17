@@ -201,14 +201,33 @@ export function renderPlayReports(play) {
     return out;
   }
 
+  // **読めなかった月を 0 として並べない。** 列名が変わったときに
+  // 「誰も来ていない」と「読めていない」が同じ表に並ぶのを避ける
+  const unreadable = (play.performance ?? []).filter((p) => p.unreadable);
+  if (unreadable.length > 0) {
+    out.push('### 読み取れなかった月', '');
+    for (const p of unreadable)
+      out.push(
+        `- ${cell(p.month)}: ${cell(p.unreadable)}`,
+        `  実際の列: ${(p.header ?? []).map((h) => `\`${h}\``).join(', ') || '（不明）'}`,
+      );
+    out.push(
+      '',
+      '> 列名が変わった可能性がある。`summarizeStorePerformance` の候補名を足すこと。',
+      '',
+    );
+  }
+
   const perf = mdTable(
     ['月', '掲載ページ訪問者', '獲得', '転換率'],
-    (play.performance ?? []).map((p) => [
-      p.month,
-      p.visitors,
-      p.acquisitions,
-      p.conversion === null ? '-' : `${(p.conversion * 100).toFixed(1)}%`,
-    ]),
+    (play.performance ?? [])
+      .filter((p) => !p.unreadable)
+      .map((p) => [
+        p.month,
+        p.visitors,
+        p.acquisitions,
+        p.conversion === null ? '-' : `${(p.conversion * 100).toFixed(1)}%`,
+      ]),
     ['l', 'r', 'r', 'r'],
   );
   out.push('### 掲載ページの成績', '', perf ?? '該当なし。', '');

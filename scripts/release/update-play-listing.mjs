@@ -39,12 +39,14 @@ const TITLE = extractSection(md, 'アプリ名');
 const SHORT = extractSection(md, '短い説明');
 const FULL = extractSection(md, '詳しい説明');
 
-// **文字数は符号位置で数える。** `.length` はサロゲートペアで実際より多く出る
+// **Play がどちらの単位で数えるかは未確認**なので、符号位置と UTF-16 単位の
+// 両方で検査する。甘い方だけで通すと、送ってから API に弾かれる
 const len = (s) => [...s].length;
-if (len(TITLE) > 30) throw new Error(`アプリ名が30字超: ${len(TITLE)}`);
+const worst = (s) => Math.max([...s].length, s.length);
+if (worst(TITLE) > 30) throw new Error(`アプリ名が30字超: ${worst(TITLE)}`);
 if (/[\r\n]/.test(TITLE)) throw new Error('アプリ名が複数行です');
-if (len(SHORT) > 80) throw new Error(`短い説明が80字超: ${len(SHORT)}`);
-if (len(FULL) > 4000) throw new Error(`詳しい説明が4000字超: ${len(FULL)}`);
+if (worst(SHORT) > 80) throw new Error(`短い説明が80字超: ${worst(SHORT)}`);
+if (worst(FULL) > 4000) throw new Error(`詳しい説明が4000字超: ${worst(FULL)}`);
 console.log(`title: ${len(TITLE)}字 / short: ${len(SHORT)}字 / full: ${len(FULL)}字`);
 
 if (DRY_RUN) {

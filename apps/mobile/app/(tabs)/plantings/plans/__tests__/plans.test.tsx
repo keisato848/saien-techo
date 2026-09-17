@@ -194,6 +194,10 @@ describe('作付け計画の一覧', () => {
   // **失敗を黙らない。** 確認シートは押した時点で閉じるので、変換が失敗したときに
   // 何も出さないと「押したのに何も起きなかった」になる（2026-09-17 のレビュー指摘）
   it('変換に失敗したら知らせる（黙って閉じない）', async () => {
+    // **偽タイマーは押す前に入れる。** 押したあとに切り替えても、そのとき既に
+    // 実タイマーで予約された setTimeout は掴めず、進めても何も起きない
+    // （2026-09-18 に一度そう書いて、PR 前のレビューで指摘された）
+    jest.useFakeTimers();
     mockGetPlans.mockResolvedValue([plan({ id: 'plan-1', monthsUntil: 0 })]);
     mockConvert.mockRejectedValue(new Error('DB が壊れている'));
     render(<PlantingPlanListScreen />);
@@ -203,8 +207,11 @@ describe('作付け計画の一覧', () => {
     fireEvent.press(screen.getByText('登録する'));
 
     await waitFor(() => expect(screen.getByText(/登録に失敗しました/)).toBeTruthy());
-    // 失敗したのに栽培の詳細へ飛ばさない
+    // 成功時の遷移は 900ms の setTimeout。進めずに assert すると、遷移を
+    // 止められていなくても通ってしまう
+    jest.runAllTimers();
     expect(mockPush).not.toHaveBeenCalledWith(expect.stringContaining('/plantings/planting'));
+    jest.useRealTimers();
   });
 
   // 読み込みが失敗したときに setLoading(false) へ到達しないと、読み込み中のまま固まる
