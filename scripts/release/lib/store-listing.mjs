@@ -37,3 +37,22 @@ export const WHATS_NEW_MAX = 4000;
 function escapeRegExp(s) {
   return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
+
+/**
+ * `## §N 見出し` 直下の最初のコードブロックを取り出す。
+ *
+ * サブタイトル・プロモーションテキスト・キーワードのように、**listing-ja.md を
+ * 唯一の正と書きながら、どの経路でも送られていなかった**欄を拾うために足した。
+ * 実測（2026-09-17）では 1.3.0 までプロモーションテキストが空のままだった。
+ */
+export function parseFencedSection(md, headingFragment) {
+  const re = new RegExp(`^## [^\\n]*${headingFragment}[^\\n]*$`, 'm');
+  const m = re.exec(String(md ?? ''));
+  if (!m) return null;
+  const rest = md.slice(m.index + m[0].length);
+  // **次の見出しより前だけを見る。** 見ないと別の節のコードブロックを拾う
+  const nextHeading = rest.search(/^## /m);
+  const scope = nextHeading === -1 ? rest : rest.slice(0, nextHeading);
+  const fence = /```[a-z]*\n([\s\S]*?)\n```/.exec(scope);
+  return fence ? fence[1].trim() : null;
+}
