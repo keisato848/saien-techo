@@ -39,6 +39,15 @@ import {
   parseSalesTsv,
   summarizeSales,
 } from './asc-sales.mjs';
+import {
+  bucketName,
+  classifyMissing,
+  decodeCsv,
+  recentMonths,
+  reportUrl,
+  summarizeInstalls,
+  summarizeStorePerformance,
+} from './play-reports.mjs';
 import { classify, looksLikePlayTable } from './bigquery-probe.mjs';
 import { asPercent, cell, mdTable, renderSummary } from './analytics-report.mjs';
 
@@ -464,4 +473,147 @@ test('getSales はベンダー番号が無ければ取得を試みない', async
   const r = await getSales({ vendorNumber: null });
   assert.equal(r.state, 'no-vendor');
   assert.match(r.detail, /支払いと財務レポート/);
+});
+
+/* ---------------- play-reports ---------------- */
+
+test('reportUrl は命名規則どおりに組み立て、不正な入力で投げる', () => {
+  const u = reportUrl({
+    developerId: '4806763604853146902',
+    packageName: 'com.saientecho.app',
+    group: 'installs',
+    month: '202609',
+    kind: 'overview',
+  });
+  assert.equal(
+    u,
+    'https://storage.cloud.google.com/pubsite_prod_4806763604853146902/stats/installs/installs_com.saientecho.app_202609_overview.csv?authuser=0',
+  );
+  assert.throws(() => bucketName('abc'), /デベロッパー ID/);
+  assert.throws(() => bucketName(''), /デベロッパー ID/);
+  assert.throws(
+    () =>
+      reportUrl({
+        developerId: '1234567',
+        packageName: 'x',
+        group: 'installs',
+        month: '2026-09',
+        kind: 'overview',
+      }),
+    /YYYYMM/,
+  );
+});
+
+test('decodeCsv は UTF-16LE を読む（UTF-8 として読むと全部化ける）', () => {
+  const text = 'Date,Package name\n2026-09-01,com.example\n';
+  const utf16 = Buffer.concat([Buffer.from([0xff, 0xfe]), Buffer.from(text, 'utf16le')]);
+  assert.equal(decodeCsv(utf16), text);
+  // BOM 無しの UTF-8 もそのまま読める
+  assert.equal(decodeCsv(Buffer.from(text, 'utf8')), text);
+  assert.equal(decodeCsv(null), '');
+});
+
+test('summarizeInstalls は断面の列を合計しない', () => {
+  // 実データの形（2026-09 の overview）。稼働台数 1 が 6 日続く
+  const rows = [
+    {
+      Date: '2026-09-01',
+      'Install events': '0',
+      'Uninstall events': '1',
+      'Active Device Installs': '0',
+      'Total User Installs': '0',
+    },
+    {
+      Date: '2026-09-04',
+      'Install events': '1',
+      'Uninstall events': '0',
+      'Active Device Installs': '1',
+      'Total User Installs': '0',
+    },
+    {
+      Date: '2026-09-08',
+      'Install events': '0',
+      'Uninstall events': '0',
+      'Active Device Installs': '1',
+      'Total User Installs': '0',
+    },
+  ];
+  const s = summarizeInstalls(rows);
+  assert.equal(s.totals['Install events'], 1, '事象は合計する');
+  assert.equal(s.totals['Uninstall events'], 1);
+  assert.equal(s.latest['Active Device Installs'], 1, '断面は最終日の値（合計の 2 ではない）');
+  assert.equal(s.lastDate, '2026-09-08');
+  // 断面の列が totals に混ざっていないこと
+  assert.equal('Active Device Installs' in s.totals, false);
+  assert.deepEqual(summarizeInstalls([]).totals, {});
+  assert.deepEqual(summarizeInstalls(null).latest, {});
+});
+
+test('summarizeStorePerformance は転換率を行平均せず合計から出す', () => {
+  const rows = [
+    {
+      Date: '1',
+      'Traffic source': 'Other',
+      'Store listing visitors': '1',
+      'Store listing acquisitions': '0',
+      'Store listing conversion rate': '0.0',
+    },
+    {
+      Date: '2',
+      'Traffic source': 'Other',
+      'Store listing visitors': '1',
+      'Store listing acquisitions': '1',
+      'Store listing conversion rate': '1.0',
+    },
+  ];
+  const s = summarizeStorePerformance(rows);
+  assert.equal(s.visitors, 2);
+  assert.equal(s.acquisitions, 1);
+  assert.equal(s.conversion, 0.5, '行ごとの 0.0 と 1.0 を平均した 0.5 ではなく、1/2 として 0.5');
+  assert.deepEqual(s.byGroup, [{ name: 'Other', visitors: 2, acquisitions: 1 }]);
+  // 訪問者ゼロで割らない
+  const z = summarizeStorePerformance([
+    { 'Store listing visitors': '0', 'Store listing acquisitions': '0', 'Traffic source': 'x' },
+  ]);
+  assert.equal(z.conversion, null);
+  assert.equal(summarizeStorePerformance([]).visitors, 0);
+});
+
+test('classifyMissing は「未生成」と「ログイン切れ」を言い分ける', () => {
+  const a = classifyMissing({
+    month: '202608',
+    failedKinds: ['installs/overview'],
+    okKindsSameMonth: ['store_performance/traffic_source'],
+  });
+  assert.match(a, /生成されていない/);
+  // 他の月が取れているならセッションは生きている（公開前の月をセッション切れと言わない）
+  const b = classifyMissing({
+    month: '202607',
+    failedKinds: ['installs/overview'],
+    okKindsSameMonth: [],
+    anySuccessInRun: true,
+  });
+  assert.match(b, /まだ公開していない/);
+  assert.equal(/セッション/.test(b), false);
+  const c = classifyMissing({
+    month: '202608',
+    failedKinds: ['installs/overview'],
+    okKindsSameMonth: [],
+    anySuccessInRun: false,
+  });
+  assert.match(c, /セッションが切れている/);
+});
+
+test('recentMonths は古い順で n か月を返す', () => {
+  assert.deepEqual(recentMonths(3, new Date(Date.UTC(2026, 8, 17))), [
+    '202607',
+    '202608',
+    '202609',
+  ]);
+  assert.deepEqual(
+    recentMonths(2, new Date(Date.UTC(2026, 0, 5))),
+    ['202512', '202601'],
+    '年をまたぐ',
+  );
+  assert.equal(recentMonths('abc', new Date(Date.UTC(2026, 8, 17))).length, 3);
 });

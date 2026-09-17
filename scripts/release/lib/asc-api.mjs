@@ -74,15 +74,25 @@ export function ascToken() {
  * ASC API を叩く。失敗は `METHOD path -> status {errors[0]}` で投げる。
  * 204 No Content（relationship の PATCH など）は `{}` を返す。
  */
-export async function ascRequest(method, apiPath, body) {
-  const res = await fetch(`${ASC_BASE}${apiPath}`, {
-    method,
-    headers: {
-      Authorization: `Bearer ${ascToken()}`,
-      'Content-Type': 'application/json',
-    },
-    body: body ? JSON.stringify(body) : undefined,
-  });
+export async function ascRequest(method, apiPath, body, { retryOn401 = true } = {}) {
+  const send = () =>
+    fetch(`${ASC_BASE}${apiPath}`, {
+      method,
+      headers: {
+        Authorization: `Bearer ${ascToken()}`,
+        'Content-Type': 'application/json',
+      },
+      body: body ? JSON.stringify(body) : undefined,
+    });
+
+  let res = await send();
+  // **401 は一時的に出ることがある**（2026-09-17 実測。同じ鍵で直後の再試行は通った）。
+  // キャッシュした JWT を捨てて 1 度だけ引き直す。無限に粘らない
+  if (res.status === 401 && retryOn401) {
+    cachedToken = null;
+    await new Promise((r) => setTimeout(r, 1000));
+    res = await send();
+  }
   const text = await res.text();
   const json = text ? JSON.parse(text) : {};
   if (!res.ok) {

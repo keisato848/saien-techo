@@ -189,9 +189,58 @@ export function renderSales(sales) {
   return out;
 }
 
+/** Play の掲載ページとインストール（Console の月次レポート） */
+export function renderPlayReports(play) {
+  const out = ['## 4. Play の掲載ページとインストール（Console の月次レポート）', ''];
+  if (!play) {
+    out.push('取得していない（`node scripts/release/fetch-play-reports.mjs` で落とす）。', '');
+    return out;
+  }
+  if (play.state !== 'ok') {
+    out.push(`取得できなかった（${cell(play.state)}）: ${cell(play.detail)}`, '');
+    return out;
+  }
+
+  const perf = mdTable(
+    ['月', '掲載ページ訪問者', '獲得', '転換率'],
+    (play.performance ?? []).map((p) => [
+      p.month,
+      p.visitors,
+      p.acquisitions,
+      p.conversion === null ? '-' : `${(p.conversion * 100).toFixed(1)}%`,
+    ]),
+    ['l', 'r', 'r', 'r'],
+  );
+  out.push('### 掲載ページの成績', '', perf ?? '該当なし。', '');
+
+  const sources = [];
+  for (const p of play.performance ?? [])
+    for (const g of p.byGroup ?? []) sources.push([p.month, g.name, g.visitors, g.acquisitions]);
+  const src = mdTable(['月', '流入元', '訪問者', '獲得'], sources, ['l', 'l', 'r', 'r']);
+  if (src) out.push('### 流入元別', '', src, '');
+
+  for (const i of play.installs ?? []) {
+    out.push(`### インストール ${cell(i.month)}（〜${cell(i.lastDate)}）`, '');
+    const t = mdTable(
+      ['項目', '値'],
+      [
+        ...Object.entries(i.totals ?? {}).map(([k, v]) => [`${k}（期間合計）`, v]),
+        ...Object.entries(i.latest ?? {}).map(([k, v]) => [`${k}（最終日の断面）`, v]),
+      ],
+      ['l', 'r'],
+    );
+    out.push(t ?? '該当なし。', '');
+  }
+  out.push(
+    '> **断面の列を足さない。** 稼働台数や累計インストールは日ごとの状態なので、期間合計に意味はない。',
+    '',
+  );
+  return out;
+}
+
 /** B' 群（BigQuery エクスポート）の節 */
 export function renderBigQuery(bq) {
-  const out = ['## 4. Play のリーチ・獲得（BigQuery エクスポート）', ''];
+  const out = ['## 5. Play のリーチ・獲得（BigQuery エクスポート・参考）', ''];
   if (!bq) {
     out.push('判定していない（`--check-bigquery` で判定する）。', '');
     return out;
@@ -229,7 +278,7 @@ export function renderBigQuery(bq) {
 }
 
 /** 全体。戻り値は Markdown 文字列 */
-export function renderSummary({ date, vitals, asc, sales, bigquery, notes = [] }) {
+export function renderSummary({ date, vitals, asc, sales, play, bigquery, notes = [] }) {
   const lines = [
     `# 流入とVitalsの数字 — ${cell(date)} 取得`,
     '',
@@ -240,15 +289,16 @@ export function renderSummary({ date, vitals, asc, sales, bigquery, notes = [] }
     ...renderVitals(vitals),
     ...renderAsc(asc),
     ...renderSales(sales),
+    ...renderPlayReports(play),
     ...renderBigQuery(bigquery),
-    '## 5. 取得していないもの',
+    '## 6. 取得していないもの',
     '',
     '- **Apple Ads Basic のキャンペーン別内訳** — Basic プランでは App Store Connect の画面でも内訳が出ず、API でも取れない。Advanced へ切り替えない限り自動化しても得るものが無い',
-    '- **Play のインストール数・全ユーザー数** — Developer Reporting API の対象外。上の BigQuery エクスポートが唯一の道',
+    '- **Play の検索キーワード別の流入** — Console の月次レポートにも無い。BigQuery エクスポートが要る',
     '',
   ];
   if (notes.length > 0) {
-    lines.push('## 6. 実行時のメモ', '');
+    lines.push('## 7. 実行時のメモ', '');
     for (const n of notes) lines.push(`- ${cell(n)}`);
     lines.push('');
   }

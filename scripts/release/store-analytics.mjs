@@ -27,6 +27,7 @@ import {
   listReportRequests,
 } from './lib/asc-analytics.mjs';
 import { getSales } from './lib/asc-sales.mjs';
+import { readSavedReports } from './lib/play-reports.mjs';
 import { BIGQUERY_SCOPE, probeBigQueryExport } from './lib/bigquery-probe.mjs';
 import { renderSummary } from './lib/analytics-report.mjs';
 
@@ -44,6 +45,7 @@ const CREATE_ASC = flag('create-asc-request');
 const PLAY_ONLY = flag('play-only');
 const ASC_ONLY = flag('asc-only');
 const TO_STDOUT = flag('stdout');
+const PLAY_REPORT_DIR = path.resolve(ROOT, opt('play-reports', 'analytics/play-reports'));
 const VENDOR = opt('vendor', process.env.ASC_VENDOR_NUMBER ?? null);
 const SKU = opt('sku', 'saien-techo');
 const today = new Date().toISOString().slice(0, 10);
@@ -115,6 +117,15 @@ async function collectSales() {
   }
 }
 
+/** Play Console の月次レポート（fetch-play-reports.mjs が落とした CSV を読むだけ） */
+function collectPlayReports() {
+  try {
+    return readSavedReports({ dir: PLAY_REPORT_DIR, packageName: PACKAGE, fs, path });
+  } catch (e) {
+    return { state: 'error', detail: String(e?.message ?? e).slice(0, 200) };
+  }
+}
+
 /** B' 群 */
 async function collectBigQuery() {
   try {
@@ -134,7 +145,7 @@ async function main() {
   const vitals = ASC_ONLY ? null : await collectVitals();
   if (vitals)
     console.log(
-      `  play       Vitals ${vitals.sets.filter((s) => s.ok).length}/${vitals.sets.length} セット取得`,
+      `  vitals     ${vitals.sets.filter((s) => s.ok).length}/${vitals.sets.length} セット取得（Android Vitals）`,
     );
 
   const asc = PLAY_ONLY ? null : await collectAsc();
@@ -144,6 +155,12 @@ async function main() {
   if (sales)
     console.log(
       `  sales      ${sales.state}${sales.state === 'ok' ? `: 新規 ${sales.summary.downloads} / 更新 ${sales.summary.updates} / 再DL ${sales.summary.redownloads}` : `: ${sales.detail}`}`,
+    );
+
+  const play = ASC_ONLY ? null : collectPlayReports();
+  if (play)
+    console.log(
+      `  play       ${play.state}${play.state === 'ok' ? `: CSV ${play.files} 件` : `: ${play.detail}`}`,
     );
 
   const bigquery = CHECK_BQ ? await collectBigQuery() : null;
@@ -159,7 +176,7 @@ async function main() {
       'ASC のレポート要求が無い。--create-asc-request を付けると作成する（App Store Connect への書き込み）',
     );
 
-  const md = renderSummary({ date: today, vitals, asc, sales, bigquery, notes });
+  const md = renderSummary({ date: today, vitals, asc, sales, play, bigquery, notes });
 
   if (TO_STDOUT) {
     process.stdout.write(md);
