@@ -32,6 +32,13 @@ import {
   toNumber,
   WANTED_REPORTS,
 } from './asc-analytics.mjs';
+import {
+  classifyProductType,
+  dateRange,
+  getSales,
+  parseSalesTsv,
+  summarizeSales,
+} from './asc-sales.mjs';
 import { classify, looksLikePlayTable } from './bigquery-probe.mjs';
 import { asPercent, cell, mdTable, renderSummary } from './analytics-report.mjs';
 
@@ -378,4 +385,83 @@ test('リリース系スクリプトに制御文字を埋めない（git がバ�
     assert.equal(buf.indexOf(0x00), -1, `${f}: NUL が埋まっている`);
     assert.equal(buf.indexOf(Buffer.from('EFBBBF', 'hex')), -1, `${f}: BOM が埋まっている`);
   }
+});
+
+/* ---------------- asc-sales ---------------- */
+
+test('classifyProductType は更新と再ダウンロードを新規に混ぜない', () => {
+  assert.equal(classifyProductType('1'), 'download');
+  assert.equal(classifyProductType('1F'), 'download');
+  assert.equal(classifyProductType('7'), 'update');
+  assert.equal(classifyProductType('3'), 'redownload', '実測で出た区分（再ダウンロード）');
+  // 知らない識別子を黙って download に倒さない
+  assert.equal(classifyProductType('IA1'), 'other');
+  assert.equal(classifyProductType(''), 'other');
+  assert.equal(classifyProductType(undefined), 'other');
+});
+
+test('dateRange は end から遡り、不正な days を 30 に丸める', () => {
+  const end = new Date(Date.UTC(2026, 8, 17));
+  assert.deepEqual(dateRange(end, 3), ['2026-09-15', '2026-09-16', '2026-09-17']);
+  assert.equal(dateRange(end, 0).length, 30);
+  assert.equal(dateRange(end, 'abc').length, 30);
+  assert.equal(dateRange(new Date('壊れた'), 2).length, 2, '壊れた Date でも落ちない');
+});
+
+test('summarizeSales は SKU で絞り、区分ごとに分けて数える', () => {
+  // 実際の列名で組む（2026-09-17 のレポートから）
+  const row = (sku, type, units, extra = {}) => ({
+    SKU: sku,
+    'Product Type Identifier': type,
+    Units: String(units),
+    Device: 'iPhone',
+    Version: '1.3.0',
+    'Country Code': 'JP',
+    ...extra,
+  });
+  const rows = [
+    row('saien-techo', '1', 5),
+    row('saien-techo', '7', 4),
+    row('saien-techo', '3', 1),
+    row('saien-techo', '1', 3, { Device: 'iPad', Version: '1.2.0' }),
+    row('daidoko', '1', 99),
+  ];
+  const s = summarizeSales(rows, { sku: 'saien-techo' });
+  assert.equal(s.downloads, 8, '別 SKU を巻き込まない');
+  assert.equal(s.updates, 4);
+  assert.equal(s.redownloads, 1);
+  assert.equal(s.other, 0);
+  assert.deepEqual(s.byDevice, [
+    ['iPhone', 5],
+    ['iPad', 3],
+  ]);
+  // 端末・版は新規ダウンロードだけを数える（更新を混ぜない）
+  assert.equal(
+    s.byDevice.reduce((a, [, v]) => a + v, 0),
+    s.downloads,
+  );
+  assert.deepEqual(s.byCountry, [['JP', 13]]);
+
+  // 知らない区分は other に積み、識別子を残す
+  const u = summarizeSales([row('x', 'ZZ', 2)], {});
+  assert.equal(u.other, 2);
+  assert.deepEqual(u.unknownTypes, ['ZZ']);
+
+  // 壊れた入力
+  assert.equal(summarizeSales(null).downloads, 0);
+  assert.equal(summarizeSales([]).rowCount, 0);
+});
+
+test('parseSalesTsv はヘッダだけ・空でも落ちない', () => {
+  assert.deepEqual(parseSalesTsv('SKU\tUnits'), []);
+  assert.deepEqual(parseSalesTsv(''), []);
+  assert.deepEqual(parseSalesTsv(null), []);
+  const rows = parseSalesTsv('SKU\tUnits\nsaien-techo\t5');
+  assert.deepEqual(rows, [{ SKU: 'saien-techo', Units: '5' }]);
+});
+
+test('getSales はベンダー番号が無ければ取得を試みない', async () => {
+  const r = await getSales({ vendorNumber: null });
+  assert.equal(r.state, 'no-vendor');
+  assert.match(r.detail, /支払いと財務レポート/);
 });

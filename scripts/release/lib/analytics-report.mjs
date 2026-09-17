@@ -139,9 +139,59 @@ export function renderAsc(asc) {
   return out;
 }
 
+/** 売上とトレンド（何人が入れたか）の節 */
+export function renderSales(sales) {
+  const out = ['## 3. App Store のダウンロード数（売上とトレンド API・同期）', ''];
+  if (!sales) {
+    out.push('取得していない。', '');
+    return out;
+  }
+  if (sales.state !== 'ok') {
+    out.push(`取得できなかった（${cell(sales.state)}）: ${cell(sales.detail)}`, '');
+    return out;
+  }
+  const s = sales.summary;
+  out.push(
+    `期間: ${cell(sales.from)} 〜 ${cell(sales.to)}（${cell(sales.days)} 日 / うち計上なし ${cell(sales.emptyDays)} 日）`,
+    '',
+  );
+  const main = mdTable(
+    ['区分', '件数'],
+    [
+      ['新規ダウンロード', s.downloads],
+      ['アップデート', s.updates],
+      ['再ダウンロード', s.redownloads],
+      ...(s.other > 0 ? [[`区分不明（${s.unknownTypes.join(', ')}）`, s.other]] : []),
+    ],
+    ['l', 'r'],
+  );
+  out.push(main ?? '該当なし。', '');
+  out.push('> **区分を足し合わせない。** アップデートと再ダウンロードは新規の利用者ではない。', '');
+
+  for (const [title, pairs] of [
+    ['端末別（新規ダウンロード）', s.byDevice],
+    ['入れた版（新規ダウンロード）', s.byVersion],
+    ['国別（全区分）', s.byCountry],
+  ]) {
+    const t = mdTable(
+      [title.split('（')[0], '件数'],
+      pairs.map(([k, v]) => [k, v]),
+      ['l', 'r'],
+    );
+    if (t) out.push(`### ${title}`, '', t, '');
+  }
+
+  if ((sales.failed ?? []).length > 0) {
+    out.push('### 取得に失敗した日', '');
+    for (const f of sales.failed.slice(0, 10)) out.push(`- ${cell(f)}`);
+    out.push('');
+  }
+  return out;
+}
+
 /** B' 群（BigQuery エクスポート）の節 */
 export function renderBigQuery(bq) {
-  const out = ['## 3. Play のリーチ・獲得（BigQuery エクスポート）', ''];
+  const out = ['## 4. Play のリーチ・獲得（BigQuery エクスポート）', ''];
   if (!bq) {
     out.push('判定していない（`--check-bigquery` で判定する）。', '');
     return out;
@@ -179,7 +229,7 @@ export function renderBigQuery(bq) {
 }
 
 /** 全体。戻り値は Markdown 文字列 */
-export function renderSummary({ date, vitals, asc, bigquery, notes = [] }) {
+export function renderSummary({ date, vitals, asc, sales, bigquery, notes = [] }) {
   const lines = [
     `# 流入とVitalsの数字 — ${cell(date)} 取得`,
     '',
@@ -189,15 +239,16 @@ export function renderSummary({ date, vitals, asc, bigquery, notes = [] }) {
     '',
     ...renderVitals(vitals),
     ...renderAsc(asc),
+    ...renderSales(sales),
     ...renderBigQuery(bigquery),
-    '## 4. 取得していないもの',
+    '## 5. 取得していないもの',
     '',
     '- **Apple Ads Basic のキャンペーン別内訳** — Basic プランでは App Store Connect の画面でも内訳が出ず、API でも取れない。Advanced へ切り替えない限り自動化しても得るものが無い',
     '- **Play のインストール数・全ユーザー数** — Developer Reporting API の対象外。上の BigQuery エクスポートが唯一の道',
     '',
   ];
   if (notes.length > 0) {
-    lines.push('## 5. 実行時のメモ', '');
+    lines.push('## 6. 実行時のメモ', '');
     for (const n of notes) lines.push(`- ${cell(n)}`);
     lines.push('');
   }

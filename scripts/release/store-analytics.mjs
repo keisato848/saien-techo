@@ -26,6 +26,7 @@ import {
   getEngagement,
   listReportRequests,
 } from './lib/asc-analytics.mjs';
+import { getSales } from './lib/asc-sales.mjs';
 import { BIGQUERY_SCOPE, probeBigQueryExport } from './lib/bigquery-probe.mjs';
 import { renderSummary } from './lib/analytics-report.mjs';
 
@@ -43,6 +44,8 @@ const CREATE_ASC = flag('create-asc-request');
 const PLAY_ONLY = flag('play-only');
 const ASC_ONLY = flag('asc-only');
 const TO_STDOUT = flag('stdout');
+const VENDOR = opt('vendor', process.env.ASC_VENDOR_NUMBER ?? null);
+const SKU = opt('sku', 'saien-techo');
 const today = new Date().toISOString().slice(0, 10);
 const OUT_DIR = opt('out', path.join(ROOT, 'analytics', today));
 
@@ -103,6 +106,15 @@ async function collectAsc() {
   }
 }
 
+/** 売上とトレンド（同期。待たずに取れる） */
+async function collectSales() {
+  try {
+    return await getSales({ vendorNumber: VENDOR, sku: SKU, days: DAYS });
+  } catch (e) {
+    return { state: 'error', detail: String(e?.message ?? e).slice(0, 200) };
+  }
+}
+
 /** B' 群 */
 async function collectBigQuery() {
   try {
@@ -128,16 +140,26 @@ async function main() {
   const asc = PLAY_ONLY ? null : await collectAsc();
   if (asc) console.log(`  asc        ${asc.state}${asc.detail ? `: ${asc.detail}` : ''}`);
 
+  const sales = PLAY_ONLY ? null : await collectSales();
+  if (sales)
+    console.log(
+      `  sales      ${sales.state}${sales.state === 'ok' ? `: 新規 ${sales.summary.downloads} / 更新 ${sales.summary.updates} / 再DL ${sales.summary.redownloads}` : `: ${sales.detail}`}`,
+    );
+
   const bigquery = CHECK_BQ ? await collectBigQuery() : null;
   if (bigquery) console.log(`  bigquery   ${bigquery.state}: ${bigquery.detail}`);
   else notes.push('BigQuery エクスポートの判定は実行していない（--check-bigquery で判定する）');
 
+  if (!VENDOR)
+    notes.push(
+      'ベンダー番号が未設定のため、売上とトレンド（ダウンロード数）を取得していない。ASC_VENDOR_NUMBER か --vendor で渡す',
+    );
   if (!CREATE_ASC && asc?.state === 'no-request')
     notes.push(
       'ASC のレポート要求が無い。--create-asc-request を付けると作成する（App Store Connect への書き込み）',
     );
 
-  const md = renderSummary({ date: today, vitals, asc, bigquery, notes });
+  const md = renderSummary({ date: today, vitals, asc, sales, bigquery, notes });
 
   if (TO_STDOUT) {
     process.stdout.write(md);
