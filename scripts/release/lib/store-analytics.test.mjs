@@ -27,6 +27,7 @@ import {
   pickReport,
   summarizeBySource,
   toNumber,
+  WANTED_REPORTS,
 } from './asc-analytics.mjs';
 import { classify, looksLikePlayTable } from './bigquery-probe.mjs';
 import { asPercent, cell, mdTable, renderSummary } from './analytics-report.mjs';
@@ -227,16 +228,39 @@ test('summarizeBySource はソース別に合計し、列名が違えば ok=fals
   assert.equal(summarizeBySource(null).ok, false);
 });
 
-test('pickReport は優先順で選び、当たらなければ先頭、空なら null', () => {
+test('pickReport は Detailed を Standard より先に選ぶ', () => {
+  // 実際の一覧では同じ名前に Standard と Detailed が並ぶ（2026-09-17 取得）
   const reports = [
-    { id: '1', attributes: { name: 'App Sessions' } },
+    { id: '1', attributes: { name: 'App Store Discovery and Engagement Standard' } },
     { id: '2', attributes: { name: 'App Store Discovery and Engagement Detailed' } },
   ];
-  assert.equal(pickReport(reports).id, '2');
-  assert.equal(pickReport([{ id: '9', attributes: { name: '知らないレポート' } }]).id, '9');
+  const want = WANTED_REPORTS.find((w) => w.key === 'engagement').preferred;
+  assert.equal(pickReport(reports, want).id, '2', '部分一致で Standard を掴まない');
+  // Detailed が無ければ Standard へ落ちる
+  assert.equal(pickReport([reports[0]], want).id, '1');
+});
+
+test('pickReport は当たらなければ null（先頭で妥協しない）', () => {
+  // 実際の一覧は 50 件中 37 件が AirPlay・Metal 等の無関係なレポート。
+  // 先頭を返すと「表示回数」の表に AirPlay の数字が載る
+  const noise = [
+    { id: '9', attributes: { name: 'AirPlay Discovery Sessions' } },
+    { id: '10', attributes: { name: 'Metal Command Queues' } },
+  ];
+  for (const w of WANTED_REPORTS) assert.equal(pickReport(noise, w.preferred), null, w.key);
   assert.equal(pickReport([]), null);
   assert.equal(pickReport(null), null);
-  assert.equal(pickReport([{ id: '3' }]).id, '3', 'attributes が無くても落ちない');
+  assert.equal(pickReport([{ id: '3' }]), null, 'attributes が無くても落ちず、拾いもしない');
+});
+
+test('WANTED_REPORTS は 1 レポートに寄せず、表示回数とダウンロードを別々に取りに行く', () => {
+  const keys = WANTED_REPORTS.map((w) => w.key);
+  assert.ok(keys.includes('engagement'), '表示回数・製品ページ閲覧数');
+  assert.ok(keys.includes('downloads'), '初回ダウンロード数は別レポート');
+  for (const w of WANTED_REPORTS) {
+    assert.ok(w.preferred.length >= 1, w.key);
+    assert.match(w.preferred[0], /Detailed$/, `${w.key}: Detailed を先頭に置く`);
+  }
 });
 
 test('classifyAscError は鍵の権限不足を、生 JSON ではなく次の行動に翻訳する', () => {
