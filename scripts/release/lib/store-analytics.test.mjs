@@ -6,7 +6,10 @@
  * 正常系だけでなく壊れた入力を必ず 1 件ずつ入れてある。**
  */
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import path from 'node:path';
 import { test } from 'node:test';
+import { fileURLToPath } from 'node:url';
 
 import {
   dailyFreshness,
@@ -167,7 +170,8 @@ test('detectDelimiter はタブ優先、カンマの方が多ければカンマ'
 
 test('parseDelimited は BOM を落とし、列数がずれた行も空で埋める', () => {
   const rows = parseDelimited(
-    '﻿Date\tSource Type\tCounts\n2026-09-10\t検索\t100\n2026-09-11\t閲覧',
+    // BOM はソースに直接書かず組み立てる（リテラルを埋めると git がバイナリ判定する）
+    `${String.fromCharCode(0xfeff)}Date\tSource Type\tCounts\n2026-09-10\t検索\t100\n2026-09-11\t閲覧`,
   );
   assert.equal(rows.length, 2);
   assert.deepEqual(rows[0], { Date: '2026-09-10', 'Source Type': '検索', Counts: '100' });
@@ -358,4 +362,20 @@ test('renderSummary は vitals も asc も無い状態でも落ちない', () =>
   const md = renderSummary({ date: '2026-09-16' });
   assert.match(md, /2026-09-16/);
   assert.match(md, /取得していない/);
+});
+
+/* ---------------- ソースの衛生 ---------------- */
+
+test('リリース系スクリプトに制御文字を埋めない（git がバイナリ判定するため）', () => {
+  // 2026-09-17: 区切り文字として U+0000 を、BOM 判定として U+FEFF を**リテラルで**
+  // 書いたせいで git が asc-analytics.mjs をバイナリと判定し、PR #196 の差分が
+  // レビューできない状態でマージされた。エスケープや組み立てで書けば済む
+  const dir = path.dirname(fileURLToPath(import.meta.url));
+  const files = fs.readdirSync(dir).filter((f) => f.endsWith('.mjs'));
+  assert.ok(files.length >= 5, '走査対象が見つかっている');
+  for (const f of files) {
+    const buf = fs.readFileSync(path.join(dir, f));
+    assert.equal(buf.indexOf(0x00), -1, `${f}: NUL が埋まっている`);
+    assert.equal(buf.indexOf(Buffer.from('EFBBBF', 'hex')), -1, `${f}: BOM が埋まっている`);
+  }
 });
