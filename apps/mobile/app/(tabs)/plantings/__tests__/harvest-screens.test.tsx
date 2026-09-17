@@ -26,7 +26,8 @@ jest.mock('../../../../src/services/expo-photo-capture.adapter', () => ({
 }));
 
 const mockBack = jest.fn();
-const mockRouter = { back: mockBack };
+const mockPush = jest.fn();
+const mockRouter = { back: mockBack, push: mockPush };
 let mockParams: Record<string, string> = {};
 jest.mock('expo-router', () => ({
   useRouter: () => mockRouter,
@@ -90,6 +91,7 @@ function pressAlertButton(label: string) {
 
 beforeEach(() => {
   mockBack.mockReset();
+  mockPush.mockReset();
   mockParams = { id: 'p1' };
   mockCapturePhoto.mockReset().mockRejectedValue(new Error('cancelled'));
   mockCreateHarvest.mockReset().mockResolvedValue('new-harvest-id');
@@ -257,6 +259,22 @@ describe('収穫を編集', () => {
         expect.objectContaining({ quantity: 5 }),
       ),
     );
+  });
+
+  /**
+   * 共有（R28 / #41）の入口。アルバムも読み取りキューもこの画面へ来るので、
+   * ここに置けば収穫のどこからでも共有へ行ける。
+   * **押した先で何を出すか見せてから共有シートを開く**ので、この画面からは
+   * 遷移するだけ（ここで共有シートが開いてはいけない）。
+   */
+  it('「共有する」で共有画面へ遷移する', async () => {
+    mockParams = { id: 'p1', harvestId: 'h1' };
+    render(<EditHarvestScreen />);
+    await waitFor(() => expect(screen.getByText('共有する')).toBeTruthy());
+
+    fireEvent.press(screen.getByText('共有する'));
+
+    expect(mockPush).toHaveBeenCalledWith('/plantings/p1/harvests/share?harvestId=h1');
   });
 
   it('確認してから削除する', async () => {
