@@ -6,7 +6,10 @@
  * 正常系だけでなく壊れた入力を必ず 1 件ずつ入れてある。**
  */
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import path from 'node:path';
 import { test } from 'node:test';
+import { fileURLToPath } from 'node:url';
 
 import {
   dailyFreshness,
@@ -27,6 +30,7 @@ import {
   pickReport,
   summarizeBySource,
   toNumber,
+  WANTED_REPORTS,
 } from './asc-analytics.mjs';
 import { classify, looksLikePlayTable } from './bigquery-probe.mjs';
 import { asPercent, cell, mdTable, renderSummary } from './analytics-report.mjs';
@@ -166,7 +170,8 @@ test('detectDelimiter はタブ優先、カンマの方が多ければカンマ'
 
 test('parseDelimited は BOM を落とし、列数がずれた行も空で埋める', () => {
   const rows = parseDelimited(
-    '﻿Date\tSource Type\tCounts\n2026-09-10\t検索\t100\n2026-09-11\t閲覧',
+    // BOM はソースに直接書かず組み立てる（リテラルを埋めると git がバイナリ判定する）
+    `${String.fromCharCode(0xfeff)}Date\tSource Type\tCounts\n2026-09-10\t検索\t100\n2026-09-11\t閲覧`,
   );
   assert.equal(rows.length, 2);
   assert.deepEqual(rows[0], { Date: '2026-09-10', 'Source Type': '検索', Counts: '100' });
@@ -227,16 +232,39 @@ test('summarizeBySource はソース別に合計し、列名が違えば ok=fals
   assert.equal(summarizeBySource(null).ok, false);
 });
 
-test('pickReport は優先順で選び、当たらなければ先頭、空なら null', () => {
+test('pickReport は Detailed を Standard より先に選ぶ', () => {
+  // 実際の一覧では同じ名前に Standard と Detailed が並ぶ（2026-09-17 取得）
   const reports = [
-    { id: '1', attributes: { name: 'App Sessions' } },
+    { id: '1', attributes: { name: 'App Store Discovery and Engagement Standard' } },
     { id: '2', attributes: { name: 'App Store Discovery and Engagement Detailed' } },
   ];
-  assert.equal(pickReport(reports).id, '2');
-  assert.equal(pickReport([{ id: '9', attributes: { name: '知らないレポート' } }]).id, '9');
+  const want = WANTED_REPORTS.find((w) => w.key === 'engagement').preferred;
+  assert.equal(pickReport(reports, want).id, '2', '部分一致で Standard を掴まない');
+  // Detailed が無ければ Standard へ落ちる
+  assert.equal(pickReport([reports[0]], want).id, '1');
+});
+
+test('pickReport は当たらなければ null（先頭で妥協しない）', () => {
+  // 実際の一覧は 50 件中 37 件が AirPlay・Metal 等の無関係なレポート。
+  // 先頭を返すと「表示回数」の表に AirPlay の数字が載る
+  const noise = [
+    { id: '9', attributes: { name: 'AirPlay Discovery Sessions' } },
+    { id: '10', attributes: { name: 'Metal Command Queues' } },
+  ];
+  for (const w of WANTED_REPORTS) assert.equal(pickReport(noise, w.preferred), null, w.key);
   assert.equal(pickReport([]), null);
   assert.equal(pickReport(null), null);
-  assert.equal(pickReport([{ id: '3' }]).id, '3', 'attributes が無くても落ちない');
+  assert.equal(pickReport([{ id: '3' }]), null, 'attributes が無くても落ちず、拾いもしない');
+});
+
+test('WANTED_REPORTS は 1 レポートに寄せず、表示回数とダウンロードを別々に取りに行く', () => {
+  const keys = WANTED_REPORTS.map((w) => w.key);
+  assert.ok(keys.includes('engagement'), '表示回数・製品ページ閲覧数');
+  assert.ok(keys.includes('downloads'), '初回ダウンロード数は別レポート');
+  for (const w of WANTED_REPORTS) {
+    assert.ok(w.preferred.length >= 1, w.key);
+    assert.match(w.preferred[0], /Detailed$/, `${w.key}: Detailed を先頭に置く`);
+  }
 });
 
 test('classifyAscError は鍵の権限不足を、生 JSON ではなく次の行動に翻訳する', () => {
@@ -334,4 +362,20 @@ test('renderSummary は vitals も asc も無い状態でも落ちない', () =>
   const md = renderSummary({ date: '2026-09-16' });
   assert.match(md, /2026-09-16/);
   assert.match(md, /取得していない/);
+});
+
+/* ---------------- ソースの衛生 ---------------- */
+
+test('リリース系スクリプトに制御文字を埋めない（git がバイナリ判定するため）', () => {
+  // 2026-09-17: 区切り文字として U+0000 を、BOM 判定として U+FEFF を**リテラルで**
+  // 書いたせいで git が asc-analytics.mjs をバイナリと判定し、PR #196 の差分が
+  // レビューできない状態でマージされた。エスケープや組み立てで書けば済む
+  const dir = path.dirname(fileURLToPath(import.meta.url));
+  const files = fs.readdirSync(dir).filter((f) => f.endsWith('.mjs'));
+  assert.ok(files.length >= 5, '走査対象が見つかっている');
+  for (const f of files) {
+    const buf = fs.readFileSync(path.join(dir, f));
+    assert.equal(buf.indexOf(0x00), -1, `${f}: NUL が埋まっている`);
+    assert.equal(buf.indexOf(Buffer.from('EFBBBF', 'hex')), -1, `${f}: BOM が埋まっている`);
+  }
 });

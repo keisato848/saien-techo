@@ -96,33 +96,46 @@ export function renderAsc(asc) {
     );
     return out;
   }
-  if (asc.state !== 'ok') {
+  if (!Array.isArray(asc.reports)) {
     out.push(`取得できなかった（${cell(asc.state)}）: ${cell(asc.detail)}`, '');
     return out;
   }
+  if (asc.detail) out.push(cell(asc.detail), '');
 
-  out.push(
-    `レポート: ${cell(asc.reportName)} / 粒度: ${cell(asc.granularity)} / 処理日: ${cell(asc.processingDate)} / 行数: ${cell(asc.rowCount)}`,
-    '',
-  );
-  const s = asc.summary;
-  if (!s?.ok) {
+  // 欲しい数字は 1 つのレポートに揃っていないので、レポートごとに節を作る
+  for (const rep of asc.reports) {
+    out.push(`### ${cell(rep.label)}`, '');
+    if (rep.state !== 'ok') {
+      out.push(
+        `取得できなかった（${cell(rep.state)}）: ${cell(rep.detail)}`,
+        ...(rep.reportName ? ['', `対象レポート: ${cell(rep.reportName)}`] : []),
+        '',
+      );
+      continue;
+    }
     out.push(
-      `ソースタイプ別に畳めなかった: ${cell(s?.reason)}`,
-      '',
-      `実際の列: ${(s?.header ?? []).map((h) => `\`${h}\``).join(', ') || '（不明）'}`,
-      '',
-      '> 列名が変わった可能性がある。`summarizeBySource` の候補名を足すこと。',
+      `レポート: ${cell(rep.reportName)} / 粒度: ${cell(rep.granularity)} / 処理日: ${cell(rep.processingDate)} / 行数: ${cell(rep.rowCount)}`,
       '',
     );
-    return out;
+    const s = rep.summary;
+    if (!s?.ok) {
+      out.push(
+        `ソースタイプ別に畳めなかった: ${cell(s?.reason)}`,
+        '',
+        `実際の列: ${(s?.header ?? []).map((h) => `\`${h}\``).join(', ') || '（不明）'}`,
+        '',
+        '> 列名が変わった可能性がある。`summarizeBySource` の候補名を足すこと。',
+        '',
+      );
+      continue;
+    }
+    const table = mdTable(
+      ['ソースタイプ', '種別', '件数'],
+      s.rows.map((r) => [r.source, r.kind, r.value.toLocaleString('ja-JP')]),
+      ['l', 'l', 'r'],
+    );
+    out.push(table ?? '該当なし。', '');
   }
-  const table = mdTable(
-    ['ソースタイプ', '種別', '件数'],
-    s.rows.map((r) => [r.source, r.kind, r.value.toLocaleString('ja-JP')]),
-    ['l', 'l', 'r'],
-  );
-  out.push(table ?? '該当なし。', '');
   return out;
 }
 
