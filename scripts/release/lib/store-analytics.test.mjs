@@ -32,6 +32,22 @@ import {
   toNumber,
   WANTED_REPORTS,
 } from './asc-analytics.mjs';
+import {
+  classifyProductType,
+  dateRange,
+  getSales,
+  parseSalesTsv,
+  summarizeSales,
+} from './asc-sales.mjs';
+import {
+  bucketName,
+  classifyMissing,
+  decodeCsv,
+  recentMonths,
+  reportUrl,
+  summarizeInstalls,
+  summarizeStorePerformance,
+} from './play-reports.mjs';
 import { classify, looksLikePlayTable } from './bigquery-probe.mjs';
 import { asPercent, cell, mdTable, renderSummary } from './analytics-report.mjs';
 
@@ -378,4 +394,313 @@ test('リリース系スクリプトに制御文字を埋めない（git がバ�
     assert.equal(buf.indexOf(0x00), -1, `${f}: NUL が埋まっている`);
     assert.equal(buf.indexOf(Buffer.from('EFBBBF', 'hex')), -1, `${f}: BOM が埋まっている`);
   }
+});
+
+/* ---------------- asc-sales ---------------- */
+
+test('classifyProductType は更新と再ダウンロードを新規に混ぜない', () => {
+  assert.equal(classifyProductType('1'), 'download');
+  assert.equal(classifyProductType('1F'), 'download');
+  assert.equal(classifyProductType('7'), 'update');
+  assert.equal(classifyProductType('3'), 'redownload', '実測で出た区分（再ダウンロード）');
+  // 知らない識別子を黙って download に倒さない
+  assert.equal(classifyProductType('IA1'), 'other');
+  assert.equal(classifyProductType(''), 'other');
+  assert.equal(classifyProductType(undefined), 'other');
+});
+
+test('dateRange は end から遡り、不正な days を 30 に丸める', () => {
+  const end = new Date(Date.UTC(2026, 8, 17));
+  assert.deepEqual(dateRange(end, 3), ['2026-09-15', '2026-09-16', '2026-09-17']);
+  assert.equal(dateRange(end, 0).length, 30);
+  assert.equal(dateRange(end, 'abc').length, 30);
+  assert.equal(dateRange(new Date('壊れた'), 2).length, 2, '壊れた Date でも落ちない');
+});
+
+test('summarizeSales は SKU で絞り、区分ごとに分けて数える', () => {
+  // 実際の列名で組む（2026-09-17 のレポートから）
+  const row = (sku, type, units, extra = {}) => ({
+    SKU: sku,
+    'Product Type Identifier': type,
+    Units: String(units),
+    Device: 'iPhone',
+    Version: '1.3.0',
+    'Country Code': 'JP',
+    ...extra,
+  });
+  const rows = [
+    row('saien-techo', '1', 5),
+    row('saien-techo', '7', 4),
+    row('saien-techo', '3', 1),
+    row('saien-techo', '1', 3, { Device: 'iPad', Version: '1.2.0' }),
+    row('daidoko', '1', 99),
+  ];
+  const s = summarizeSales(rows, { sku: 'saien-techo' });
+  assert.equal(s.downloads, 8, '別 SKU を巻き込まない');
+  assert.equal(s.updates, 4);
+  assert.equal(s.redownloads, 1);
+  assert.equal(s.other, 0);
+  assert.deepEqual(s.byDevice, [
+    ['iPhone', 5],
+    ['iPad', 3],
+  ]);
+  // 端末・版は新規ダウンロードだけを数える（更新を混ぜない）
+  assert.equal(
+    s.byDevice.reduce((a, [, v]) => a + v, 0),
+    s.downloads,
+  );
+  assert.deepEqual(s.byCountry, [['JP', 13]]);
+
+  // 知らない区分は other に積み、識別子を残す
+  const u = summarizeSales([row('x', 'ZZ', 2)], {});
+  assert.equal(u.other, 2);
+  assert.deepEqual(u.unknownTypes, ['ZZ']);
+
+  // 壊れた入力
+  assert.equal(summarizeSales(null).downloads, 0);
+  assert.equal(summarizeSales([]).rowCount, 0);
+});
+
+test('parseSalesTsv はヘッダだけ・空でも落ちない', () => {
+  assert.deepEqual(parseSalesTsv('SKU\tUnits'), []);
+  assert.deepEqual(parseSalesTsv(''), []);
+  assert.deepEqual(parseSalesTsv(null), []);
+  const rows = parseSalesTsv('SKU\tUnits\nsaien-techo\t5');
+  assert.deepEqual(rows, [{ SKU: 'saien-techo', Units: '5' }]);
+});
+
+test('getSales はベンダー番号が無ければ取得を試みない', async () => {
+  const r = await getSales({ vendorNumber: null });
+  assert.equal(r.state, 'no-vendor');
+  assert.match(r.detail, /支払いと財務レポート/);
+});
+
+/* ---------------- play-reports ---------------- */
+
+test('reportUrl は命名規則どおりに組み立て、不正な入力で投げる', () => {
+  const u = reportUrl({
+    developerId: '4806763604853146902',
+    packageName: 'com.saientecho.app',
+    group: 'installs',
+    month: '202609',
+    kind: 'overview',
+  });
+  assert.equal(
+    u,
+    'https://storage.cloud.google.com/pubsite_prod_4806763604853146902/stats/installs/installs_com.saientecho.app_202609_overview.csv?authuser=0',
+  );
+  assert.throws(() => bucketName('abc'), /デベロッパー ID/);
+  assert.throws(() => bucketName(''), /デベロッパー ID/);
+  assert.throws(
+    () =>
+      reportUrl({
+        developerId: '1234567',
+        packageName: 'x',
+        group: 'installs',
+        month: '2026-09',
+        kind: 'overview',
+      }),
+    /YYYYMM/,
+  );
+});
+
+test('decodeCsv は UTF-16LE を読む（UTF-8 として読むと全部化ける）', () => {
+  const text = 'Date,Package name\n2026-09-01,com.example\n';
+  const utf16 = Buffer.concat([Buffer.from([0xff, 0xfe]), Buffer.from(text, 'utf16le')]);
+  assert.equal(decodeCsv(utf16), text);
+  // BOM 無しの UTF-8 もそのまま読める
+  assert.equal(decodeCsv(Buffer.from(text, 'utf8')), text);
+  assert.equal(decodeCsv(null), '');
+});
+
+test('summarizeInstalls は断面の列を合計しない', () => {
+  // 実データの形（2026-09 の overview）。稼働台数 1 が 6 日続く
+  const rows = [
+    {
+      Date: '2026-09-01',
+      'Install events': '0',
+      'Uninstall events': '1',
+      'Active Device Installs': '0',
+      'Total User Installs': '0',
+    },
+    {
+      Date: '2026-09-04',
+      'Install events': '1',
+      'Uninstall events': '0',
+      'Active Device Installs': '1',
+      'Total User Installs': '0',
+    },
+    {
+      Date: '2026-09-08',
+      'Install events': '0',
+      'Uninstall events': '0',
+      'Active Device Installs': '1',
+      'Total User Installs': '0',
+    },
+  ];
+  const s = summarizeInstalls(rows);
+  assert.equal(s.totals['Install events'], 1, '事象は合計する');
+  assert.equal(s.totals['Uninstall events'], 1);
+  assert.equal(s.latest['Active Device Installs'], 1, '断面は最終日の値（合計の 2 ではない）');
+  assert.equal(s.lastDate, '2026-09-08');
+  // 断面の列が totals に混ざっていないこと
+  assert.equal('Active Device Installs' in s.totals, false);
+  assert.deepEqual(summarizeInstalls([]).totals, {});
+  assert.deepEqual(summarizeInstalls(null).latest, {});
+});
+
+test('summarizeStorePerformance は転換率を行平均せず合計から出す', () => {
+  // **母数を非対称にする。** 1 対 1 だと行平均も合計再計算もどちらも 0.5 になり、
+  // 実装を行平均へ差し替えてもテストが緑のままだった（2026-09-17 の変異検証で判明）
+  const rows = [
+    {
+      Date: '1',
+      'Traffic source': 'Other',
+      'Store listing visitors': '1',
+      'Store listing acquisitions': '1',
+    },
+    {
+      Date: '2',
+      'Traffic source': 'Other',
+      'Store listing visitors': '9',
+      'Store listing acquisitions': '0',
+    },
+  ];
+  const s = summarizeStorePerformance(rows);
+  assert.equal(s.visitors, 10);
+  assert.equal(s.acquisitions, 1);
+  // 行平均なら (1.0 + 0.0) / 2 = 0.5。正しくは 1 / 10 = 0.1
+  assert.equal(s.conversion, 0.1, '行平均の 0.5 ではなく、合計から 1/10');
+  assert.deepEqual(s.byGroup, [{ name: 'Other', visitors: 10, acquisitions: 1 }]);
+  // 列名の大小が違っても拾う（実 CSV が Traffic Source の可能性）
+  assert.deepEqual(
+    summarizeStorePerformance([
+      {
+        'Traffic Source': '検索',
+        'Store listing visitors': '3',
+        'Store listing acquisitions': '1',
+      },
+    ]).byGroup,
+    [{ name: '検索', visitors: 3, acquisitions: 1 }],
+  );
+  // 訪問者ゼロで割らない
+  const z = summarizeStorePerformance([
+    { 'Store listing visitors': '0', 'Store listing acquisitions': '0', 'Traffic source': 'x' },
+  ]);
+  assert.equal(z.conversion, null);
+  assert.equal(summarizeStorePerformance([]).visitors, 0);
+});
+
+test('classifyMissing は「未生成」と「ログイン切れ」を言い分ける', () => {
+  const a = classifyMissing({
+    month: '202608',
+    failedKinds: ['installs/overview'],
+    okKindsSameMonth: ['store_performance/traffic_source'],
+  });
+  assert.match(a, /生成されていない/);
+  // 他の月が取れているならセッションは生きている（公開前の月をセッション切れと言わない）
+  const b = classifyMissing({
+    month: '202607',
+    failedKinds: ['installs/overview'],
+    okKindsSameMonth: [],
+    anySuccessInRun: true,
+  });
+  assert.match(b, /まだ公開していない/);
+  assert.equal(/セッション/.test(b), false);
+  const c = classifyMissing({
+    month: '202608',
+    failedKinds: ['installs/overview'],
+    okKindsSameMonth: [],
+    anySuccessInRun: false,
+  });
+  assert.match(c, /セッションが切れている/);
+});
+
+test('recentMonths は古い順で n か月を返す', () => {
+  assert.deepEqual(recentMonths(3, new Date(Date.UTC(2026, 8, 17))), [
+    '202607',
+    '202608',
+    '202609',
+  ]);
+  assert.deepEqual(
+    recentMonths(2, new Date(Date.UTC(2026, 0, 5))),
+    ['202512', '202601'],
+    '年をまたぐ',
+  );
+  assert.equal(recentMonths('abc', new Date(Date.UTC(2026, 8, 17))).length, 3);
+});
+
+/* ---------------- 描画の中身（変異検証で素通りしたため追加） ---------------- */
+
+test('renderSummary は売上と Play の数字を、正しい欄に出す', () => {
+  // 以前は render 系に assert が 1 つも無く、`s.downloads` を `s.updates` に
+  // 差し替えてもテストが緑のままだった（2026-09-17 の変異検証で判明）
+  const md = renderSummary({
+    date: '2026-09-17',
+    sales: {
+      state: 'ok',
+      from: '2026-09-01',
+      to: '2026-09-17',
+      days: 17,
+      countedDays: 15,
+      emptyDays: 3,
+      pendingDays: 2,
+      summary: {
+        downloads: 8,
+        updates: 4,
+        redownloads: 1,
+        other: 0,
+        unknownTypes: [],
+        byDevice: [['iPhone', 6]],
+        byVersion: [['1.3.0', 8]],
+        byCountry: [['JP', 13]],
+      },
+    },
+    play: {
+      state: 'ok',
+      files: 4,
+      performance: [
+        { month: '202609', visitors: 10, acquisitions: 1, conversion: 0.1, byGroup: [] },
+      ],
+      installs: [
+        {
+          month: '202609',
+          lastDate: '2026-09-08',
+          totals: { 'Install events': 7 },
+          latest: { 'Active Device Installs': 1 },
+        },
+      ],
+    },
+  });
+
+  // 区分ごとに別の数字が、別の行に出ている（取り違えたら落ちる）
+  assert.match(md, /\| 新規ダウンロード \| 8 \|/);
+  assert.match(md, /\| アップデート \| 4 \|/);
+  assert.match(md, /\| 再ダウンロード \| 1 \|/);
+  // 未生成の日を「見た日数」に混ぜない
+  assert.match(md, /実際に見た 15 日/);
+  assert.match(md, /未生成 2 日/);
+  // 端末別は新規ダウンロードだけ
+  assert.match(md, /\| iPhone \| 6 \|/);
+  // Play: 転換率は合計から
+  assert.match(md, /\| 202609 \| 10 \| 1 \| 10\.0% \|/);
+  // 断面と合計を言い分けている
+  assert.match(md, /Install events（期間合計） \| 7/);
+  assert.match(md, /Active Device Installs（最終日の断面） \| 1/);
+  // 足し合わせないよう釘を刺す注記が残っている
+  assert.match(md, /区分を足し合わせない/);
+  assert.match(md, /断面の列を足さない/);
+});
+
+test('renderSummary は取得できなかった理由を隠さない', () => {
+  const md = renderSummary({
+    date: '2026-09-17',
+    sales: { state: 'sku-mismatch', detail: 'SKU「foo」の行が 1 件も無い' },
+    play: { state: 'no-data', detail: 'CSV がありません' },
+  });
+  assert.match(md, /sku-mismatch/);
+  assert.match(md, /SKU「foo」の行が 1 件も無い/);
+  assert.match(md, /CSV がありません/);
+  // 0 件として表を出してしまっていないこと
+  assert.equal(/新規ダウンロード \| 0/.test(md), false);
 });
