@@ -163,7 +163,7 @@ for (const info of infos) {
   if (!iloc) continue;
   if (iloc.attributes.subtitle === listing.subtitle) {
     subtitleDone = true;
-    continue;
+    break;
   }
   try {
     await ascPatch(`/appInfoLocalizations/${iloc.id}`, {
@@ -175,6 +175,8 @@ for (const info of infos) {
     });
     console.log(`subtitle : 更新 ${iloc.attributes.subtitle ?? '(空)'} → ${listing.subtitle}`);
     subtitleDone = true;
+    // **1 つ更新できたら抜ける。** 続けると別の状態の appInfo まで書き換える
+    break;
   } catch (e) {
     // **公開中の appInfo は編集できない。** 準備中のものだけ通ればよいので、
     // ここで止めずに次の appInfo を試す

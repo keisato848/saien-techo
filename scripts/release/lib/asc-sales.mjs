@@ -200,6 +200,7 @@ export async function getSales({ vendorNumber, sku, days = 30, now }) {
   const failed = [];
   let emptyDays = 0;
   let pendingDays = 0;
+  const counted = [];
   for (const d of dates) {
     const r = await fetchSalesDay({ vendorNumber, reportDate: d });
     if (!r.ok) {
@@ -207,7 +208,10 @@ export async function getSales({ vendorNumber, sku, days = 30, now }) {
       continue;
     }
     if (r.pending) pendingDays += 1;
-    else if (r.empty) emptyDays += 1;
+    else {
+      counted.push(d);
+      if (r.empty) emptyDays += 1;
+    }
     rows = rows.concat(r.rows);
   }
   if (failed.length === dates.length)
@@ -226,8 +230,10 @@ export async function getSales({ vendorNumber, sku, days = 30, now }) {
   return {
     state: 'ok',
     from: dates[0],
-    // **未生成の日を「期間」に含めない。** 含めると見ていない日を見たことにする
-    to: dates[dates.length - 1],
+    // **未生成の日を期間の終わりにしない。** コメントだけそう書いて dates の末尾を
+    // 返していた（2026-09-18 のレビュー指摘）
+    to: counted.length > 0 ? counted[counted.length - 1] : dates[dates.length - 1],
+    requestedTo: dates[dates.length - 1],
     days: dates.length,
     countedDays: dates.length - pendingDays - failed.length,
     emptyDays,

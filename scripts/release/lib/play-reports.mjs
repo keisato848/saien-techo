@@ -138,13 +138,16 @@ export function summarizeStorePerformance(rows, { groupBy = 'Traffic source' } =
   const vCol = header.find((h) => /visitors/i.test(h));
   const aCol = header.find((h) => /acquisitions/i.test(h));
   if (!vCol || !aCol)
+    // **0 を返して続けない。** 列名が変わったときに「訪問者 0」と出すと、
+    // 「誰も来ていない」と「読めていない」が同じ表示になる（2026-09-18 のレビュー指摘）
     return {
       rowCount: list.length,
-      visitors: 0,
-      acquisitions: 0,
+      unreadable: `想定した列が見つからない（visitors=${vCol ?? '無し'} / acquisitions=${aCol ?? '無し'}）`,
+      header,
+      visitors: null,
+      acquisitions: null,
       conversion: null,
       byGroup: [],
-      header,
     };
 
   // 完全一致だと実 CSV が `Traffic Source`（大文字 S）のとき表が黙って消える

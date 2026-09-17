@@ -203,8 +203,12 @@ describe('作付け計画の一覧', () => {
     fireEvent.press(screen.getByText('登録する'));
 
     await waitFor(() => expect(screen.getByText(/登録に失敗しました/)).toBeTruthy());
-    // 失敗したのに栽培の詳細へ飛ばさない
+    // **タイマーを進めてから確かめる。** 成功時の遷移は 900ms の setTimeout なので、
+    // 進めずに assert すると遷移を止められていなくても通ってしまう（2026-09-18 の指摘）
+    jest.useFakeTimers();
+    jest.advanceTimersByTime(2000);
     expect(mockPush).not.toHaveBeenCalledWith(expect.stringContaining('/plantings/planting'));
+    jest.useRealTimers();
   });
 
   // 読み込みが失敗したときに setLoading(false) へ到達しないと、読み込み中のまま固まる
