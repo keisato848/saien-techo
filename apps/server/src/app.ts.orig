@@ -17,7 +17,6 @@ export const app = new Hono();
 
 // ─── Middleware ───────────────────────────────────────────────────────────────
 
-// Add standard security headers to prevent XSS, clickjacking, etc.
 app.use('*', secureHeaders());
 app.use('*', logger());
 app.use(
